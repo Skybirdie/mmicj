@@ -438,6 +438,36 @@ previousBook
 if(typeof UI!=="undefined" && typeof UI.showLibrary==="function")
     UI.showLibrary(true);
 
+/*
+ * Reset the Reader status bar to its idle state.
+ * The Reader starts with "MMicj"; closing a book must return
+ * the status bar to exactly that same state rather than leaving
+ * the last book title/page information visible.
+ */
+const statusMessage=document.getElementById("statusMessage");
+const readerTitle=document.getElementById("readerTitle");
+const pageIndicator=document.getElementById("pageIndicator");
+const pageJump=document.getElementById("pageJump");
+
+if(statusMessage){
+    statusMessage.textContent="MMicj";
+}
+
+if(readerTitle){
+    readerTitle.textContent="";
+}
+
+if(pageIndicator){
+    pageIndicator.textContent="";
+    pageIndicator.classList.remove("pageIndicatorActive");
+    pageIndicator.setAttribute("aria-hidden","true");
+}
+
+if(pageJump){
+    pageJump.hidden=true;
+    pageJump.setAttribute("aria-hidden","true");
+}
+
 };
 
 const readerCloseButton = document.getElementById("readerCloseButton");
