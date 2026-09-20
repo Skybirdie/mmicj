@@ -2954,6 +2954,7 @@ body:not(.sky-share-mode):has(#videoSection.videoFocus) #workspacePrimaryLogo:no
     max-height: 28px;
     font-size: 13px;
     line-height: 20px;
+    margin: 0;
 }
 
 /* Keep the actual status/welcome text at the same size. */
