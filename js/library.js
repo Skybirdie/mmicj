@@ -559,15 +559,24 @@ if(search){
 if(searchToggle && search){
     const searchGroup=document.getElementById("topSearchGroup");
 
-    const openSearch=()=>{
-        if(searchGroup)searchGroup.classList.add("searchOpen");
+    const toggleSearch=()=>{
+    if(!searchGroup)return;
+
+    const isOpen=searchGroup.classList.toggle("searchOpen");
+
+    if(isOpen){
         requestAnimationFrame(()=>{
             search.focus({preventScroll:true});
             search.select();
         });
-    };
+    }else{
+        search.value="";
+        this.filter("");
+        search.blur();
+    }
+};
 
-    searchToggle.addEventListener("click",openSearch);
+searchToggle.addEventListener("click",toggleSearch);
 
     /* Keep the visual state synchronized with the actual focused control.
        This is presentation only; the existing input/filter event remains
