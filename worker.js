@@ -2513,26 +2513,25 @@ async function handleSharePrime(
         );
       }
 
-    } catch (error) {
+    } catch(error) {
+  console.error("MMicjMedia direct-share KV write failure:", error);
 
-      console.error(
-        "MMicjMedia direct-share KV write failure:",
-        error
-      );
-
-      return new Response(
-        JSON.stringify({
-          error:
-            "MMicjMedia KV write failed."
-        }),
-        {
-          status:
-            500,
-
-          headers:
-            corsHeaders
-        }
-      );
+  return new Response(
+    JSON.stringify({
+      error: "MMicjMedia KV write failed.",
+      detail: error instanceof Error
+        ? error.message
+        : String(error)
+    }),
+    {
+      status: 500,
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/json; charset=utf-8"
+      }
+    }
+  );
+}
     }
 
     const shareUrl =
