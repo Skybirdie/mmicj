@@ -1026,9 +1026,17 @@ if (
 }
 
     current = item;
-    index = 0;
-    playing = true;
-    stopTimer();
+index = 0;
+playing = true;
+stopTimer();
+
+/* Selecting a slideshow automatically closes the mobile library drawer. */
+if (
+    window.SlideshowUI &&
+    typeof SlideshowUI.closeDrawer === "function"
+) {
+    SlideshowUI.closeDrawer();
+}
 
     // existing PDF/image opening code continues...
 
