@@ -1414,40 +1414,89 @@ html:fullscreen #topBar{
 
 #app.viewerFocus #libraryPanel{display:none!important;}
 
-/* ---------- Top-bar search ---------- */
+ /* ---------- Standard expandable top-bar search ---------- */
 
 #topSearchGroup{
   grid-column:1;
   justify-self:start;
+
   display:flex;
   align-items:center;
   gap:7px;
-  width:calc(360px - 30px);
+
+  width:330px;
+  max-width:100%;
+  min-width:0;
+
+  box-sizing:border-box;
 }
 
 #topSearchGroup #searchBox{
   display:none!important;
+
   flex:1 1 auto;
+  min-width:0;
   width:auto;
+
   height:34px;
+
   padding:0 11px;
+
   opacity:1;
   pointer-events:auto;
-  border:1px solid color-mix(in srgb,var(--control-text) 18%,transparent);
+
+  border:1px solid color-mix(
+    in srgb,
+    var(--control-text) 18%,
+    transparent
+  );
+
   border-radius:10px;
+
   background:var(--control-bg);
   color:var(--control-text);
+
   font-size:14px;
   outline:none;
+
   box-sizing:border-box;
+
   backdrop-filter:blur(10px);
 }
 
-#topSearchGroup #searchBox::placeholder{color:color-mix(in srgb,var(--control-text) 72%,transparent);}
-#topSearchGroup #searchBox:focus{box-shadow:0 0 0 2px color-mix(in srgb,var(--control-text) 18%,transparent);}
-#topSearchGroup.searchOpen #searchBox{display:block!important;}
-#topSearchGroup .iconButton{flex:0 0 auto;}
-#searchWrapper,#searchToggleButton{display:none!important;}
+#topSearchGroup #searchBox::placeholder{
+  color:color-mix(
+    in srgb,
+    var(--control-text) 72%,
+    transparent
+  );
+}
+
+#topSearchGroup #searchBox:focus{
+  box-shadow:0 0 0 2px color-mix(
+    in srgb,
+    var(--control-text) 18%,
+    transparent
+  );
+}
+
+#topSearchGroup.searchOpen #searchBox{
+  display:block!important;
+}
+
+#topSearchGroup .iconButton{
+  flex:0 0 auto;
+}
+
+#searchWrapper,
+#searchToggleButton{
+  display:none!important;
+}
+
+html[data-theme="dark"] #topBar .icon,
+html[data-theme="dark"] #topBar .iconButton{
+  color:#eef2f5!important;
+}
 
 html[data-theme="dark"] #topBar .icon,
 html[data-theme="dark"] #topBar .iconButton{
@@ -2494,6 +2543,36 @@ max-width:35vw;
     border-radius:10px;
   }
 }
+
+ /* =======================================================
+    STANDARD TOP-BAR SEARCH — MOBILE
+    The search field occupies only the space available
+    between the left and right header controls.
+ ======================================================= */
+
+@media (max-width:700px){
+
+  #topSearchGroup,
+  .video-search-group,
+  .slideshow-search-group{
+    width:auto;
+    max-width:none;
+    min-width:0;
+
+    flex:1 1 auto;
+  }
+
+  #topSearchGroup.searchOpen #searchBox,
+  .video-search-group.searchOpen #videoSearchBox,
+  .slideshow-search-group.searchOpen input{
+    width:auto;
+    min-width:0;
+    max-width:100%;
+    flex:1 1 auto;
+  }
+
+}
+
 
 /* ---------------------------------------------------------
    Narrow Reader top bar — left cluster / right cluster
