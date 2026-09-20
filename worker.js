@@ -10,31 +10,19 @@
 
      /s/<section>/<id>
 
- The selected item is already encoded as a ONE-ITEM
- SR2 contract before it reaches this Worker.
-
  Flow:
 
      ShareManager
           ↓
      POST /__sky_share_prime
           ↓
-     Worker stores the one-item record by section + ID
+     Worker stores one-item record in MEDIA_KV
           ↓
      Worker returns /s/<section>/<id>
           ↓
-     Worker retrieves payload
+     Worker retrieves item
           ↓
-     window.MMicjMediaContract
-     window.__SKY_SHARE_TARGET
-          ↓
-     existing GlideContract / Manifest
-          ↓
-     existing ShareManager
-          ↓
-     existing ShareViewer
-
- The browser address bar NEVER receives the long contract.
+     Share Mode receives one-item manifest
 =========================================================
 */
 
@@ -44,11 +32,8 @@ const KEY_LENGTH = 16;
 const SKYMEDIA_BASE_URL =
   "https://mmicj.meditation-mornings-icj.workers.dev";
 
-/* =========================================================
-   Open Graph / Social Preview
-========================================================= */
-
-const OG_SITE_NAME = "Meditation Mornings";
+const OG_SITE_NAME =
+  "Meditation Mornings";
 
 const OG_DEFAULT_THUMBNAIL =
   "https://storage.googleapis.com/glide-prod.appspot.com/uploads-v2/mKxnsa8ky8uPGbBKpTyv/pub/lu8ys9mg3bqa2jgeWIFB.webp";
@@ -68,47 +53,7 @@ const SHARE_RECORD_PREFIX =
 const CATALOG_RECORD_PREFIX =
   "catalog:v1:";
 
-/* =========================================================
-   KV read caching
-
-   Every KV value this Worker reads is immutable for the
-   lifetime of a publish: a catalog item, a primed share
-   record, or an encoded contract. None of them change
-   between two requests for the same link.
-
-   cacheTtl lets the colo serve repeat reads from its local
-   cache instead of going back to KV storage, which removes
-   a KV read (and ~50-100ms) from every repeat view of the
-   same shared item.
-
-   Lower this while actively republishing the catalog if you
-   need edits to appear immediately.
-========================================================= */
-
 const KV_CACHE_TTL = 300;
-
-function kvGet(
-  env,
-  key
-) {
-
-  return env.MEDIA_KV.get(
-    key,
-    {
-      cacheTtl:
-        KV_CACHE_TTL
-    }
-  );
-}
-
-/* =========================================================
-   TEMPORARY CATALOG PUBLISH TEST
-
-   This is intentionally a temporary shared test token.
-   It proves the Glide -> Worker POST path before we move
-   publishing authentication to a proper secret-backed
-   Glide workflow/API arrangement.
-========================================================= */
 
 const CATALOG_TEST_TOKEN =
   "SMCAT-TEST-9f7b2d4c-20260918";
@@ -116,12 +61,26 @@ const CATALOG_TEST_TOKEN =
 const CATALOG_TEST_STATUS_KEY =
   "catalog:test:last";
 
+
+/* =========================================================
+   KV
+========================================================= */
+
+function kvGet(env, key) {
+  return env.MEDIA_KV.get(
+    key,
+    {
+      cacheTtl: KV_CACHE_TTL
+    }
+  );
+}
+
+
 /* =========================================================
    FNV-1A
 ========================================================= */
 
 function fnv1a32(value, seed) {
-
   let hash =
     (0x811c9dc5 ^ seed) >>> 0;
 
@@ -130,7 +89,6 @@ function fnv1a32(value, seed) {
     i < value.length;
     i++
   ) {
-
     hash ^= value.charCodeAt(i);
 
     hash =
@@ -144,7 +102,6 @@ function fnv1a32(value, seed) {
 }
 
 function hex8(value) {
-
   return value
     .toString(16)
     .padStart(8, "0")
@@ -152,7 +109,6 @@ function hex8(value) {
 }
 
 function makeKey(payload) {
-
   const hash1 =
     fnv1a32(
       payload,
@@ -171,12 +127,77 @@ function makeKey(payload) {
   );
 }
 
+
 /* =========================================================
-   DIRECT SHARE RECORDS
+   SECTION NORMALIZATION
+========================================================= */
+
+function normalizeSection(section) {
+  const value =
+    String(
+      section || ""
+    )
+      .trim()
+      .toLowerCase();
+
+  if (
+    value === "book" ||
+    value === "books" ||
+    value === "reader" ||
+    value === "pdf" ||
+    value === "pdfs"
+  ) {
+    return "reader";
+  }
+
+  if (
+    value === "video" ||
+    value === "videos"
+  ) {
+    return "video";
+  }
+
+  if (
+    value === "slideshow" ||
+    value === "slideshows" ||
+    value === "slide" ||
+    value === "slides"
+  ) {
+    return "slideshow";
+  }
+
+  return value;
+}
+
+function sectionFromItem(item) {
+  const type =
+    String(
+      item?.type || ""
+    )
+      .trim()
+      .toLowerCase();
+
+  if (type === "book") {
+    return "reader";
+  }
+
+  if (type === "video") {
+    return "video";
+  }
+
+  if (type === "slideshow") {
+    return "slideshow";
+  }
+
+  return normalizeSection(type);
+}
+
+
+/* =========================================================
+   DIRECT SHARE KEYS
 ========================================================= */
 
 function makeShareRecordKey(section, id) {
-
   const normalizedSection =
     normalizeSection(section);
 
@@ -186,13 +207,14 @@ function makeShareRecordKey(section, id) {
   return (
     SHARE_RECORD_PREFIX +
     makeKey(
-      normalizedSection + "\0" + normalizedId
+      normalizedSection +
+      "\0" +
+      normalizedId
     )
   );
 }
 
 function makeCatalogRecordKey(section, id) {
-
   const normalizedSection =
     normalizeSection(section);
 
@@ -201,60 +223,27 @@ function makeCatalogRecordKey(section, id) {
 
   /*
    * IMPORTANT:
-   * Keep the literal "\\0" here.
-   *
-   * Existing catalog records were written using this
-   * exact key construction, so the read path must remain
-   * identical during Phase 4.
+   * Existing catalog records use the literal "\\0"
+   * construction. Keep this exactly as-is.
    */
   return (
     CATALOG_RECORD_PREFIX +
     makeKey(
-      normalizedSection + "\\0" + normalizedId
+      normalizedSection +
+      "\\0" +
+      normalizedId
     )
   );
 }
+
 
 /* =========================================================
    MEDIA NORMALIZATION
 ========================================================= */
 
-/*
- * Glide can supply slideshow media in several forms:
- *
- *   1. Actual array:
- *
- *      [
- *        "https://...1.jpg",
- *        "https://...2.jpg"
- *      ]
- *
- *   2. Comma-separated string:
- *
- *      "https://...1.jpg, https://...2.jpg"
- *
- *   3. JSON-encoded array:
- *
- *      "[\"https://...1.jpg\",\"https://...2.jpg\"]"
- *
- * MMicjMedia's canonical slideshow representation is an
- * array of image URLs.
- *
- * This function converts the Glide representations into
- * that canonical form while leaving ordinary book/video
- * media URLs as strings.
- */
+function normalizeMediaValue(media, type) {
 
-function normalizeMediaValue(
-  media,
-  type
-) {
-
-  /*
-   * Already an actual array.
-   */
   if (Array.isArray(media)) {
-
     return media
       .map(
         value =>
@@ -274,26 +263,16 @@ function normalizeMediaValue(
     return "";
   }
 
-  /*
-   * A JSON-encoded array can arrive as a string.
-   *
-   * Example:
-   *
-   *   ["https://...1.jpg","https://...2.jpg"]
-   */
   if (
     type === "slideshow" &&
     value.startsWith("[") &&
     value.endsWith("]")
   ) {
-
     try {
-
       const decoded =
         JSON.parse(value);
 
       if (Array.isArray(decoded)) {
-
         return decoded
           .map(
             item =>
@@ -303,29 +282,15 @@ function normalizeMediaValue(
           )
           .filter(Boolean);
       }
-
     } catch (_) {
-
-      /*
-       * If it is not valid JSON, continue below and
-       * treat it as the normal Glide string form.
-       */
+      /* Continue as normal string. */
     }
   }
 
-  /*
-   * Glide may provide multiple slideshow images as one
-   * comma-separated string.
-   *
-   * Example:
-   *
-   *   url1.jpg, url2.jpg, url3.jpg
-   */
   if (
     type === "slideshow" &&
     value.includes(",")
   ) {
-
     return value
       .split(",")
       .map(
@@ -335,15 +300,9 @@ function normalizeMediaValue(
       .filter(Boolean);
   }
 
-  /*
-   * Ordinary book/video media remains a string.
-   *
-   * A single slideshow URL also remains a string because
-   * there is nothing to split. This is compatible with
-   * existing C3.1 handling of single-media items.
-   */
   return value;
 }
+
 
 /* =========================================================
    SHARE ITEM NORMALIZATION
@@ -355,7 +314,6 @@ function normalizeShareItem(item) {
     !item ||
     typeof item !== "object"
   ) {
-
     return null;
   }
 
@@ -373,7 +331,6 @@ function normalizeShareItem(item) {
     );
 
   const result = {
-
     id:
       String(
         item.id ?? ""
@@ -425,7 +382,6 @@ function normalizeShareItem(item) {
     item.dateAdd !== undefined &&
     item.dateAdd !== null
   ) {
-
     const dateAdd =
       String(
         item.dateAdd
@@ -441,7 +397,6 @@ function normalizeShareItem(item) {
     !result.id ||
     !result.type
   ) {
-
     return null;
   }
 
@@ -449,46 +404,45 @@ function normalizeShareItem(item) {
 }
 
 function buildShareManifest(item) {
-
   return {
-
     version:
       "1.0",
 
     content:
       [item],
 
-    frontPage:
-      {
-        categories: []
-      }
+    frontPage: {
+      categories: []
+    }
   };
 }
 
-function getDirectShareTarget(url) {
 
-  const prefix =
-    SHARE_PATH_PREFIX;
+/* =========================================================
+   DIRECT SHARE TARGET
+========================================================= */
+
+function getDirectShareTarget(url) {
 
   if (
     !url.pathname.startsWith(
-      prefix
+      SHARE_PATH_PREFIX
     )
   ) {
-
     return null;
   }
 
   const parts =
     url.pathname
-      .slice(prefix.length)
+      .slice(
+        SHARE_PATH_PREFIX.length
+      )
       .split("/")
       .filter(Boolean);
 
   if (
     parts.length !== 2
   ) {
-
     return null;
   }
 
@@ -496,7 +450,6 @@ function getDirectShareTarget(url) {
   let id = "";
 
   try {
-
     section =
       decodeURIComponent(
         parts[0]
@@ -506,9 +459,7 @@ function getDirectShareTarget(url) {
       decodeURIComponent(
         parts[1]
       );
-
   } catch (_) {
-
     return null;
   }
 
@@ -528,7 +479,6 @@ function getDirectShareTarget(url) {
     section.length > 40 ||
     id.length > 512
   ) {
-
     return null;
   }
 
@@ -537,6 +487,11 @@ function getDirectShareTarget(url) {
     id
   };
 }
+
+
+/* =========================================================
+   GET DIRECT SHARE RECORD
+========================================================= */
 
 async function getDirectShareRecord(
   env,
@@ -552,13 +507,11 @@ async function getDirectShareRecord(
   let raw;
 
   try {
-
     raw =
       await kvGet(
         env,
         key
       );
-
   } catch (error) {
 
     console.error(
@@ -567,7 +520,12 @@ async function getDirectShareRecord(
     );
 
     throw new Error(
-      "MMicjMedia KV read failed."
+      "MMicjMedia KV read failed: " +
+      (
+        error instanceof Error
+          ? error.message
+          : String(error)
+      )
     );
   }
 
@@ -584,7 +542,6 @@ async function getDirectShareRecord(
       !record ||
       !record.item
     ) {
-
       return null;
     }
 
@@ -599,14 +556,13 @@ async function getDirectShareRecord(
 
     if (
       item.id !== target.id ||
-      sectionFromItem(item) !== target.section
+      sectionFromItem(item) !==
+        target.section
     ) {
-
       return null;
     }
 
     return {
-
       key,
 
       item,
@@ -628,14 +584,9 @@ async function getDirectShareRecord(
   }
 }
 
+
 /* =========================================================
-   CATALOG SHARE RECORD
-
-   Canonical Phase 4 source:
-
-       catalog:v1:<hashed section/id>
-
-   The catalog was published by Glide from p1.
+   GET CATALOG SHARE RECORD
 ========================================================= */
 
 async function getCatalogShareRecord(
@@ -667,7 +618,12 @@ async function getCatalogShareRecord(
     );
 
     throw new Error(
-      "MMicjMedia catalog KV read failed."
+      "MMicjMedia catalog KV read failed: " +
+      (
+        error instanceof Error
+          ? error.message
+          : String(error)
+      )
     );
   }
 
@@ -744,7 +700,6 @@ async function getCatalogShareRecord(
     }
 
     return {
-
       key,
 
       item,
@@ -766,23 +721,17 @@ async function getCatalogShareRecord(
   }
 }
 
+
 /* =========================================================
-   Validation
+   VALIDATION
 ========================================================= */
 
 function isValidKey(key) {
 
   return (
-
-    typeof key ===
-      "string" &&
-
-    key.length ===
-      KEY_LENGTH &&
-
-    /^[A-Fa-f0-9]{16}$/.test(
-      key
-    )
+    typeof key === "string" &&
+    key.length === KEY_LENGTH &&
+    /^[A-Fa-f0-9]{16}$/.test(key)
   );
 }
 
@@ -797,7 +746,6 @@ function isValidPayload(payload) {
       CONTRACT_PREFIX
     )
   ) {
-
     return false;
   }
 
@@ -815,14 +763,14 @@ function isValidPayload(payload) {
   );
 }
 
+
 /* =========================================================
-   Response helpers
+   RESPONSE HEADERS
 ========================================================= */
 
 function htmlHeaders() {
 
   return {
-
     "content-type":
       "text/html; charset=UTF-8",
 
@@ -837,7 +785,6 @@ function htmlHeaders() {
 function textHeaders() {
 
   return {
-
     "content-type":
       "text/plain; charset=UTF-8",
 
@@ -849,13 +796,12 @@ function textHeaders() {
   };
 }
 
+
 /* =========================================================
-   Asset request
+   ASSET REQUEST
 ========================================================= */
 
-function makeCleanAssetRequest(
-  request
-) {
+function makeCleanAssetRequest(request) {
 
   const assetUrl =
     new URL(
@@ -875,13 +821,12 @@ function makeCleanAssetRequest(
   );
 }
 
+
 /* =========================================================
-   C2.2 Base64URL decoder
+   BASE64URL DECODER
 ========================================================= */
 
-function base64UrlDecode(
-  value
-) {
+function base64UrlDecode(value) {
 
   try {
 
@@ -899,14 +844,11 @@ function base64UrlDecode(
     while (
       base64.length % 4
     ) {
-
       base64 += "=";
     }
 
     const binary =
-      atob(
-        base64
-      );
+      atob(base64);
 
     const bytes =
       new Uint8Array(
@@ -918,11 +860,8 @@ function base64UrlDecode(
       i < binary.length;
       i++
     ) {
-
       bytes[i] =
-        binary.charCodeAt(
-          i
-        );
+        binary.charCodeAt(i);
     }
 
     return bytes;
@@ -933,19 +872,17 @@ function base64UrlDecode(
   }
 }
 
+
 /* =========================================================
-   C2.2 decompressor
+   C2.2 DECOMPRESSOR
 ========================================================= */
 
-function decompressBytes(
-  bytes
-) {
+function decompressBytes(bytes) {
 
   if (
     !bytes ||
     bytes.length < 2
   ) {
-
     throw new Error(
       "C2.2 payload is too short."
     );
@@ -954,30 +891,20 @@ function decompressBytes(
   const version =
     bytes[0];
 
-  if (
-    version !== 2
-  ) {
-
+  if (version !== 2) {
     throw new Error(
       "Unsupported C2.2 codec version: " +
       version
     );
   }
 
-  const windowSize =
-    4095;
+  const windowSize = 4095;
+  const maxLen = 18;
+  const minLen = 3;
 
-  const maxLen =
-    18;
+  const output = [];
 
-  const minLen =
-    3;
-
-  const output =
-    [];
-
-  let pos =
-    1;
+  let pos = 1;
 
   while (
     pos < bytes.length
@@ -1012,7 +939,6 @@ function decompressBytes(
         pos + 1 >=
         bytes.length
       ) {
-
         throw new Error(
           "Incomplete C2.2 match token."
         );
@@ -1040,7 +966,6 @@ function decompressBytes(
         length < minLen ||
         length > maxLen
       ) {
-
         throw new Error(
           "Invalid C2.2 match length."
         );
@@ -1051,7 +976,6 @@ function decompressBytes(
         offset > windowSize ||
         offset > output.length
       ) {
-
         throw new Error(
           "Invalid C2.2 match offset."
         );
@@ -1079,20 +1003,18 @@ function decompressBytes(
   );
 }
 
+
 /* =========================================================
-   Decode SR2
+   DECODE SR2
 ========================================================= */
 
-function decodeContractPayload(
-  payload
-) {
+function decodeContractPayload(payload) {
 
   if (
     !isValidPayload(
       payload
     )
   ) {
-
     throw new Error(
       "Invalid sr2 payload."
     );
@@ -1109,7 +1031,6 @@ function decodeContractPayload(
     );
 
   if (!compressed) {
-
     throw new Error(
       "Unable to Base64URL-decode sr2 payload."
     );
@@ -1122,53 +1043,39 @@ function decodeContractPayload(
 
   const json =
     new TextDecoder()
-      .decode(
-        utf8
-      );
+      .decode(utf8);
 
-  return JSON.parse(
-    json
-  );
+  return JSON.parse(json);
 }
 
+
 /* =========================================================
-   Contract normalization
+   CONTRACT NORMALIZATION
 ========================================================= */
 
-function normalizeContractArray(
-  contract
-) {
+function normalizeContractArray(contract) {
 
   if (
     Array.isArray(
       contract
     )
   ) {
-
     return contract;
   }
 
   if (
     contract &&
-    typeof contract ===
-      "object"
+    typeof contract === "object"
   ) {
-
-    return [
-      contract
-    ];
+    return [contract];
   }
 
   return [];
 }
 
+
 /* =========================================================
-   Item selection
-
-   The final share contract contains ONE item, so there is
-   no need for section/id query parameters.
-
-   We still accept id when processing legacy links.
+   SHARED ITEM SELECTION
 ========================================================= */
 
 function getSharedItem(
@@ -1211,103 +1118,17 @@ function getSharedItem(
   return items[0];
 }
 
-/* =========================================================
-   Type → Share Section
-========================================================= */
-
-function normalizeSection(
-  section
-) {
-
-  const value =
-    String(
-      section || ""
-    )
-      .trim()
-      .toLowerCase();
-
-  if (
-    value === "book" ||
-    value === "books" ||
-    value === "reader" ||
-    value === "pdf" ||
-    value === "pdfs"
-  ) {
-
-    return "reader";
-  }
-
-  if (
-    value === "video" ||
-    value === "videos"
-  ) {
-
-    return "video";
-  }
-
-  if (
-    value === "slideshow" ||
-    value === "slideshows" ||
-    value === "slide" ||
-    value === "slides"
-  ) {
-
-    return "slideshow";
-  }
-
-  return value;
-}
-
-function sectionFromItem(
-  item
-) {
-
-  const type =
-    String(
-      item?.type || ""
-    )
-      .trim()
-      .toLowerCase();
-
-  if (
-    type === "book"
-  ) {
-
-    return "reader";
-  }
-
-  if (
-    type === "video"
-  ) {
-
-    return "video";
-  }
-
-  if (
-    type === "slideshow"
-  ) {
-
-    return "slideshow";
-  }
-
-  return normalizeSection(
-    type
-  );
-}
 
 /* =========================================================
-   Clean media URL
+   CLEAN MEDIA URL
 ========================================================= */
 
-function cleanMediaUrl(
-  value
-) {
+function cleanMediaUrl(value) {
 
   if (
     value === null ||
     value === undefined
   ) {
-
     return "";
   }
 
@@ -1328,15 +1149,12 @@ function cleanMediaUrl(
     try {
 
       const decoded =
-        JSON.parse(
-          text
-        );
+        JSON.parse(text);
 
       if (
         typeof decoded ===
         "string"
       ) {
-
         text =
           decoded.trim();
       }
@@ -1345,10 +1163,7 @@ function cleanMediaUrl(
 
       text =
         text
-          .slice(
-            1,
-            -1
-          )
+          .slice(1, -1)
           .trim();
     }
   }
@@ -1359,7 +1174,6 @@ function cleanMediaUrl(
     );
 
   if (markdownMatch) {
-
     return markdownMatch[1];
   }
 
@@ -1369,20 +1183,18 @@ function cleanMediaUrl(
     );
 
   if (urlMatch) {
-
     return urlMatch[0];
   }
 
   return "";
 }
 
+
 /* =========================================================
-   HTML escaping
+   HTML ESCAPING
 ========================================================= */
 
-function escapeHtml(
-  value
-) {
+function escapeHtml(value) {
 
   return String(
     value ?? ""
@@ -1409,8 +1221,9 @@ function escapeHtml(
     );
 }
 
+
 /* =========================================================
-   Open Graph
+   OPEN GRAPH TAGS
 ========================================================= */
 
 function buildOgTags(
@@ -1463,41 +1276,18 @@ function buildOgTags(
     ).trim();
 
   return (
-
     `<meta property="og:title" content="${escapeHtml(title)}">` +
-
     `<meta property="og:site_name" content="${escapeHtml(OG_SITE_NAME)}">` +
-
     `<meta property="og:url" content="${escapeHtml(url.toString())}">` +
-
     `<meta property="og:image" content="${escapeHtml(imageUrl.toString())}">` +
-
     `<meta property="og:image:width" content="1200">` +
-
     `<meta property="og:image:height" content="630">`
   );
 }
 
+
 /* =========================================================
-   Bootstrap
-
-   CRITICAL:
-
-   Do NOT rewrite the browser URL.
-
-   The address bar must remain the canonical share URL:
-
-       /s/<section>/<id>
-
-   e.g. /s/slideshow/abovealllove202609131952
-
-   The old /s/<16-character-key> form is compatibility
-   code only.
-
-   The contract is supplied directly to the existing
-   GlideContract adapter through its accepted global:
-
-       window.MMicjMediaContract
+   SHARE MODE BOOTSTRAP
 ========================================================= */
 
 function injectContractBootstrap(
@@ -1529,21 +1319,21 @@ function injectContractBootstrap(
 
   window.SkyMediaContract = ${JSON.stringify(manifest)};
 
-window.__SKY_SHARE_MODE = true;
+  window.__SKY_SHARE_MODE = true;
 
-window.__SKY_SHARE_TARGET = ${JSON.stringify({
-  section:
-    target?.section ||
-    section,
+  window.__SKY_SHARE_TARGET = ${JSON.stringify({
+    section:
+      target?.section ||
+      section,
 
-  id:
-    target?.id ||
-    id
-})};
+    id:
+      target?.id ||
+      id
+  })};
 
-window.__SKY_SHARE_KEY = ${JSON.stringify(
-  imageQuery?.key || ""
-)};
+  window.__SKY_SHARE_KEY = ${JSON.stringify(
+    imageQuery?.key || ""
+  )};
 
 })();
 </script>
@@ -1559,43 +1349,6 @@ window.__SKY_SHARE_KEY = ${JSON.stringify(
   const marker =
     "</head>";
 
-  const index =
-    html.indexOf(
-      marker
-    );
-
-  if (
-    index < 0
-  ) {
-
-    return html;
-  }
-
-  /*
-   * CRITICAL — /s/<section>/<id> document base URL.
-   *
-   * index.html loads every stylesheet and script with a
-   * DOCUMENT-RELATIVE path ("css/style.css", "js/app.js").
-   *
-   * At "/" (the legacy ?contractz= route) those resolve to
-   * "/js/app.js" and everything works.
-   *
-   * At "/s/slideshow/<id>" they resolve to
-   * "/s/slideshow/js/app.js", which re-enters the share route
-   * and is rejected, so NO application script ever executes and
-   * the raw index.html shell is what the visitor sees.
-   *
-   * Forcing the document base back to the site root makes the
-   * share document load exactly the same resources as "/".
-   *
-   * The <base> element must be the FIRST thing inside <head>,
-   * before any relative href/src, or the preload scanner will
-   * already have resolved them against the /s/ path.
-   */
-
-  const baseTag =
-    '<base href="/">';
-
   const headMatch =
     /<head[^>]*>/i.exec(
       html
@@ -1603,6 +1356,20 @@ window.__SKY_SHARE_KEY = ${JSON.stringify(
 
   let withBase =
     html;
+
+  /*
+   * CRITICAL:
+   *
+   * Share URLs are /s/<section>/<id>.
+   * index.html contains document-relative
+   * stylesheet/script paths.
+   *
+   * Without <base href="/"> they resolve beneath
+   * /s/<section>/ and the application never loads.
+   */
+
+  const baseTag =
+    '<base href="/">';
 
   if (
     headMatch &&
@@ -1634,12 +1401,10 @@ window.__SKY_SHARE_KEY = ${JSON.stringify(
   if (
     headEnd < 0
   ) {
-
     return withBase;
   }
 
   return (
-
     withBase.slice(
       0,
       headEnd
@@ -1655,8 +1420,9 @@ window.__SKY_SHARE_KEY = ${JSON.stringify(
   );
 }
 
+
 /* =========================================================
-   Serve index.html with recovered contract
+   GET INDEX.HTML
 ========================================================= */
 
 async function getIndexHtml(
@@ -1674,7 +1440,6 @@ async function getIndexHtml(
   if (
     !assetResponse.ok
   ) {
-
     return assetResponse;
   }
 
@@ -1686,16 +1451,18 @@ async function getIndexHtml(
   if (
     !contentType
       .toLowerCase()
-      .includes(
-        "text/html"
-      )
+      .includes("text/html")
   ) {
-
     return assetResponse;
   }
 
   return assetResponse.text();
 }
+
+
+/* =========================================================
+   SERVE SR2 CONTRACT
+========================================================= */
 
 async function serveWithContract(
   request,
@@ -1714,7 +1481,6 @@ async function serveWithContract(
     typeof html !==
     "string"
   ) {
-
     return html;
   }
 
@@ -1735,14 +1501,28 @@ async function serveWithContract(
         )
       );
 
+    const normalized =
+      normalizeShareItem(
+        item
+      );
+
+    if (!normalized) {
+      throw new Error(
+        "Shared contract contains no valid item."
+      );
+    }
+
     manifest =
       buildShareManifest(
-        normalizeShareItem(
-          item
-        )
+        normalized
       );
 
   } catch (error) {
+
+    console.error(
+      "MMicjMedia contract decode failed:",
+      error
+    );
 
     return new Response(
       "MMicjMedia publication data is invalid.",
@@ -1757,7 +1537,6 @@ async function serveWithContract(
   }
 
   return new Response(
-
     injectContractBootstrap(
       html,
       manifest,
@@ -1775,7 +1554,6 @@ async function serveWithContract(
         key
       }
     ),
-
     {
       status:
         200,
@@ -1785,6 +1563,11 @@ async function serveWithContract(
     }
   );
 }
+
+
+/* =========================================================
+   SERVE DIRECT SHARE
+========================================================= */
 
 async function serveDirectShare(
   request,
@@ -1822,7 +1605,6 @@ async function serveDirectShare(
     typeof html !==
     "string"
   ) {
-
     return html;
   }
 
@@ -1849,16 +1631,9 @@ async function serveDirectShare(
   );
 }
 
+
 /* =========================================================
    SERVE CATALOG SHARE
-
-   Canonical URL:
-
-       /s/<section>/<id>
-
-   Example:
-
-       /s/slideshow/abovealllove202609131952
 ========================================================= */
 
 async function serveCatalogShare(
@@ -1887,7 +1662,6 @@ async function serveCatalogShare(
     typeof html !==
     "string"
   ) {
-
     return html;
   }
 
@@ -1913,6 +1687,7 @@ async function serveCatalogShare(
     }
   );
 }
+
 
 /* =========================================================
    OG IMAGE
@@ -1951,17 +1726,13 @@ async function serveOgImage(
       .trim()
       .toUpperCase();
 
-  let item =
-    null;
+  let item = null;
 
   if (
-    isValidKey(
-      key
-    )
+    isValidKey(key)
   ) {
 
-    let payload =
-      null;
+    let payload = null;
 
     try {
 
@@ -1992,9 +1763,7 @@ async function serveOgImage(
 
     if (
       !payload ||
-      !isValidPayload(
-        payload
-      )
+      !isValidPayload(payload)
     ) {
 
       return new Response(
@@ -2079,21 +1848,11 @@ async function serveOgImage(
       );
     }
 
-    /*
-     * Phase 4:
-     * OG preview now reads from the published catalog.
-     */
-
     let record =
       await getCatalogShareRecord(
         env,
         target
       );
-
-    /*
-     * Temporary backward compatibility for any
-     * older share:v1 records.
-     */
 
     if (!record) {
 
@@ -2142,21 +1901,12 @@ async function serveOgImage(
     );
 
   if (!thumbnailUrl) {
-
     thumbnailUrl =
       OG_DEFAULT_THUMBNAIL;
   }
 
-  /*
-   * The thumbnail and the logo are static remote files.
-   * Caching them keeps a social crawler storm from pulling
-   * the same two images from Glide storage on every preview.
-   */
-
   const OG_SOURCE_FETCH = {
-
     cf: {
-
       cacheTtl:
         86400,
 
@@ -2232,8 +1982,7 @@ async function serveOgImage(
   const baseStreams =
     baseResponse.body.tee();
 
-  let imageInfo =
-    null;
+  let imageInfo = null;
 
   try {
 
@@ -2250,8 +1999,7 @@ async function serveOgImage(
     );
   }
 
-  let logoWidth =
-    160;
+  let logoWidth = 160;
 
   if (
     imageInfo &&
@@ -2310,41 +2058,25 @@ async function serveOgImage(
     );
 
   const result =
-    await imagePipeline.output(
-      {
-        format:
-          "image/webp",
+    await imagePipeline.output({
+      format:
+        "image/webp",
 
-        quality:
-          85
-      }
-    );
+      quality:
+        85
+    });
 
-  return result.response(
-    {
-      headers: {
-        "Cache-Control":
-          "public, max-age=86400, stale-while-revalidate=604800"
-      }
+  return result.response({
+    headers: {
+      "Cache-Control":
+        "public, max-age=86400, stale-while-revalidate=604800"
     }
-  );
+  });
 }
 
+
 /* =========================================================
-   Share Prime
-
-   Client sends ONLY:
-
-       {
-         contractz,
-         section,
-         id
-       }
-
-   Worker calculates the key.
-
-   section/id are retained only as diagnostic compatibility
-   fields. They are NOT part of the public URL.
+   SHARE PRIME
 ========================================================= */
 
 async function handleSharePrime(
@@ -2431,8 +2163,6 @@ async function handleSharePrime(
     );
   }
 
-  /* New direct-ID registration. */
-
   const section =
     normalizeSection(
       body?.section
@@ -2448,6 +2178,10 @@ async function handleSharePrime(
       body?.item
     );
 
+  /* -------------------------------------------------------
+     NEW DIRECT-ID REGISTRATION
+  ------------------------------------------------------- */
+
   if (
     section &&
     id &&
@@ -2456,7 +2190,8 @@ async function handleSharePrime(
 
     if (
       item.id !== id ||
-      sectionFromItem(item) !== section
+      sectionFromItem(item) !==
+        section
     ) {
 
       return new Response(
@@ -2492,8 +2227,37 @@ async function handleSharePrime(
         item
       });
 
-            try {
-      await env.MEDIA_KV.get(key);
+    /*
+     * THIS IS THE CRITICAL DIRECT-SHARE BLOCK.
+     *
+     * First WRITE the record.
+     * Then READ it back.
+     *
+     * The previous version accidentally contained only
+     * MEDIA_KV.get(), meaning nothing was being stored.
+     */
+
+    try {
+
+      await env.MEDIA_KV.put(
+        key,
+        record
+      );
+
+      const stored =
+        await env.MEDIA_KV.get(
+          key
+        );
+
+      if (
+        stored !==
+        record
+      ) {
+
+        throw new Error(
+          "Direct-share KV verification failed."
+        );
+      }
 
     } catch (error) {
 
@@ -2504,22 +2268,22 @@ async function handleSharePrime(
 
       return new Response(
         JSON.stringify({
-          error: "MMicjMedia KV write failed.",
+          error:
+            "MMicjMedia KV write failed.",
+
           detail:
             error instanceof Error
               ? error.message
               : String(error)
         }),
         {
-          status: 500,
-          headers: {
-            ...corsHeaders,
-            "Content-Type":
-              "application/json; charset=utf-8"
-          }
+          status:
+            500,
+
+          headers:
+            corsHeaders
         }
       );
-    }
     }
 
     const shareUrl =
@@ -2552,7 +2316,9 @@ async function handleSharePrime(
     );
   }
 
-  /* Legacy SR2 registration remains supported. */
+  /* -------------------------------------------------------
+     LEGACY SR2 REGISTRATION
+  ------------------------------------------------------- */
 
   const payload =
     String(
@@ -2593,13 +2359,13 @@ async function handleSharePrime(
     );
 
     const stored =
-      await kvGet(
-        env,
+      await env.MEDIA_KV.get(
         key
       );
 
     if (
-      stored !== payload
+      stored !==
+      payload
     ) {
 
       throw new Error(
@@ -2617,7 +2383,12 @@ async function handleSharePrime(
     return new Response(
       JSON.stringify({
         error:
-          "MMicjMedia KV write failed."
+          "MMicjMedia KV write failed.",
+
+        detail:
+          error instanceof Error
+            ? error.message
+            : String(error)
       }),
       {
         status:
@@ -2648,8 +2419,9 @@ async function handleSharePrime(
   );
 }
 
+
 /* =========================================================
-   Legacy ?k=<key>&contractz=<payload>
+   LEGACY ?k=<key>&contractz=<payload>
 ========================================================= */
 
 async function handleLegacyPrime(
@@ -2709,6 +2481,11 @@ async function handleLegacyPrime(
 
   } catch (error) {
 
+    console.error(
+      "MMicjMedia legacy KV write failed:",
+      error
+    );
+
     return new Response(
       "MMicjMedia KV write failed.",
       {
@@ -2752,28 +2529,9 @@ async function handleLegacyPrime(
   );
 }
 
-/* =========================================================
-   CANONICAL /s/<section>/<id>
-
-   Phase 4:
-
-       catalog:v1
-
-   Temporary fallback:
-
-       share:v1
-========================================================= */
 
 /* =========================================================
-   /s/... sub-resource fallback
-
-   Defensive companion to the injected <base href="/">.
-
-   Any request under the share prefix that is plainly a static
-   asset ("/s/slideshow/js/app.js", "/s/<key>/css/style.css")
-   is served from the site root instead of being treated as a
-   share key, which previously produced a 400 for every script
-   and stylesheet on the page.
+   SHARE SUBRESOURCE FALLBACK
 ========================================================= */
 
 async function serveShareSubresource(
@@ -2797,21 +2555,19 @@ async function serveShareSubresource(
   if (
     parts.length < 2
   ) {
-
     return null;
   }
 
   const last =
-    parts[parts.length - 1];
+    parts[
+      parts.length - 1
+    ];
 
   if (
     !/\.[A-Za-z0-9]{2,6}$/.test(
       last
     )
   ) {
-
-    /* A real share target has no file extension. */
-
     return null;
   }
 
@@ -2850,13 +2606,17 @@ async function serveShareSubresource(
     if (
       assetResponse.ok
     ) {
-
       return assetResponse;
     }
   }
 
   return null;
 }
+
+
+/* =========================================================
+   DIRECT SHARE ROUTING
+========================================================= */
 
 async function handleDirectShare(
   request,
@@ -2875,10 +2635,7 @@ async function handleDirectShare(
   }
 
   /*
-   * NEW ARCHITECTURE
-   *
-   * The catalog published by Glide is the primary
-   * source of the shared item.
+   * Phase 4 catalog is primary.
    */
 
   const catalogResponse =
@@ -2893,10 +2650,7 @@ async function handleDirectShare(
   }
 
   /*
-   * TEMPORARY compatibility fallback.
-   *
-   * This allows previously primed share:v1 records
-   * to continue functioning while Phase 4 is tested.
+   * Temporary share:v1 compatibility fallback.
    */
 
   return serveDirectShare(
@@ -2906,11 +2660,9 @@ async function handleDirectShare(
   );
 }
 
-/* =========================================================
-   /s/<16-character-key> legacy handler
 
-   Compatibility only. The canonical route is
-   /s/<section>/<id>, handled by handleDirectShare().
+/* =========================================================
+   LEGACY /s/<16-character-key>
 ========================================================= */
 
 async function handleShortShare(
@@ -2923,31 +2675,25 @@ async function handleShortShare(
       request.url
     );
 
-  const prefix =
-    SHARE_PATH_PREFIX;
-
   if (
     !url.pathname.startsWith(
-      prefix
+      SHARE_PATH_PREFIX
     )
   ) {
-
     return null;
   }
 
   const key =
     url.pathname
       .slice(
-        prefix.length
+        SHARE_PATH_PREFIX.length
       )
       .split("/")[0]
       .trim()
       .toUpperCase();
 
   if (
-    !isValidKey(
-      key
-    )
+    !isValidKey(key)
   ) {
 
     return new Response(
@@ -2962,8 +2708,7 @@ async function handleShortShare(
     );
   }
 
-  let payload =
-    null;
+  let payload = null;
 
   try {
 
@@ -3007,9 +2752,7 @@ async function handleShortShare(
   }
 
   if (
-    !isValidPayload(
-      payload
-    )
+    !isValidPayload(payload)
   ) {
 
     return new Response(
@@ -3032,15 +2775,9 @@ async function handleShortShare(
   );
 }
 
+
 /* =========================================================
-   TEMPORARY /__sky_catalog_publish TEST ENDPOINT
-
-   POST body is deliberately tiny for this first test.
-   It proves that the Glide JavaScript column can reach
-   the Worker and that the Worker can write/read MEDIA_KV.
-
-   This endpoint will later be changed to accept the full
-   catalog and use proper secret-backed authentication.
+   CATALOG TEST CORS
 ========================================================= */
 
 function catalogTestCorsHeaders() {
@@ -3063,6 +2800,11 @@ function catalogTestCorsHeaders() {
       "no-store, no-cache, must-revalidate"
   };
 }
+
+
+/* =========================================================
+   CATALOG TEST AUTHORIZATION
+========================================================= */
 
 function catalogTestAuthorized(
   request,
@@ -3091,6 +2833,11 @@ function catalogTestAuthorized(
       CATALOG_TEST_TOKEN
   );
 }
+
+
+/* =========================================================
+   CATALOG PUBLISH TEST
+========================================================= */
 
 async function handleCatalogPublishTest(
   request,
@@ -3142,7 +2889,9 @@ async function handleCatalogPublishTest(
     );
   }
 
-  /* GET with section + id returns the actual stored item. */
+  /* -------------------------------------------------------
+     GET
+  ------------------------------------------------------- */
 
   if (
     request.method ===
@@ -3178,13 +2927,6 @@ async function handleCatalogPublishTest(
 
       try {
 
-        /*
-         * The diagnostic endpoint deliberately bypasses
-         * kvGet()'s cacheTtl. A verification read must show
-         * what is actually in KV right now, not a colo copy
-         * from up to KV_CACHE_TTL seconds ago.
-         */
-
         stored =
           await env.MEDIA_KV.get(
             key
@@ -3200,7 +2942,12 @@ async function handleCatalogPublishTest(
         return new Response(
           JSON.stringify({
             error:
-              "Catalog item KV read failed."
+              "Catalog item KV read failed.",
+
+            detail:
+              error instanceof Error
+                ? error.message
+                : String(error)
           }),
           {
             status:
@@ -3261,7 +3008,12 @@ async function handleCatalogPublishTest(
       return new Response(
         JSON.stringify({
           error:
-            "Catalog status KV read failed."
+            "Catalog status KV read failed.",
+
+          detail:
+            error instanceof Error
+              ? error.message
+              : String(error)
         }),
         {
           status:
@@ -3289,6 +3041,10 @@ async function handleCatalogPublishTest(
       }
     );
   }
+
+  /* -------------------------------------------------------
+     POST
+  ------------------------------------------------------- */
 
   if (
     request.method !==
@@ -3368,8 +3124,7 @@ async function handleCatalogPublishTest(
   let skippedCount =
     0;
 
-  const sample =
-    [];
+  const sample = [];
 
   try {
 
@@ -3425,9 +3180,7 @@ async function handleCatalogPublishTest(
 
       await env.MEDIA_KV.put(
         key,
-        JSON.stringify(
-          record
-        )
+        JSON.stringify(record)
       );
 
       storedCount++;
@@ -3438,8 +3191,10 @@ async function handleCatalogPublishTest(
 
         sample.push({
           section,
+
           id:
             item.id,
+
           key
         });
       }
@@ -3485,9 +3240,9 @@ async function handleCatalogPublishTest(
     );
 
     const statusReadBack =
-    await env.MEDIA_KV.get(
+      await env.MEDIA_KV.get(
         CATALOG_TEST_STATUS_KEY
-    );
+      );
 
     if (
       statusReadBack !==
@@ -3540,7 +3295,12 @@ async function handleCatalogPublishTest(
     return new Response(
       JSON.stringify({
         error:
-          "Catalog publish KV write/verification failed."
+          "Catalog publish KV write/verification failed.",
+
+        detail:
+          error instanceof Error
+            ? error.message
+            : String(error)
       }),
       {
         status:
@@ -3552,8 +3312,9 @@ async function handleCatalogPublishTest(
   }
 }
 
+
 /* =========================================================
-   Worker
+   WORKER
 ========================================================= */
 
 export default {
@@ -3570,7 +3331,7 @@ export default {
       );
 
     /* -----------------------------------------------------
-       OG image
+       OG IMAGE
     ----------------------------------------------------- */
 
     if (
@@ -3585,7 +3346,7 @@ export default {
     }
 
     /* -----------------------------------------------------
-       Temporary catalog publish test
+       TEMPORARY CATALOG PUBLISH TEST
     ----------------------------------------------------- */
 
     if (
@@ -3600,7 +3361,7 @@ export default {
     }
 
     /* -----------------------------------------------------
-       Share prime
+       SHARE PRIME
     ----------------------------------------------------- */
 
     if (
@@ -3615,7 +3376,7 @@ export default {
     }
 
     /* -----------------------------------------------------
-       New canonical /s/<section>/<id>
+       /s/ SHARE ROUTES
     ----------------------------------------------------- */
 
     if (
@@ -3623,6 +3384,10 @@ export default {
         SHARE_PATH_PREFIX
       )
     ) {
+
+      /*
+       * Defensive asset handling.
+       */
 
       const assetResponse =
         await serveShareSubresource(
@@ -3634,6 +3399,12 @@ export default {
         return assetResponse;
       }
 
+      /*
+       * New canonical:
+       *
+       * /s/<section>/<id>
+       */
+
       const directResponse =
         await handleDirectShare(
           request,
@@ -3644,7 +3415,11 @@ export default {
         return directResponse;
       }
 
-      /* Legacy /s/<16-char-key> remains supported. */
+      /*
+       * Legacy:
+       *
+       * /s/<16-character-key>
+       */
 
       return handleShortShare(
         request,
@@ -3663,7 +3438,7 @@ export default {
       );
 
     /* -----------------------------------------------------
-       Legacy ?k=<key>&contractz=<payload>
+       LEGACY ?k=<key>&contractz=<payload>
     ----------------------------------------------------- */
 
     if (
@@ -3680,12 +3455,10 @@ export default {
     }
 
     /* -----------------------------------------------------
-       Legacy ?k=<key>
+       LEGACY ?k=<key>
     ----------------------------------------------------- */
 
-    if (
-      keyParam
-    ) {
+    if (keyParam) {
 
       const key =
         keyParam
@@ -3693,9 +3466,7 @@ export default {
           .toUpperCase();
 
       if (
-        !isValidKey(
-          key
-        )
+        !isValidKey(key)
       ) {
 
         return new Response(
@@ -3710,8 +3481,7 @@ export default {
         );
       }
 
-      let payload =
-        null;
+      let payload = null;
 
       try {
 
@@ -3722,6 +3492,11 @@ export default {
           );
 
       } catch (error) {
+
+        console.error(
+          "MMicjMedia KV read failed:",
+          error
+        );
 
         return new Response(
           "MMicjMedia KV read failed.",
@@ -3758,12 +3533,10 @@ export default {
     }
 
     /* -----------------------------------------------------
-       Legacy direct contract
+       LEGACY DIRECT CONTRACT
     ----------------------------------------------------- */
 
-    if (
-      contractz
-    ) {
+    if (contractz) {
 
       if (
         !isValidPayload(
@@ -3797,7 +3570,7 @@ export default {
     }
 
     /* -----------------------------------------------------
-       Normal application
+       NORMAL APPLICATION
     ----------------------------------------------------- */
 
     return env.ASSETS.fetch(
