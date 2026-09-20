@@ -701,6 +701,17 @@ position:relative;    height: fit-content;
     .slideshow-workspace{display:block;padding:0}
     .slideshow-library{position:absolute;left:0;top:0;bottom:0;width:min(88vw,360px);z-index:30;transform:translateX(-105%);transition:transform .28s ease;box-shadow:8px 0 25px rgba(0,0,0,.3)}
     .slideshow-section.slideshow-drawer-open .slideshow-library{transform:translateX(0)}
+
+/* Hide the narrow-library toggle while the slideshow drawer is open. */
+@media (max-width:700px){
+    .slideshow-section.slideshow-drawer-open
+    .slideshow-top-bar .slideshow-narrow-library-toggle{
+        opacity:0 !important;
+        visibility:hidden !important;
+        pointer-events:none !important;
+    }
+}
+
     .slideshow-library-drawer-close{display:inline-flex}
     .slideshow-viewer{width:100%;padding:14px 8px 58px}
     /* width:100% matches #viewerLibrary (style.css, 999px breakpoint) and
