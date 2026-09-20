@@ -2938,3 +2938,53 @@ body:not(.sky-share-mode):has(#videoSection.videoFocus) #workspacePrimaryLogo:no
         width: 72px;
     }
 }
+
+/* =========================================================
+   SkyMedia Status / Welcome Bar Alignment
+   Keep all viewer status bars and Welcome bars identical.
+   ========================================================= */
+
+#statusBar,
+#videoStatusBar,
+.slideshow-status-bar,
+.sr-welcome-banner {
+    box-sizing: border-box;
+    height: 28px;
+    min-height: 28px;
+    max-height: 28px;
+    font-size: 13px;
+    line-height: 20px;
+}
+
+/* Keep the actual status/welcome text at the same size. */
+#statusBar *,
+#videoStatusBar *,
+.slideshow-status-bar *,
+.sr-welcome-banner * {
+    font-size: 13px;
+}
+
+/* Consistent vertical centering. */
+#statusBar > center,
+#videoStatusBar > center,
+.slideshow-status-bar > center,
+.sr-welcome-banner > center {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Preserve the Reader status bar's compact horizontal spacing. */
+#statusBar {
+    padding: 4px 8px;
+}
+
+/* Keep the other status bars from introducing a different height
+   through their own padding. */
+#videoStatusBar,
+.slideshow-status-bar,
+.sr-welcome-banner {
+    padding-top: 4px;
+    padding-bottom: 4px;
+}
