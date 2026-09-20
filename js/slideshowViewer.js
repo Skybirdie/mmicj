@@ -31,8 +31,22 @@ window.SlideshowViewer = (function () {
     }
 
     function setPlaybackChrome(active){
-        document.querySelectorAll(".slideshow-toolbar,.slideshow-status-bar,.slideshow-playback-status,.slideshow-viewer-title").forEach(el=>{el.hidden=!active;});
+    document.querySelectorAll(
+        ".slideshow-toolbar,.slideshow-playback-status,.slideshow-viewer-title"
+    ).forEach(el => {
+        el.hidden = !active;
+    });
+
+    /*
+     * The status bar is persistent. It remains visible when no
+     * slideshow is open so that the idle state can display MMicj.
+     */
+    const statusBar = document.querySelector(".slideshow-status-bar");
+
+    if(statusBar){
+        statusBar.hidden = false;
     }
+}
 
 
 
@@ -365,14 +379,17 @@ container.appendChild(b);
     const total = slideCount();
 
     if(status) {
-        status.textContent = current
-            ? (current.title || "")
-            : "MMicj";
+        status.textContent =
+            current
+                ? (current.title || "")
+                : "MMicj";
     }
 
     if(indicator) {
         indicator.textContent =
-            current && total ? `${index+1} / ${total}` : "";
+            current && total
+                ? `${index+1} / ${total}`
+                : "";
     }
 }
     function setStatus(message){

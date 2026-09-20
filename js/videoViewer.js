@@ -506,11 +506,13 @@ function init(options = {}) {
 
     refreshVideoLayout();
 
-    renderLanding();
+renderLanding();
 
-    resetVideoTimer();
+resetVideoTimer();
 
-    return true;
+updateStatusBar(null);
+
+return true;
 
 }
 
