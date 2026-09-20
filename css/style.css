@@ -2961,7 +2961,7 @@ body:not(.sky-share-mode):has(#videoSection.videoFocus) #workspacePrimaryLogo:no
 #videoStatusBar *,
 .slideshow-status-bar *,
 .sr-welcome-banner * {
-    font-size: 13px;
+    font-size: 13px !important;
 }
 
 /* Consistent vertical centering. */
@@ -2987,6 +2987,7 @@ body:not(.sky-share-mode):has(#videoSection.videoFocus) #workspacePrimaryLogo:no
 .sr-welcome-banner {
     padding-top: 4px;
     padding-bottom: 4px;
+margin:0 !important;
 }
 
 /* Reader status bar: slightly more compact to match the
