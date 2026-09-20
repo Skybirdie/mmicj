@@ -303,7 +303,7 @@ html:fullscreen #topBar{
   right:0;
   top:50%;
   bottom:auto;
-  width: calc(100% - 32px);
+  width: 100%;
   /* Strictly 60% of the viewer background height. */
   height:60%;
   min-height:0;
