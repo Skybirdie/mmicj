@@ -2954,7 +2954,6 @@ body:not(.sky-share-mode):has(#videoSection.videoFocus) #workspacePrimaryLogo:no
     max-height: 28px;
     font-size: 13px;
     line-height: 20px;
-    margin: 0;
 }
 
 /* Keep the actual status/welcome text at the same size. */
@@ -2988,4 +2987,14 @@ body:not(.sky-share-mode):has(#videoSection.videoFocus) #workspacePrimaryLogo:no
 .sr-welcome-banner {
     padding-top: 4px;
     padding-bottom: 4px;
+}
+
+/* Reader status bar: slightly more compact to match the
+   visual height of the other viewer bars. */
+#statusBar {
+    height: 24px;
+    min-height: 24px;
+    max-height: 24px;
+    padding: 2px 8px;
+    line-height: 20px;
 }
