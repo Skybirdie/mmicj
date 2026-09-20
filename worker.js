@@ -2492,46 +2492,51 @@ async function handleSharePrime(
         item
       });
 
-    try {
-
+        try {
       await env.MEDIA_KV.put(
         key,
         record
       );
 
       const stored =
-    await env.MEDIA_KV.get(
-        key
-    );
+        await env.MEDIA_KV.get(
+          key
+        );
 
       if (
         stored !== record
       ) {
-
         throw new Error(
           "KV verification failed."
         );
       }
 
-    } catch(error) {
-  console.error("MMicjMedia direct-share KV write failure:", error);
+    } catch (error) {
 
-  return new Response(
-    JSON.stringify({
-      error: "MMicjMedia KV write failed.",
-      detail: error instanceof Error
-        ? error.message
-        : String(error)
-    }),
-    {
-      status: 500,
-      headers: {
-        ...corsHeaders,
-        "Content-Type": "application/json; charset=utf-8"
-      }
+      console.error(
+        "MMicjMedia direct-share KV write failure:",
+        error
+      );
+
+      return new Response(
+        JSON.stringify({
+          error:
+            "MMicjMedia KV write failed.",
+
+          detail:
+            error instanceof Error
+              ? error.message
+              : String(error)
+        }),
+        {
+          status:
+            500,
+
+          headers:
+            corsHeaders
+        }
+      );
     }
-  );
-}
     }
 
     const shareUrl =
