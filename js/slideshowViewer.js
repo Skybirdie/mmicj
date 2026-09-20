@@ -1052,6 +1052,7 @@ if (
 
         root.classList.add("has-slideshow");
         setPlaybackChrome(true);
+        setStatus("");
         landing?.classList.add("hidden");
 
         stage.innerHTML="";
