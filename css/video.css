@@ -1,0 +1,2980 @@
+/*
+=========================================================
+ SkyReader Video Section
+
+ Layout:
+ • full-screen video background
+ • transparent left library / pull-out drawer
+ • dedicated video viewer
+ • centered 60% landing
+ • narrow-screen drawer overlay
+ • grid/list library controls
+=========================================================
+*/
+
+
+/* =======================================================
+   VIDEO SECTION
+======================================================= */
+
+.video-section{
+    --video-topbar-height:clamp(44px,5.5vh,68px);
+    --video-library-width:360px;
+
+    position:fixed;
+    inset:0;
+    z-index:2000;
+
+    display:none;
+
+    grid-template-rows:
+        var(--video-topbar-height)
+        minmax(0,1fr);
+
+    width:100vw;
+    height:100dvh;
+
+    min-width:0;
+    min-height:0;
+
+    overflow:hidden;
+
+    background:
+        url("../assets/video-background.jpg")
+        center/cover
+        no-repeat;
+
+    color:#fff;
+}
+
+
+/*
+AppSwitcher marks the active section.
+*/
+
+#videoSection.app-section-active{
+    display:grid;
+
+}
+
+#app.app-section-hidden{
+    display:none!important;
+}
+
+
+.video-section *,
+.video-section *::before,
+.video-section *::after{
+    box-sizing:border-box;
+}
+
+
+/* =======================================================
+   FOCUS MODE
+
+   Fullscreens the whole section (not just <video>) so
+   only the video and the section's own background image
+   remain — no top bar, library, title, or status bar.
+======================================================= */
+
+.video-section.videoFocus .video-top-bar,
+.video-section.videoFocus .video-library,
+.video-section.videoFocus .video-narrow-library-toggle,
+.video-section.videoFocus .video-status-bar,
+.video-section.videoFocus .video-viewer-title,
+.video-section.videoFocus .video-landing{
+    display:none!important;
+}
+
+.video-section.videoFocus{
+    grid-template-rows:minmax(0,1fr);
+}
+
+.video-section.videoFocus .video-workspace{
+    grid-row:1;
+    padding:0;
+}
+
+.video-section.videoFocus .video-viewer{
+    padding-bottom:0;
+}
+
+.video-focus-exit-button{
+    display:none;
+
+    position:absolute;
+
+    right:16px;
+    top:16px;
+
+    z-index:60;
+
+    width:42px;
+    height:42px;
+
+    align-items:center;
+    justify-content:center;
+
+    padding:0;
+
+    border:1px solid color-mix(in srgb,var(--control-text) 22%,transparent);
+    border-radius:8px;
+
+    background:rgba(255,255,255,.18);
+    color:#fff;
+
+    backdrop-filter:blur(7px);
+
+    cursor:pointer;
+}
+
+.video-focus-exit-button .icon{
+    width:22px;
+    height:22px;
+}
+
+.video-section.videoFocus .video-focus-exit-button{
+    display:flex;
+}
+
+
+/* =======================================================
+   LIBRARY / DESKTOP DRAWER
+======================================================= */
+
+.video-library{
+    position:relative;
+
+    z-index:3000;
+
+    width:var(--video-library-width);
+    flex:0 0 var(--video-library-width);
+
+    height:100%;
+
+    min-width:0;
+    min-height:0;
+
+    display:flex;
+    flex-direction:column;
+
+    overflow-x:hidden;
+    overflow-y:auto;
+
+    background:transparent;
+    color:#fff;
+
+    transition:
+        transform .28s cubic-bezier(.25,.8,.25,1),
+        visibility 0s linear 0s;
+
+    scrollbar-width:thin;
+    scrollbar-color:
+        rgba(255,255,255,.42)
+        transparent;
+}
+
+
+.video-library::-webkit-scrollbar{
+    width:9px;
+}
+
+.video-library::-webkit-scrollbar-track{
+    background:rgba(255,255,255,.10);
+}
+
+.video-library::-webkit-scrollbar-thumb{
+    background:rgba(255,255,255,.42);
+    border-radius:999px;
+    border:2px solid transparent;
+    background-clip:padding-box;
+}
+
+
+/* =======================================================
+   LIBRARY HEADER
+======================================================= */
+
+.video-library-header{
+    position:relative;
+    z-index:100;
+    flex:0 0 48px;
+    min-height:48px;
+
+    width:100%;
+
+    display:flex;
+    align-items:center;
+
+    gap:8px;
+
+    padding:8px 12px;
+
+}
+
+
+.video-library-title{
+    margin:0;
+
+    min-width:0;
+
+    flex:1 1 auto;
+
+    color:#fff;
+
+     font-size:
+        clamp(20px,4vw,30px);
+    line-height:1;
+    font-weight:700;
+
+    text-shadow:
+        0 1px 4px rgba(0,0,0,.65);
+
+}
+
+
+.video-library-header-right{
+    flex:0 0 auto;
+    position:relative;
+    z-index:101;
+    display:flex;
+    align-items:center;
+
+    gap:4px;
+
+    margin-left:auto;
+    background:rgba(255,255,255,.42);
+    border-radius: 10px;
+
+}
+
+
+.video-library-controls{
+    display:flex;
+    align-items:center;
+    gap:2px;
+}
+
+.video-library-organization-controls{
+    position:relative;
+    display:flex;
+    align-items:center;
+    gap:2px;
+}
+
+.video-library-org-button{
+    position:relative;
+    width:32px;
+    height:32px;
+    flex:0 0 32px;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    padding:0;
+    border:0;
+    border-radius:10px;
+    background:none;
+    color:#fff;
+    backdrop-filter:blur(7px);
+    cursor:pointer;
+    text-shadow:0 2px 3px rgba(0,0,0,.55);
+    font-size:clamp(15px,3.5vw,22px);
+}
+
+.video-library-org-button:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(0,0,0,.18)}
+
+.video-library-org-button .icon{
+    width:20px;
+    height:20px;
+    color:#fff;
+    filter:drop-shadow(0 2px 3px rgba(0,0,0,.55));
+}
+
+.video-library-filter-active{
+    display:none;
+    position:absolute;
+    right:4px;
+    top:4px;
+    width:6px;
+    height:6px;
+
+}
+
+.video-library-filter-active.active{
+    display:block;
+
+}
+
+.video-library-org-menu{
+    position:absolute;
+    top:34px;
+    right:0;
+    z-index:200;
+    min-width:170px;
+    padding:8px;
+    border:1px solid rgba(255,255,255,.18);
+    border-radius:10px;
+    background:rgba(25,25,25,.94);
+    box-shadow:0 10px 30px rgba(0,0,0,.3);
+    backdrop-filter:blur(12px);
+}
+
+.video-library-org-menu select{
+    width:100%;
+    min-height:30px;
+    margin:0;
+    padding:5px 8px;
+    border:1px solid rgba(255,255,255,.15);
+    border-radius:7px;
+    background:rgba(255,255,255,.08);
+    color:#fff;
+    font:inherit;
+
+}
+
+.video-library-org-menu select + select{
+    margin-top:7px;
+}
+
+.video-library-org-menu option{
+    background:#222;
+    color:#fff;
+}
+
+
+
+.video-view-button,
+.video-library-drawer-close{
+    width:30px;
+    height:30px;
+
+    flex:0 0 30px;
+
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+
+    padding:0;
+
+    border:0;
+    border-radius:8px;
+
+    background:transparent;
+    color:#fff;
+    filter:drop-shadow(0 2px 3px rgba(0,0,0,.55));
+    cursor:pointer;
+
+    text-shadow:
+        0 1px 4px rgba(0,0,0,.55);
+
+    transition:
+        background .2s ease,
+        transform .2s ease;
+}
+
+
+.video-view-button:hover,
+.video-view-button.active,
+.video-library-drawer-close:hover{
+    background:rgba(255,255,255,.16);
+
+}
+
+
+.video-view-button:active,
+.video-library-drawer-close:active{
+    transform:scale(.96);
+}
+
+
+.video-view-button .icon,
+.video-library-drawer-close .icon{
+    width:18px;
+    height:18px;
+}
+
+
+.video-library-drawer-close{
+    display:none;
+}
+
+
+/* =======================================================
+   LIBRARY GRID
+======================================================= */
+
+.video-library-grid{
+    position:relative;
+    z-index:1;
+    flex:1 1 auto;
+
+    width:100%;
+
+    min-width:0;
+    min-height:0;
+
+    padding:2px 10px 30px;
+}
+
+
+/* =======================================================
+   CIRCULAR SIDE-PANEL GRID
+======================================================= */
+
+.video-circle-card{
+    position:absolute;
+    appearance:none;
+
+    border:0;
+    padding:0;
+    margin:0;
+
+    background:transparent;
+
+    cursor:pointer;
+
+    display:block;
+
+}
+
+
+.video-circle{
+    position:relative;
+
+    width:130px;
+    height:130px;
+
+    border-radius:50%;
+
+    overflow:hidden;
+
+    background:rgba(0,0,0,.18);
+
+    box-shadow:
+        0 5px 18px rgba(0,0,0,.28);
+
+    transition:
+        transform .25s ease,
+        box-shadow .25s ease;
+}
+
+
+.video-circle-size-1 .video-circle{
+    width:162px;
+    height:162px;
+}
+
+.video-circle-size-2 .video-circle{
+    width:100px;
+    height:100px;
+}
+
+.video-circle-size-3 .video-circle{
+    width:62px;
+    height:62px;
+}
+
+
+.video-circle img{
+    display:block;
+
+    width:100%;
+    height:100%;
+
+    object-fit:cover;
+}
+
+
+.video-circle-overlay{
+    position:absolute;
+    inset:0;
+
+    display:flex;
+    flex-direction:column;
+
+    align-items:center;
+    justify-content:center;
+
+    padding:14px;
+
+    text-align:center;
+
+    background:
+        linear-gradient(
+            to bottom,
+            rgba(0,0,0,.04),
+            rgba(0,0,0,.70)
+        );
+
+}
+
+
+.video-circle-title{
+    max-width:82%;
+    color:#fff;
+    font-size:clamp(11px,2.2vh,18px);
+    line-height:1.2;
+    font-weight:600;
+    text-shadow:0 1px 4px rgba(0,0,0,.9);
+}
+
+/* Scale the title with the three circle sizes while keeping it legible. */
+.video-circle-size-1 .video-circle-title{
+    max-width:78%;
+    font-size:18px;
+}
+.video-circle-size-2 .video-circle-title{
+    max-width:80%;
+    font-size:14px;
+}
+.video-circle-size-3 .video-circle-title{
+    max-width:80%;
+    font-size:11px;
+}
+
+
+.video-circle-play{
+    display:none!important;
+}
+
+
+.video-favorite-control{
+    position:absolute;
+    top:6px;
+    right:6px;
+    z-index:4;
+    width:25px;
+    height:25px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    border:0;
+    border-radius:50%;
+    background:color-mix(in srgb,var(--card,#222) 30%,transparent);
+    backdrop-filter:blur(4px);
+    -webkit-backdrop-filter:blur(4px);
+    color:var(--text,#fff);
+    font-size:16px;
+    line-height:1;
+    cursor:pointer;
+    user-select:none;
+    padding:0;
+    transition:transform .2s ease,color .2s ease,background .2s ease;
+}
+
+/* Keep the standardized 25px favorite inside the circular clipping boundary.
+   Larger circles need a deeper inset; the smallest circle keeps its
+   previous positioning. */
+.video-circle-size-1 .video-favorite-control{
+    top:20%;
+    right:20%;
+}
+.video-circle-size-2 .video-favorite-control{
+    top:24%;
+    right:24%;
+}
+.video-circle-size-3 .video-favorite-control{
+    top:4px;
+    right:4px;
+}
+
+.video-favorite-control .video-favorite-icon{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    width:100%;
+    height:100%;
+    line-height:1;
+    transform:translateY(-1px);
+}
+
+.video-favorite-control:hover{
+    transform:scale(1.08);
+}
+
+.video-favorite-control.is-favorite{
+    color:#e0435c;
+}
+
+.video-favorite-icon{
+    display:block;
+    line-height:1;
+}
+
+.video-list-card .video-favorite-control{
+    right:10px;
+    top:8px;
+}
+
+.video-landing-circle-card{
+    position:relative;
+}
+
+.video-landing-favorite{
+    position:absolute;
+    top:8px;
+    right:8px;
+    z-index:5;
+    width:25px;
+    height:25px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    border:0;
+    border-radius:50%;
+    background:color-mix(in srgb,var(--card,#222) 30%,transparent);
+    backdrop-filter:blur(4px);
+    -webkit-backdrop-filter:blur(4px);
+    color:var(--text,#fff);
+    font-size:16px;
+    line-height:1;
+    cursor:pointer;
+    transition:transform .2s ease,color .2s ease,background .2s ease;
+}
+
+.video-landing-favorite:hover{
+    transform:scale(1.08);
+}
+
+.video-landing-favorite.is-favorite{
+    color:#e0435c;
+}
+
+.video-circle-card:hover .video-circle{
+    transform:scale(1.05);
+
+    box-shadow:
+        0 8px 24px rgba(0,0,0,.38);
+}
+
+
+.video-circle-card.selected .video-circle{
+    transform:scale(1.05);
+
+    box-shadow:
+        0 0 0 3px #66CDAA,
+        0 8px 24px rgba(0,0,0,.4);
+}
+
+
+/* =======================================================
+   LIST VIEW
+======================================================= */
+
+.video-library[data-view="list"]
+.video-library-grid{
+    display:flex;
+    flex-direction:column;
+
+    align-items:stretch;
+
+    gap:10px;
+
+    padding:10px 14px 30px;
+}
+
+
+.video-list-card{
+    position:relative;
+    appearance:none;
+
+    width:100%;
+
+    min-width:0;
+
+    display:flex;
+    align-items:center;
+
+    gap:12px;
+
+    padding:0;
+
+    border:0;
+
+    background:transparent;
+    color:#fff;
+
+    text-align:left;
+
+    cursor:pointer;
+}
+
+
+.video-list-thumbnail{
+    position:relative;
+
+    width:110px;
+    height:110px;
+
+    flex:0 0 110px;
+
+    overflow:hidden;
+
+    border-radius:50%;
+
+    background:rgba(0,0,0,.25);
+
+    box-shadow:
+        0 3px 12px rgba(0,0,0,.25);
+}
+
+
+.video-list-thumbnail img{
+    display:block;
+
+    width:100%;
+    height:100%;
+
+    object-fit:cover;
+}
+
+
+.video-list-play{
+    position:absolute;
+
+    left:50%;
+    top:50%;
+
+    transform:
+        translate(-50%,-50%);
+
+    width:28px;
+    height:28px;
+
+    display:flex;
+    align-items:center;
+    justify-content:center;
+
+    border-radius:50%;
+
+    background:rgba(0,0,0,.55);
+    color:#fff;
+
+    font-size:10px;
+}
+
+
+.video-list-info{
+    min-width:0;
+
+    flex:1 1 auto;
+}
+
+
+.video-list-title{
+    color:#fff;
+
+    font-size:clamp(11px,3.0vw,15px);
+    line-height:1.25;
+    font-weight:600;
+
+    overflow:hidden;
+
+    text-overflow:ellipsis;
+    white-space:nowrap;
+
+    text-shadow:
+        0 1px 4px rgba(0,0,0,.7);
+}
+
+
+.video-list-meta{
+    margin-top:4px;
+    color:rgba(255,255,255,1.0);
+    font-size:clamp(8px,1.5vw,12px);
+    font-weight:550;
+    text-shadow: 0 1px 3px rgba(0,0,0,.5);
+}
+
+
+.video-list-card.selected .video-list-thumbnail{
+    box-shadow:
+        0 0 0 2px #66CDAA,
+        0 3px 12px rgba(0,0,0,.3);
+}
+
+
+/* =======================================================
+   VIDEO WORKSPACE
+======================================================= */
+
+.video-workspace{
+    grid-row:2;
+
+    position:relative;
+
+    min-width:0;
+    min-height:0;
+
+    width:100%;
+    height:100%;
+
+    display:flex;
+    flex-direction:row;
+
+    overflow:hidden;
+
+    padding:0 30px;
+
+    background:transparent;
+}
+
+
+
+/* =======================================================
+   VIDEO VIEWER
+======================================================= */
+
+.video-viewer{
+    --video-statusbar-height:
+        clamp(22px,3vh,32px);
+
+    --video-clearance:
+        clamp(16px,2.5vh,28px);
+
+    position:relative;
+
+    top:50%;
+    transform:translateY(-50%);
+
+    flex:1 1 auto;
+
+    width:0;
+
+    min-width:0;
+    min-height:0;
+
+    /*
+     * Keep the viewer centered while reserving equal
+     * breathing room above and below the video.
+     */
+    height:93%;
+
+    box-sizing:border-box;
+
+    padding-top:var(--video-clearance);
+
+    padding-bottom:
+        calc(
+            var(--video-clearance) +
+            var(--video-statusbar-height)
+        );
+
+    display:flex;
+
+    align-items:center;
+    justify-content:center;
+
+    overflow:hidden;
+
+    background:transparent;
+    border-radius:10px;
+}
+
+
+/* Close control shown whenever a video is active. */
+.video-viewer-close{
+    position:absolute;
+    top:14px;
+    right:14px;
+    z-index:40;
+    width:38px;
+    height:38px;
+    display:none;
+    align-items:center;
+    justify-content:center;
+    padding:0;
+    border:1px solid color-mix(in srgb,var(--text) 22%,transparent);
+    border-radius:50%;
+    background:color-mix(in srgb,var(--panel) 22%,transparent);
+    color:var(--text);
+    backdrop-filter:blur(7px);
+    cursor:pointer;
+    transition:background .25s,transform .25s,box-shadow .25s;
+}
+.video-viewer-close .icon{width:20px;height:20px;color:var(--text)}
+.video-viewer-close:hover{background:color-mix(in srgb,var(--panel) 75%,transparent);transform:translateY(-2px);box-shadow:0 6px 18px rgba(0,0,0,.18)}
+ .video-viewer.has-video .video-viewer-close{display:flex}
+.video-viewer-share{position:absolute;top:12px;right:66px;z-index:20;width:42px;height:42px;display:none;align-items:center;justify-content:center;border:1px solid color-mix(in srgb,var(--text) 22%,transparent);border-radius:50%;background:color-mix(in srgb,var(--panel) 22%,transparent);color:var(--text);backdrop-filter:blur(7px);box-shadow:0 5px 18px rgba(0,0,0,.16);cursor:pointer;transition:background .25s,transform .25s,box-shadow .25s}
+.video-viewer-share .icon{width:20px;height:20px;color:var(--text)}.video-viewer-share:hover{background:color-mix(in srgb,var(--panel) 75%,transparent);transform:translateY(-2px);box-shadow:0 6px 18px rgba(0,0,0,.18)}
+.video-viewer.has-video .video-viewer-share{display:flex}
+
+/* Keep the exit target continuously available while a video is active. */
+.video-viewer.has-video .video-viewer-close{
+    opacity:1 !important;
+    visibility:visible !important;
+    pointer-events:auto !important;
+}
+
+/* =======================================================
+   VIDEO PLAYER
+======================================================= */
+
+.video-player{
+    display:block;
+
+    width:auto;
+    height:auto;
+
+    max-width:100%;
+    max-height:100%;
+
+    object-fit:contain;
+
+    background:transparent;
+
+    border-radius:20px;
+
+    visibility:hidden;
+
+    pointer-events:none;
+}
+
+
+.video-viewer.has-video .video-player{
+    visibility:visible;
+    pointer-events:auto;
+}
+
+
+/* =======================================================
+   VIEWER TITLE
+======================================================= */
+
+.video-viewer-title{
+    position:absolute;
+
+    left:18px;
+    top:16px;
+
+    z-index:5;
+
+    margin:0;
+
+    color:#fff;
+
+    pointer-events:none;
+
+    text-shadow:
+        0 1px 5px rgba(0,0,0,.8);
+}
+
+
+/* =======================================================
+   STATUS BAR
+======================================================= */
+
+.video-status-bar{
+    position:absolute;
+
+    left:0;
+    right:0;
+    bottom:0;
+
+    z-index:50;
+
+    min-height:
+        var(--video-statusbar-height);
+
+    padding:2px 8px;
+
+    font-size:13px;
+    letter-spacing:.02em;
+
+    background:var(--panel);
+
+}
+
+
+.video-viewer.has-video .video-status-bar{
+    opacity:1;
+}
+
+
+.video-status-bar center{
+    display:flex;
+
+    align-items:center;
+    justify-content:center;
+
+    gap:14px;
+}
+
+
+.video-status-message{
+    display:inline-block;
+    font-weight:600;
+    opacity:.85;
+
+}
+
+
+.video-status-title{
+    display: none;
+    font-weight:600;
+    opacity:.85;
+
+    max-width:40vw;
+
+    overflow:hidden;
+
+    text-overflow:ellipsis;
+    white-space:nowrap;
+
+
+}
+
+
+.video-status-indicator{
+    font-size:12px;
+
+    opacity:.7;
+
+    min-width:50px;
+
+    text-align:center;
+
+    border:
+        1px solid
+        color-mix(
+            in srgb,
+            var(--muted) 28%,
+            transparent
+        );
+
+    background:
+        color-mix(
+            in srgb,
+            var(--panel) 72%,
+            transparent
+        );
+
+    padding:2px 8px;
+
+    border-radius:7px;
+
+}
+
+/* When there's no index/count to show, the indicator is left with an
+   empty textContent (see videoViewer.js). Collapsing it here - rather
+   than just leaving an empty, still-occupying box - lets the flex row's
+   own centering (justify-content:center, gap) re-center the status
+   message on the bar instead of off-center around a phantom sibling. */
+.video-status-indicator:empty{
+    display:none;
+}
+
+
+/* =======================================================
+   NARROW LIBRARY TOGGLE
+======================================================= */
+
+.video-narrow-library-toggle{
+    display:none;
+
+    position:absolute;
+
+    left:8px;
+    top:calc(var(--video-topbar-height) + 8px);
+
+    z-index:40;
+
+    width:38px;
+    height:38px;
+
+    min-width:38px;
+    min-height:38px;
+
+    align-items:center;
+    justify-content:center;
+
+    padding:0;
+
+    border:
+        1px solid
+        color-mix(
+            in srgb,
+            var(--control-text) 22%,
+            transparent
+        );
+
+    border-radius:8px;
+
+    background:
+        rgba(255,255,255,.30);
+
+    color:var(--control-text);
+
+    backdrop-filter:blur(7px);
+
+    box-shadow:
+        0 5px 18px rgba(0,0,0,.16);
+
+    cursor:pointer;
+
+    transition:
+        opacity .2s ease,
+        visibility .2s ease,
+        transform .2s ease;
+}
+
+
+.video-narrow-library-toggle .icon{
+    width:22px;
+    height:22px;
+}
+
+
+.video-narrow-library-toggle svg{
+    animation:narrowLibraryIconPulse 10s ease-in-out infinite;
+}
+
+@keyframes narrowLibraryIconPulse{
+    0%,100%{
+        stroke:currentColor;
+    }
+
+    45%,55%{
+        stroke:#ACE1AF;
+    }
+
+    65%{
+        stroke:currentColor;
+    }
+}
+
+
+
+html[data-theme="dark"] .video-narrow-library-toggle{
+    background:rgba(12,15,20,.30);
+    color:#f2f5f7;
+}
+
+
+.video-section.video-library-open
+.video-narrow-library-toggle{
+    opacity:0;
+
+    visibility:hidden;
+
+    pointer-events:none;
+}
+
+
+/* =======================================================
+   VIDEO TOP BAR
+======================================================= */
+
+.video-top-bar{
+    grid-row:1;
+
+    position:relative;
+
+    width:100%;
+    height:var(--video-topbar-height);
+
+    min-height:
+        var(--video-topbar-height);
+
+    display:grid;
+    grid-template-columns:
+        minmax(0,1fr)
+        auto
+        minmax(0,1fr);
+    align-items:center;
+
+    padding-inline:
+        clamp(8px,1.5vw,18px);
+
+    gap:10px;
+
+    background:var(--panel);
+
+    color:var(--text);
+
+    backdrop-filter:blur(14px);
+    -webkit-backdrop-filter:blur(14px);
+
+    z-index:100;
+}
+
+
+.video-top-bar-title{
+    grid-column:2;
+
+    min-width:0;
+
+    max-width:70vw;
+
+    margin:0;
+
+    overflow:hidden;
+
+    text-overflow:ellipsis;
+    white-space:nowrap;
+
+    text-align:center;
+
+    font-size:
+        clamp(15px,2.2vh,22px);
+
+    font-weight:700;
+
+    letter-spacing:.4px;
+
+    color:var(--text);
+
+    user-select:none;
+}
+
+
+/* =======================================================
+   SEARCH
+======================================================= */
+
+.video-search-group{
+    grid-column:1;
+    justify-self:start;
+
+    position:relative;
+
+    z-index:1;
+
+    display:flex;
+
+    align-items:center;
+
+    gap:7px;
+
+    width:auto;
+    max-width:100%;
+
+    min-width:0;
+}
+
+
+.video-icon-button{
+    flex:0 0 auto;
+
+    width:
+        clamp(30px,4vh,36px);
+
+    height:
+        clamp(30px,4vh,36px);
+
+    display:inline-flex;
+
+    align-items:center;
+    justify-content:center;
+
+    padding:0;
+
+    border:0;
+    border-radius:50%;
+
+    background:transparent;
+    color:var(--text);
+
+    cursor:pointer;
+
+    transition:
+        background .2s ease,
+        transform .2s ease,
+        box-shadow .2s ease;
+}
+
+
+.video-icon-button:hover{
+    background:rgba(0,0,0,.06);
+
+    transform:translateY(-2px);
+
+    box-shadow:
+        0 6px 18px rgba(0,0,0,.12);
+}
+
+
+.video-icon-button:active{
+    transform:scale(.96);
+}
+
+
+.video-icon-button .icon{
+    width:var(--icon-size,22px);
+    height:var(--icon-size,22px);
+}
+
+
+.video-search-group #videoSearchBox{
+    display:none;
+
+    flex:0 1 auto;
+
+    width:min(240px,40vw);
+
+    min-width:0;
+
+    height:34px;
+
+    padding:0 11px;
+
+    border:
+        1px solid
+        color-mix(
+            in srgb,
+            var(--control-text) 18%,
+            transparent
+        );
+
+    border-radius:10px;
+
+    background:var(--control-bg);
+    color:var(--control-text);
+
+    font-size:14px;
+}
+
+
+.video-search-group
+#videoSearchBox::placeholder{
+    color:
+        color-mix(
+            in srgb,
+            var(--control-text) 72%,
+            transparent
+        );
+}
+
+
+.video-search-group.searchOpen
+#videoSearchBox{
+    display:block;
+}
+
+
+/* =======================================================
+   RIGHT TOP-BAR CONTROLS
+======================================================= */
+
+.video-top-bar-right-controls{
+    position:relative;
+
+    z-index:1;
+
+    display:flex;
+
+    align-items:center;
+    justify-content:flex-end;
+
+    gap:10px;
+
+    margin-left:auto;
+}
+
+
+/* =======================================================
+   APP SWITCHER
+======================================================= */
+
+.app-switcher{
+    display:flex;
+
+    align-items:center;
+
+    gap:2px;
+
+    padding:2px;
+
+    border-radius:10px;
+
+    background:
+        color-mix(
+            in srgb,
+            var(--text) 8%,
+            transparent
+        );
+}
+
+
+.app-switch-button{
+    appearance:none;
+
+    border:0;
+
+    padding:5px 12px;
+
+    border-radius:8px;
+
+    background:transparent;
+    color:var(--text);
+
+    font-size:12px;
+    font-weight:600;
+
+    letter-spacing:.2px;
+
+    cursor:pointer;
+
+    transition:
+        background .18s ease,
+        color .18s ease;
+}
+
+
+.app-switch-button:hover{
+    background:
+        color-mix(
+            in srgb,
+            var(--text) 10%,
+            transparent
+        );
+}
+
+
+.app-switch-button.active{
+    background:var(--panel);
+
+    color:var(--text);
+
+    box-shadow:
+        0 0 0 2px #66CDAA,
+        0 2px 8px rgba(0,0,0,.14);
+}
+
+
+/* =======================================================
+   LIBRARY EMPTY STATE
+======================================================= */
+
+.video-library-empty{
+    padding:24px 14px;
+
+    text-align:center;
+
+    color:rgba(255,255,255,.72);
+
+    font-size:13px;
+}
+
+
+/* =======================================================
+   VIEWER LANDING
+======================================================= */
+
+.video-landing{
+    position:absolute;
+
+    left:50%;
+
+    /* Centered between the bottom of the top bar (top:0 of .video-viewer,
+       its containing block) and the top of the indicator bar (which sits
+       --video-statusbar-height above the welcome banner, at the very
+       bottom of .video-viewer). Halfway down the full viewer (50%) is
+       biased low by that reserved bottom strip, so the midpoint is
+       shifted up by half of it. */
+    top:
+        calc(50% - (var(--video-statusbar-height,28px) + var(--video-welcome-height,22px)) / 2);
+
+    width:
+        calc(100% - 48px);
+
+    height:55%;
+
+    min-width:0;
+    min-height:0;
+
+    max-width:100%;
+
+    margin:0;
+
+    transform:
+        translate(-50%,-50%);
+
+    padding:
+        clamp(20px,4vw,46px);
+
+    display:flex;
+
+    flex-direction:column;
+
+    overflow:hidden;
+
+    border-radius:20px;
+
+    background:color-mix(in srgb,var(--panel) 55%,transparent);
+
+
+    color:var(--text);
+
+    z-index:6;
+
+    opacity:1;
+
+    visibility:visible;
+
+    pointer-events:auto;
+
+    /* Timing/easing matches .sky-share-closed-go-button.sky-share-go-float-in
+       (skyShareGoFloatIn, share.css) - same float-in feel as Share Mode's
+       go-button, just moving up from below (see the "hidden" transform
+       below) instead of in from the left. */
+    transition:
+        opacity 650ms cubic-bezier(0.16, 1, 0.3, 1),
+        transform 650ms cubic-bezier(0.16, 1, 0.3, 1),
+        visibility 0s linear 0s;
+}
+
+
+.video-landing.hidden,
+.video-section.video-library-open
+.video-landing{
+    opacity:0;
+
+    visibility:hidden;
+
+    pointer-events:none;
+
+    transform:
+        translate(-50%,calc(-50% + 90px))
+        scale(.985);
+}
+
+
+/* =======================================================
+   LANDING HERO
+======================================================= */
+
+.video-landing-hero{
+    flex:0 0 25%;
+
+    min-height:0;
+
+    width:100%;
+
+    display:flex;
+
+    align-items:center;
+    justify-content:center;
+
+    gap:16px;
+
+    text-align:left;
+}
+
+
+.video-landing-hero-icon{
+    width:58px;
+    height:58px;
+
+    flex:0 0 58px;
+
+    display:flex;
+
+    align-items:center;
+    justify-content:center;
+
+    border-radius:18px;
+
+    background:
+        color-mix(
+            in srgb,
+            var(--panel) 55%,
+            transparent
+        );
+
+    color:var(--text);
+}
+
+
+.video-landing-hero-logo{
+    display:block;
+
+    width:72%;
+    height:72%;
+
+    object-fit:contain;
+}
+
+
+.video-landing-hero-copy h2{
+    margin:0;
+
+    color:var(--text);
+
+    font-size:
+        clamp(30px,4vw,55px);
+
+    line-height:1.05;
+
+    font-weight:700;
+
+    letter-spacing:-.02em;
+}
+
+
+.video-landing-hero-copy p{
+    margin:4px 0 0;
+
+    color:var(--text);
+
+    font-size:14px;
+}
+
+
+/* =======================================================
+   WATCH AGAIN
+
+   Mirrors SkyReader's Read Again treatment: centered as
+   a capped-width card on desktop; full width and left
+   aligned on narrow screens (see the narrow media query
+   further down).
+======================================================= */
+
+.video-landing-media-row{
+    flex:0 0 25%;
+
+    height:25%;
+
+    min-height:0;
+    min-width:0;
+
+    width:100%;
+
+    display:flex;
+
+    align-items:stretch;
+    justify-content:center;
+
+    overflow:hidden;
+
+padding: 10px;
+
+    transition:flex-basis .3s ease,height .3s ease,padding .3s ease;
+}
+
+/*
+ * No Watch Again card to show — collapse this row entirely so the
+ * library row below grows (via its own flex-grow) to fill the
+ * space up to the hero instead of leaving a gap.
+ */
+.video-landing-media-row.is-empty{
+    flex:0 0 0;
+    height:0;
+    padding:0;
+    overflow:hidden;
+}
+
+
+.video-landing-media-section{
+
+    width:100%;
+
+    display:flex;
+
+    flex-direction:column;
+
+    align-items:stretch;
+
+    justify-content:stretch;
+
+    overflow:hidden;
+}
+
+
+.video-landing-continue-section{
+    width:min(560px,100%);
+
+    flex:0 1 min(560px,100%);
+}
+
+
+.video-landing-continue-section.is-empty{
+    display:none;
+}
+
+
+.video-landing-media-section h3,
+.video-landing-library-section h3{
+    flex:0 0 auto;
+
+    margin:0 0 6px;
+
+    color:var(--text);
+
+    font-size:
+        clamp(15px,4vw,25px);
+
+    line-height:1.2;
+
+    font-weight:600;
+
+    text-shadow:none;
+}
+
+
+.video-landing-watch-slot{
+    width:100%;
+    max-width:100%;
+
+    flex:1 1 auto;
+
+    min-width:0;
+    min-height:0;
+
+    display:flex;
+
+    align-items:center;
+    justify-content:center;
+}
+
+
+.video-landing-featured{
+    width:100%;
+    max-width:520px;
+
+    min-width:0;
+    min-height:0;
+
+    height:100%;
+
+    display:flex;
+
+    align-items:center;
+    justify-content:center;
+}
+
+
+.video-landing-watch{
+    width:min(100%,520px);
+
+    height:100%;
+
+    max-height:100%;
+
+    flex:0 0 auto;
+
+    display:flex;
+
+    align-items:center;
+
+    gap:10px;
+
+    padding:4px;
+
+    border:0;
+
+    border-radius:16px;
+
+    background:
+        color-mix(
+            in srgb,
+            var(--panel) 55%,
+            transparent
+        );
+
+    color:var(--text);
+
+    box-shadow:
+        0 8px 24px rgba(0,0,0,.34);
+
+    cursor:pointer;
+
+    overflow:hidden;
+
+    text-align:left;
+
+    transition:
+        transform .22s ease,
+        box-shadow .22s ease;
+}
+
+
+.video-landing-watch:hover{
+    transform:translateY(-2px);
+
+    box-shadow:
+        0 16px 34px rgba(0,0,0,.48);
+}
+
+
+.video-landing-watch-thumbnail{
+    width:clamp(50px,8vh,68px);
+    height:clamp(50px,8vh,68px);
+
+    flex:0 0 clamp(50px,8vh,68px);
+
+    overflow:hidden;
+
+    border-radius:13px;
+}
+
+
+.video-landing-watch-thumbnail img{
+    width:100%;
+    height:100%;
+
+    display:block;
+
+    object-fit:cover;
+}
+
+
+.video-landing-watch-info{
+    display:flex;
+    flex-direction:column;
+
+    justify-content:center;
+
+    gap:2px;
+
+    min-width:0;
+
+    overflow:hidden;
+}
+
+
+.video-landing-watch-kicker{
+    font-size:11px;
+    font-weight:600;
+
+    letter-spacing:.03em;
+    text-transform:uppercase;
+
+    opacity:.65;
+
+    overflow:hidden;
+
+    text-overflow:ellipsis;
+
+    white-space:nowrap;
+}
+
+
+.video-landing-watch-label{
+    font-size:15px;
+
+    font-weight:600;
+
+    overflow:hidden;
+
+    text-overflow:ellipsis;
+
+    white-space:nowrap;
+}
+
+
+/* =======================================================
+   LANDING LIBRARY
+======================================================= */
+
+.video-landing-library-section{
+    flex:1 0 50%;
+
+    min-height:0;
+
+    width:100%;
+
+    display:flex;
+
+    flex-direction:column;
+
+    align-items:stretch;
+
+    overflow:hidden;
+ 
+    padding: 0 0 20px;
+
+    transition:flex-basis .3s ease;
+}
+
+
+.video-landing-library-section
+.video-landing-circle-row{
+    flex:1 1 auto;
+
+    min-height:0;
+}
+
+
+.video-landing-circle-row{
+  display:flex;
+
+  align-items:center;
+  justify-content:center;
+
+  gap:14px;
+
+  width:100%;
+  height:100%;
+
+  min-width:0;
+  min-height:0;
+
+  margin:0;
+  padding:0;
+
+  overflow:hidden;
+
+  border:0;
+  border-radius:0;
+
+  background:transparent;
+
+  color:inherit;
+
+  font:inherit;
+
+  text-align:left;
+
+  cursor:pointer;
+
+  transition:
+    transform .22s ease;
+}
+
+
+.video-landing-circle-row::-webkit-scrollbar{
+    height:8px;
+}
+
+
+.video-landing-circle-row::-webkit-scrollbar-track{
+    background:
+        rgba(255,255,255,.10);
+}
+
+
+.video-landing-circle-row::-webkit-scrollbar-thumb{
+    background:
+        rgba(255,255,255,.42);
+
+    border-radius:999px;
+}
+
+
+/* =======================================================
+   LANDING CIRCLES
+
+   The thumbnail stays circular, but its title is a
+   caption below the circle rather than text overlaid on
+   top of the image, matching the Reader section's
+   shelf-card convention (thumbnail, then text beneath).
+======================================================= */
+
+.video-landing-circle-card{
+    position:relative;
+
+    flex:0 0 auto;
+
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+
+    gap:8px;
+
+    align-self:stretch;
+
+    width:auto;
+    height:100%;
+
+    max-height:100%;
+
+    padding:0;
+
+    border:0;
+
+    background:transparent;
+
+    cursor:pointer;
+
+    transition:transform .22s ease;
+}
+
+
+.video-landing-circle-card:hover{
+    transform:translateY(-2px);
+}
+
+
+.video-landing-circle-card img{
+    width:100%;
+    height:100%;
+
+    display:block;
+
+    object-fit:cover;
+}
+
+
+.video-landing-circle-card
+.video-landing-circle,
+.video-landing-circle{
+    position:relative;
+
+    flex:1 1 auto;
+
+    width:auto;
+    height:100%;
+
+    aspect-ratio:1 / 1;
+
+    min-height:0;
+
+    border-radius:50%;
+
+    overflow:hidden;
+
+    background:
+        rgba(0,0,0,.20);
+
+    box-shadow:
+        0 4px 15px rgba(0,0,0,.30);
+
+    transition:
+        box-shadow .22s ease;
+}
+
+
+.video-landing-circle-card:hover
+.video-landing-circle{
+    box-shadow:
+        0 8px 24px rgba(0,0,0,.38);
+}
+
+
+.video-landing-title,
+.video-landing-circle-title{
+    flex:0 0 auto;
+
+    max-width:100%;
+
+    color:var(--text);
+
+    font-size:
+        clamp(11px,1.2vw,14px);
+
+    line-height:1.25;
+
+    font-weight:600;
+
+    overflow:hidden;
+
+    text-overflow:ellipsis;
+    white-space:nowrap;
+    text-align:center;
+}
+
+
+/* Smaller, muted release date beneath the title - see
+   DateDisplay.format() (js/dateDisplay.js) for the actual
+   "Sep 5th, 2026" / "5 days ago" text this holds. */
+.video-landing-circle-date{
+    flex:0 0 auto;
+
+    max-width:100%;
+
+    margin-top:-4px;
+
+    color:var(--muted);
+
+    font-size:
+        clamp(9px,1vw,11px);
+
+    line-height:1.2;
+
+    font-weight:400;
+
+    overflow:hidden;
+
+    text-overflow:ellipsis;
+    white-space:nowrap;
+    text-align:center;
+}
+
+
+/* =======================================================
+   WATCH AGAIN CARD
+
+   Mirrors SkyReader's Read Again card exactly: thumbnail
+   on the left, title and a "last watched" line stacked
+   to the right of it — no text on the thumbnail itself.
+======================================================= */
+
+.video-landing-continue-section .video-landing-recent-card{
+    flex:1 1 auto;
+
+    max-width:100%;
+}
+
+
+.video-landing-recent-card{
+    display:flex;
+
+    align-items:center;
+    justify-content:center;
+
+    gap:14px;
+
+    width:100%;
+    height:100%;
+
+    min-width:0;
+    min-height:0;
+
+    margin:0;
+    padding:
+        clamp(7px,1vh,12px)
+        clamp(10px,1.5vw,16px);
+
+    box-sizing:border-box;
+
+    overflow:hidden;
+
+    border:0;
+    border-radius:16px;
+
+    background:var(--card);
+
+    color:inherit;
+
+    font:inherit;
+
+    text-align:left;
+
+    cursor:pointer;
+
+    box-shadow:var(--soft-shadow);
+
+    transition:
+        transform .22s ease,
+        box-shadow .22s ease;
+}
+
+
+.video-landing-recent-card:hover{
+    transform:translateY(-2px);
+
+    box-shadow:var(--hover-shadow);
+}
+
+
+.video-landing-recent-thumbnail{
+    display:block;
+
+    flex:0 0 auto;
+
+    width:auto;
+    height:auto;
+
+    max-width:25%;
+    max-height:100%;
+
+    object-fit:contain;
+
+    padding:5px;
+    margin-top:3px;
+
+    box-sizing:border-box;
+
+    border-radius:15px;
+}
+
+
+.video-landing-recent-info{
+    display:flex;
+
+    flex:1 1 auto;
+    flex-direction:column;
+    justify-content:center;
+
+    gap:3px;
+
+    min-width:0;
+
+    overflow:hidden;
+}
+
+
+.video-landing-recent-title,
+.video-landing-recent-subtitle{
+    min-width:0;
+    max-width:100%;
+
+    overflow:hidden;
+
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}
+
+
+.video-landing-recent-title{
+    color:var(--text);
+
+    font-size:
+        clamp(13px,1.6vw,18px);
+
+    font-weight:700;
+
+    line-height:1.2;
+}
+
+
+.video-landing-recent-title::before{
+    content:"Watch Again: ";
+}
+
+
+.video-landing-recent-subtitle{
+    font-size:12px;
+
+    color:var(--muted);
+}
+
+
+/* =======================================================
+   NARROW SCREENS
+======================================================= */
+
+@media (max-width:999px){
+
+    .video-section{
+        width:100%;
+        max-width:100%;
+        left:0;
+        right:0;
+    }
+
+    .video-top-bar{
+        width:100%;
+        max-width:100%;
+        min-width:0;
+    }
+
+    /* ---------------------------------------------------
+       WORKSPACE
+
+       The narrow library is an overlay.
+       It is NOT part of the viewer's width.
+       --------------------------------------------------- */
+
+    .video-workspace{
+        width:100%;
+        max-width:100%;
+        min-width:0;
+    }
+
+
+    /* ---------------------------------------------------
+       VIEWER
+
+       Viewer occupies the complete workspace.
+       Drawer overlays it when opened.
+       --------------------------------------------------- */
+
+    .video-viewer{
+        position:absolute;
+
+        inset:0;
+
+        width:100%;
+        height:100%;
+
+        min-width:0;
+        min-height:0;
+
+        margin:0;
+
+        padding-bottom:
+            var(--video-statusbar-height);
+
+        overflow:hidden;
+
+        display:flex;
+
+        align-items:center;
+        justify-content:center;
+
+        transform:none;
+
+        background:transparent;
+
+    }
+
+
+    /* ---------------------------------------------------
+       NARROW DRAWER TOGGLE
+       --------------------------------------------------- */
+
+    .video-narrow-library-toggle{
+        display:flex;
+
+        left:8px;
+        top:8px;
+
+        background:
+            color-mix(
+                in srgb,
+                var(--panel) 55%,
+                transparent
+            );
+
+        color:var(--text);
+    }
+
+
+    /* ---------------------------------------------------
+       DRAWER
+
+       Closed:
+           translated completely off the left side.
+
+       Open:
+           overlays the viewer.
+
+       It never changes viewer width — position:absolute
+       (anchored to .video-workspace, which is the nearest
+       positioned ancestor) takes it out of flex flow
+       entirely, so it can't reserve layout space while
+       hidden behind its own transform.
+       --------------------------------------------------- */
+
+    .video-library{
+        position:absolute;
+
+        left:0;
+        top:0;
+
+        flex:none;
+
+        width:var(--video-library-width);
+        height:100%;
+
+        display:flex;
+        flex-direction:column;
+
+
+        min-width:
+            var(--video-narrow-drawer-width);
+
+
+        transform:
+            translateX(-102%);
+
+        visibility:hidden;
+
+        background:
+            rgba(0,0,0,.08);
+
+        box-shadow:
+            12px 0 30px rgba(0,0,0,.22);
+
+        transition:
+            transform .28s cubic-bezier(.25,.8,.25,1),
+            visibility 0s linear .28s;
+    }
+
+
+    .video-section.video-library-open
+    .video-library{
+        transform:translateX(0);
+
+        visibility:visible;
+
+        transition:
+            transform .28s cubic-bezier(.25,.8,.25,1),
+            visibility 0s linear 0s;
+    }
+
+
+    .video-library-header{
+        flex:0 0 48px;
+        min-height:48px;
+
+        padding:8px 10px;
+    }
+
+
+    .video-library-title{
+     font-size:
+        clamp(25px,5vw,35px);
+    }
+
+
+    .video-library-header-right{
+        gap:2px;
+    }
+
+
+    .video-library-drawer-close{
+        display:inline-flex;
+
+        margin-left:2px;
+    }
+
+
+    .video-library-grid{
+        padding-left:8px;
+        padding-right:8px;
+    }
+
+
+    /* ===================================================
+       NARROW LANDING GEOMETRY
+
+       IMPORTANT:
+       The drawer is an overlay and therefore must NOT
+       affect the landing's horizontal center.
+
+       The landing is centered against the full viewer
+       workspace, exactly like the top bar.
+       =================================================== */
+
+    .video-landing{
+        position:absolute;
+
+        left:50%;
+        /* Same vertical centering as desktop - see the base .video-landing
+           rule for why this isn't a plain 50%. */
+        top:calc(50% - (var(--video-statusbar-height,28px) + var(--video-welcome-height,22px)) / 2);
+
+        /* Matches #viewerLibrary's width:100% at this same breakpoint
+           (style.css) and .slideshow-landing's width:100% at its mobile
+           breakpoint (slideshow.css) - all three landings are full-bleed
+           on mobile so they occupy the same screen width. */
+        width:100%;
+
+        height:60%;
+
+        min-width:0;
+        min-height:0;
+
+        max-width:100%;
+
+        margin:0;
+
+        transform:
+            translate(-50%,-50%);
+
+        padding:
+            clamp(20px,4vw,46px);
+
+        box-sizing:border-box;
+
+        overflow:hidden;
+    }
+
+
+    /* ---------------------------------------------------
+       LANDING HIDDEN STATE
+       --------------------------------------------------- */
+
+    .video-landing.hidden,
+    .video-section.video-library-open
+    .video-landing{
+        transform:
+            translate(
+                -50%,
+                calc(-50% + 60px)
+            )
+            scale(.99);
+    }
+
+
+    /* ---------------------------------------------------
+       PREVENT LANDING CHILDREN FROM FORCING OVERFLOW
+       --------------------------------------------------- */
+
+    .video-landing-media-row{
+        width:100%;
+
+        max-width:100%;
+
+        min-width:0;
+
+    }
+
+
+    .video-landing-media-section{
+        width:100%;
+
+        max-width:100%;
+
+        min-width:0;
+
+    }
+
+
+    .video-landing-continue-section{
+        width:100%;
+
+        flex:0 1 100%;
+
+
+    }
+
+
+    .video-landing-featured{
+        width:100%;
+
+        max-width:100%;
+
+        min-width:0;
+    }
+
+
+    .video-landing-watch{
+        width:100%;
+
+        max-width:100%;
+
+        min-width:0;
+    }
+
+
+    /* ---------------------------------------------------
+       NARROW HERO
+       --------------------------------------------------- */
+
+.video-landing-hero-copy h2{
+        font-size: clamp(25px, 5vw, 35px);
+        gap:9px;
+    }
+
+
+    .video-landing-hero-icon{
+        width:44px;
+        height:44px;
+
+        flex-basis:44px;
+
+        border-radius:14px;
+
+        background:
+            color-mix(
+                in srgb,
+                var(--panel) 75%,
+                transparent
+            );
+
+        color:var(--text);
+    }
+
+
+    /* Hero text keeps the desktop clamp(30px,4vw,55px)
+       sizing at every width — no narrow-only downsize. */
+
+
+    /* ---------------------------------------------------
+       WATCH AGAIN
+
+       Full width and left aligned on narrow screens,
+       instead of the desktop centered/capped card.
+       --------------------------------------------------- */
+
+    .video-landing-media-row{
+        gap:6px;
+
+        justify-content:flex-start;
+    }
+
+
+    .video-landing-media-section{
+        justify-content:flex-start;
+    }
+
+
+    .video-landing-media-section h3,
+    .video-landing-library-section h3{
+        margin:0 0 3px;
+
+        line-height:1.15;
+
+        text-align:left;
+    }
+
+
+    .video-landing-continue-section{
+        width:100%;
+
+        flex:0 1 100%;
+    }
+
+
+    .video-landing-featured{
+        width:100%;
+
+        min-width:0;
+
+        justify-content:flex-start;
+    }
+
+
+    .video-landing-watch{
+        width:100%;
+
+        max-width:none;
+
+        min-width:0;
+    }
+
+
+    .video-landing-watch-thumbnail{
+        width:50px;
+        height:50px;
+
+        flex-basis:50px;
+    }
+
+
+    .video-landing-watch-kicker{
+        font-size:10px;
+    }
+
+
+    .video-landing-watch-label{
+        font-size:13px;
+    }
+
+
+    /* ---------------------------------------------------
+       CIRCULAR LANDING LIBRARY
+       --------------------------------------------------- */
+
+    .video-landing-circle-row{
+        justify-content:flex-start;
+
+        padding-left:4px;
+        padding-right:4px;
+    }
+
+
+    .video-landing-circle-card{
+        width:auto;
+
+        height:100%;
+
+        max-height:100%;
+    }
+
+
+    .video-landing-circle{
+        aspect-ratio:1 / 1;
+    }
+
+
+    .video-landing-circle-title{
+        font-size:
+            clamp(9px,2.6vw,13px);
+    }
+
+}
+
+
+/* =======================================================
+   NARROW LANDSCAPE
+======================================================= */
+
+@media (max-width:999px)
+and (orientation:landscape){
+
+    .video-workspace{
+        display:block;
+
+        width:100%;
+        height:100%;
+
+        padding:0 !important;
+
+        overflow:hidden;
+    }
+
+
+    .video-viewer{
+        position:absolute;
+
+        inset:0;
+
+        width:100%;
+        height:100%;
+
+        transform:none;
+    }
+
+
+    /*
+     * Landscape keeps the landing centered against
+     * the complete viewer workspace.
+     */
+
+    .video-landing{
+        left:50%;
+
+        /* Kept in sync with the portrait rule above - see its comment. */
+        width:100%;
+
+        margin:0;
+
+        transform:
+            translate(-50%,-50%);
+    }
+
+
+    .video-landing.hidden,
+    .video-section.video-library-open
+    .video-landing{
+        transform:
+            translate(
+                -50%,
+                calc(-50% + 60px)
+            )
+            scale(.99);
+    }
+
+
+    .video-landing-circle-card{
+        height:100%;
+    }
+
+
+    .video-landing-circle{
+        aspect-ratio:1 / 1;
+    }
+
+}
+/* =========================================================
+   NARROW TOP BAR — compact navigation + drawer toggle
+   ========================================================= */
+@media (max-width:999px){
+    .video-top-bar{
+        grid-template-columns:auto minmax(0,1fr) auto;
+        padding-inline:6px;
+        gap:5px;
+        overflow:visible;
+    }
+    .video-search-group{grid-column:2;justify-self:start;min-width:0;max-width:100%}
+    .video-top-bar-title{grid-column:2;position:absolute;left:50%;transform:translateX(-50%);max-width:42vw;pointer-events:none}
+    .video-top-bar-right-controls{grid-column:3;min-width:0;max-width:46vw;gap:5px;margin-left:auto;position:relative}
+    .video-top-bar-right-controls .app-switcher{display:none}
+    .video-top-bar-right-controls .responsive-app-menu-button{display:inline-flex}
+    .video-narrow-library-toggle{position:relative;left:auto;top:auto;display:flex;width:34px;height:34px;min-width:34px;min-height:34px;flex:0 0 34px;z-index:100}
+    .video-search-group #videoSearchBox{max-width:42vw}
+}
+@media (max-width:480px){
+    .video-top-bar{grid-template-columns:auto minmax(0,1fr) auto;gap:3px;padding-inline:4px}
+    .video-top-bar-right-controls{gap:3px;max-width:40vw}
+    .video-top-bar-right-controls .video-icon-button{width:32px;height:32px}
+    .video-narrow-library-toggle{width:32px;height:32px;min-width:32px;min-height:32px;flex-basis:32px}
+    .video-search-group{gap:2px}
+    .video-search-group #videoSearchBox{width:min(150px,40vw)!important;max-width:40vw}
+    .video-top-bar-title{max-width:34vw;font-size:14px}
+}
+
+/* Normal-view video sizing is computed in JS (VideoViewer.refreshVideoLayout)
+   so the <video> element's own box always matches the exact rendered video
+   rectangle — filling the viewer without cropping, distortion, or letterboxed
+   dead-space inside the element (which is what causes native controls to
+   spill past the visible picture). Do NOT force width/height/max-width/
+   max-height here with !important — that overrides the JS sizing and makes
+   low-resolution clips render at native pixel size instead of filling the
+   viewer, exactly like the fully-stretched YouTube iframe does. */
+
+/* Landing library must remain horizontally scrollable on every narrow width. */
+@media (max-width:999px){
+  .video-landing-library-section{min-width:0;overflow:hidden}
+  .video-landing-library-section .video-landing-circle-row{
+    justify-content:flex-start!important;
+    align-items:center;
+    overflow-x:auto!important;
+    overflow-y:hidden!important;
+    flex-wrap:nowrap!important;
+    width:100%;
+    min-width:0;
+    padding:0 4px 8px;
+    -webkit-overflow-scrolling:touch;
+    overscroll-behavior-x:contain;
+    scrollbar-width:thin;
+  }
+  .video-landing-library-section .video-landing-circle-card{
+    flex:0 0 clamp(86px,18vw,150px)!important;
+    width:clamp(86px,18vw,150px)!important;
+    height:auto!important;
+    align-self:center;
+  }
+}
+
+/* See note above — sizing for .video-viewer.has-video .video-player is
+   owned by VideoViewer.refreshVideoLayout() in js/videoViewer.js. */
+
+/* ---------------------------------------------------------
+   Video landing library — scroll at every viewport width.
+   Fixed card widths create real overflow instead of allowing
+   Flexbox to shrink the row until scrolling disappears.
+   --------------------------------------------------------- */
+.video-landing-library-section{
+    min-width:0!important;
+    overflow:hidden!important;
+}
+.video-landing-library-section .video-landing-circle-row{
+    justify-content:flex-start!important;
+    align-items:center!important;
+    flex-wrap:nowrap!important;
+    overflow-x:auto!important;
+    overflow-y:hidden!important;
+    width:100%!important;
+    min-width:0!important;
+    max-width:none!important;
+    padding:4px 4px 8px!important;
+    -webkit-overflow-scrolling:touch;
+    overscroll-behavior-x:contain;
+    scrollbar-width:thin;
+}
+.video-landing-library-section .video-landing-circle-card{
+    flex:0 0 clamp(120px,13vw,165px)!important;
+    width:clamp(120px,13vw,165px)!important;
+    height:auto!important;
+    aspect-ratio:1 / 1!important;
+    align-self:center!important;
+}
+
+
+/* Keep the Video Library organization menu above card/favorite overlays. */
+.video-library-header{position:relative;z-index:100;}
+.video-library-header-right{position:relative;z-index:101;}
+.video-library-organization-controls{position:relative;z-index:102;}
+.video-library-org-menu{z-index:200!important;}
+.video-library-grid{position:relative;z-index:1;}
+
+/* =========================================================
+   SHARED MEDIA TOP-BAR STANDARD — final override
+   ========================================================= */
+.video-section{
+  --video-topbar-height:var(--media-topbar-height,clamp(44px,5.5vh,68px));
+}
+.video-top-bar{
+  height:var(--video-topbar-height)!important;
+  min-height:var(--video-topbar-height)!important;
+}
+.video-top-bar-right-controls .responsive-app-menu-button{
+  height:var(--media-topbar-button-height,42px)!important;
+  min-height:var(--media-topbar-button-height,42px)!important;
+  flex:0 1 auto;
+}
+.video-narrow-library-toggle{
+  width:var(--media-topbar-button-height,42px)!important;
+  height:var(--media-topbar-button-height,42px)!important;
+  min-width:var(--media-topbar-button-height,42px)!important;
+  min-height:var(--media-topbar-button-height,42px)!important;
+  flex:0 0 var(--media-topbar-button-height,42px)!important;
+  border-radius:7px!important;
+}
+
+
+/* =========================================================
+   SKYMEDIA WELCOME BANNER + STATUS BAR
+   Final baseline override
+   Keeps both elements inside the visible dynamic viewport.
+========================================================= */
+
+.video-viewer{
+    --video-welcome-height:22px;
+    --video-statusbar-height:28px;
+
+    top:0;
+    transform:none;
+    height:100%;
+    padding-bottom:calc(
+        var(--video-statusbar-height) +
+        var(--video-welcome-height)
+    );
+}
+
+/* Status/indicator row sits immediately above the welcome banner. */
+.video-status-bar{
+    position:absolute;
+    left:0;
+    right:0;
+    bottom:var(--video-welcome-height);
+    height:var(--video-statusbar-height);
+    min-height:var(--video-statusbar-height);
+    padding:2px 8px;
+    box-sizing:border-box;
+    display:block;
+    font-size:13px;
+    line-height:18px;
+    letter-spacing:.02em;
+    color:var(--text);
+    z-index:50;
+}
+
+/* Match Reader's centered status contents and typography. */
+.video-status-bar center{
+    width:100%;
+    height:100%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:14px;
+    margin:0;
+    font-size:13px;
+    line-height:18px;
+    letter-spacing:.02em;
+}
+
+.video-status-message,
+.video-status-title,
+.video-status-indicator{
+    font-size:13px;
+    line-height:18px;
+    letter-spacing:.02em;
+}
+
+.video-status-message{
+    display:inline-block;
+    font-weight:600;
+    opacity:.85;
+    max-width:60vw;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}
+
+.video-status-title{
+    display:none;
+}
+
+/* The welcome banner is part of the workspace bottom edge. */
+.video-viewer > .sr-welcome-banner{
+    position:absolute;
+    left:0;
+    right:0;
+    bottom:env(safe-area-inset-bottom, 0px);
+    height:var(--video-welcome-height);
+    min-height:var(--video-welcome-height);
+    padding:2px 8px;
+    box-sizing:border-box;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    overflow:hidden;
+    background:var(--panel);
+    color:var(--muted);
+    border-top:none;
+    font-size:12px;
+    line-height:18px;
+    letter-spacing:normal;
+    z-index:51;
+}
+
+.video-viewer > .sr-welcome-banner center{
+    display:block;
+    width:100%;
+    margin:0;
+    padding:0;
+    line-height:18px;
+    text-align:center;
+}
+
+/* Focus mode intentionally remains media-only. */
+.video-section.videoFocus .video-viewer > .sr-welcome-banner{
+    display:none!important;
+}

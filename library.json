@@ -1,0 +1,89 @@
+{
+  "version": "1.0",
+  "content": [
+    {
+      "id": "sample",
+      "type": "book",
+      "title": "Roboto Specimen Book",
+      "subtitle": "Sample Magazine",
+      "thumbnail": "assets/thumbnails/Roboto_Specimen_Image.jpg",
+      "media": "pdf/Roboto_Specimen_Book.pdf",
+      "audio": "",
+      "author": "",
+      "category": "",
+      "date": "202607200700"
+    },
+    {
+      "id": "sample2",
+      "type": "book",
+      "title": "The Double Case - Sine Rule",
+      "subtitle": "Sample Magazine2",
+      "thumbnail": "assets/thumbnails/The Double Case - Sine Rule.jpg",
+      "media": "pdf/The Double Case - Sine Rule.pdf",
+      "audio": "",
+      "author": "Sky",
+      "category": "Education",
+      "date": "202603201830"
+    },
+    {
+      "id": "sample4",
+      "type": "book",
+      "title": "Trees",
+      "subtitle": "Sample Magazine4",
+      "thumbnail": "assets/thumbnails/trees.jpg",
+      "media": "pdf/Trees.pdf",
+      "audio": "",
+      "author": "Andrew L.",
+      "category": "General",
+      "date": "202607200807"
+    },
+    {
+      "id": "sample5",
+      "type": "book",
+      "title": "Light",
+      "subtitle": "Sample Magazine5",
+      "thumbnail": "assets/thumbnails/light.jpg",
+      "media": "pdf/Light.pdf",
+      "audio": "",
+      "author": "Andrew L.",
+      "category": "General",
+      "date": "202607200808"
+    },
+    {
+      "id": "sample6",
+      "type": "book",
+      "title": "Source",
+      "subtitle": "Sample Magazine6",
+      "thumbnail": "assets/thumbnails/source.jpg",
+      "media": "pdf/Source.pdf",
+      "audio": "",
+      "author": "Andrew L.",
+      "category": "General",
+      "date": "202607200809"
+    },
+    {
+      "id": "sample7",
+      "type": "book",
+      "title": "Water, living waters never run dry; you will never thirst",
+      "subtitle": "Sample Magazine7",
+      "thumbnail": "assets/thumbnails/water.jpg",
+      "media": "pdf/Water, living waters never run dry; you will never thirst.pdf",
+      "audio": "",
+      "author": "Andrew L.",
+      "category": "General",
+      "date": "202607200810"
+    },
+    {
+      "id": "sample8",
+      "type": "book",
+      "title": "Khurasan",
+      "subtitle": "Sample Magazine7",
+      "thumbnail": "assets/thumbnails/khurasan.jpg",
+      "media": "pdf/Khurasan Read Me New.pdf",
+      "audio": "",
+      "author": "Andrew L.",
+      "category": "General",
+      "date": "202507200811"
+    }
+  ]
+}

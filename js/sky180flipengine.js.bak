@@ -1,0 +1,551 @@
+"use strict";
+
+/*
+=========================================================
+ SkyReader Sky180FlipEngine
+ Version 1.0
+
+ SkyReader-specific presentation engine.
+
+ Responsibilities
+ • Own the StPageFlip instance
+ • Turn already-created SkyReader page surfaces
+ • Expose only SkyReader page movement methods
+ • Report flip state/page changes to Renderer
+
+ IMPORTANT
+ No other SkyReader module should reference St.PageFlip.
+ Renderer owns PDF.js and page canvases.
+ This engine owns only the page-flip presentation layer.
+=========================================================
+*/
+
+window.Sky180FlipEngine=(function(){
+
+const engine={};
+
+let host=null;
+let flipHost=null;
+let flipbook=null;
+
+let pageCount=0;
+let currentPage=1;
+let busy=false;
+let initialized=false;
+let normalFlippingTime=650;
+let handlers={
+    init:null,
+    page:null,
+    state:null,
+    orientation:null,
+    error:null
+};
+
+function emit(name,...args){
+    const fn=handlers[name];
+    if(typeof fn==="function") fn(...args);
+}
+
+function normalizeSpreadStart(page){
+    page=Math.max(1,Math.min(pageCount,Number(page)||1));
+
+    if(pageCount<=1 || page===1){
+        return 1;
+    }
+
+    /* Real PDF page numbers now equal their StPageFlip indices. */
+    return page%2===0 ? page : page-1;
+}
+
+function internalPageCount(){
+    return pageCount+1+(pageCount%2===0 ? 1 : 0);
+}
+
+function lastSpreadIndex(){
+    return Math.max(0,Math.floor(internalPageCount()/2)-1);
+}
+
+function spreadHostOffset(spreadIndex){
+    if(!flipbook || typeof flipbook.getBoundsRect!=="function") return 0;
+
+    const bounds=flipbook.getBoundsRect();
+    const pageWidth=Number(bounds && bounds.pageWidth)||0;
+    if(!pageWidth) return 0;
+
+    /*
+     * Opening spread: [transparent, cover]. Shift left by half a page so
+     * the real cover is centered.
+     *
+     * Closing spread for even-length PDFs: [last page, transparent].
+     * Shift right by half a page so the last real page is centered.
+     */
+    if(spreadIndex===0){
+        return -pageWidth/2;
+    }
+
+    if(pageCount%2===0 && spreadIndex===lastSpreadIndex()){
+        return pageWidth/2;
+    }
+
+    return 0;
+}
+
+function applyHostAlignment(spreadIndex=null,animate=false){
+    if(!flipHost || !flipbook) return;
+
+    if(spreadIndex===null &&
+       typeof flipbook.getPageCollection==="function" &&
+       typeof flipbook.getPageCollection().getCurrentSpreadIndex==="function"){
+        spreadIndex=flipbook.getPageCollection().getCurrentSpreadIndex();
+    }
+
+    const offset=spreadHostOffset(spreadIndex);
+    const transitionTime=
+        flipbook && flipbook.getSettings
+            ? Number(flipbook.getSettings().flippingTime)||normalFlippingTime
+            : normalFlippingTime;
+
+    flipHost.style.transition=animate
+        ? `left ${Math.max(1,transitionTime)}ms ease`
+        : "none";
+    flipHost.style.left=`${offset}px`;
+
+    if(!animate){
+        requestAnimationFrame(()=>{
+            if(flipHost) flipHost.style.transition="";
+        });
+    }
+}
+
+function prepareHostForTransition(targetSpreadIndex){
+    applyHostAlignment(targetSpreadIndex,true);
+}
+
+function setCustomFlipLighting(active,coverReverse=false){
+    if(!flipHost) return;
+
+    flipHost.classList.toggle("sky180-is-flipping",!!active);
+    flipHost.classList.toggle("sky180-cover-reverse",!!coverReverse);
+
+    const collection=flipbook && typeof flipbook.getPageCollection==="function"
+        ? flipbook.getPageCollection()
+        : null;
+    const spreadIndex=collection && typeof collection.getCurrentSpreadIndex==="function"
+        ? collection.getCurrentSpreadIndex()
+        : 0;
+
+    flipHost.classList.toggle(
+        "sky180-open-spread",
+        spreadIndex>0 && !active
+    );
+}
+
+function pageIndexToSpreadStart(index){
+    /* Internal index 0 is the transparent opening partner. */
+    index=Math.max(0,Number(index)||0);
+    if(index<=1) return 1;
+    return index%2===0 ? index : index-1;
+}
+
+function syncCurrentPage(emitEvent=true){
+    if(!flipbook) return currentPage;
+
+    const index=typeof flipbook.getCurrentPageIndex==="function"
+        ? flipbook.getCurrentPageIndex()
+        : 1;
+    const nextPage=pageIndexToSpreadStart(index);
+
+    if(nextPage!==currentPage) currentPage=nextPage;
+    if(emitEvent) emit("page",currentPage,pageCount);
+    return currentPage;
+}
+
+function ensureLibrary(){
+    if(typeof St==="undefined" || typeof St.PageFlip!=="function"){
+        const error=new Error(
+            "Sky180FlipEngine: page-flip.browser.js is not loaded."
+        );
+        emit("error",error);
+        throw error;
+    }
+}
+
+engine.initialize=function(options={}){
+    if(initialized) return;
+
+    host=options.container || document.getElementById("pageContainer");
+
+    if(!host){
+        throw new Error("Sky180FlipEngine: #pageContainer not found.");
+    }
+
+    ensureLibrary();
+
+    initialized=true;
+};
+
+engine.open=function(options={}){
+    if(!initialized) engine.initialize(options);
+
+    ensureLibrary();
+
+    engine.close();
+
+    /* The first StPageFlip initialization is asynchronous. Return a
+       readiness promise so Renderer.open() never finishes before the
+       visual engine is actually ready. */
+    let resolveReady;
+    let rejectReady;
+    const readyPromise=new Promise((resolve,reject)=>{
+        resolveReady=resolve;
+        rejectReady=reject;
+    });
+
+    pageCount=Math.max(0,Number(options.pageCount)||0);
+    currentPage=Math.max(1,Number(options.startPage)||1);
+    normalFlippingTime=Number(options.flippingTime)||650;
+
+    if(!options.pages || !options.pages.length){
+        throw new Error("Sky180FlipEngine: no page surfaces supplied.");
+    }
+
+    /*
+     * StPageFlip removes the element supplied to its constructor when
+     * destroyed. Therefore it gets a private child of #pageContainer,
+     * never #pageContainer itself.
+     */
+    flipHost=document.createElement("div");
+    flipHost.id="sky180FlipHost";
+    flipHost.className="sky180FlipHost";
+
+
+
+
+    /*
+     * The StPageFlip wrapper is allowed to be shorter than the viewer.
+     * Center that wrapper inside the host so short/tall PDFs do not jump
+     * vertically when the page ratio changes.
+     */
+    flipHost.style.display="flex";
+    flipHost.style.alignItems="flex-start";
+    flipHost.style.justifyContent="center";
+    flipHost.style.overflow="hidden";
+    flipHost.style.position="relative";
+    flipHost.style.left="0px";
+
+    host.innerHTML="";
+    host.appendChild(flipHost);
+
+    flipbook=new St.PageFlip(
+        flipHost,
+        {
+            width:options.width || 800,
+            height:options.height || 1100,
+            size:"stretch",
+
+
+            minWidth:options.minWidth || 280,
+            maxWidth:options.maxWidth || 1000,
+            minHeight:options.minHeight || 380,
+            maxHeight:options.maxHeight || 1400, 
+            drawShadow:false,
+            maxShadowOpacity:0,
+            flippingTime:options.flippingTime || 650,
+            usePortrait:false,
+            showCover:false,
+            autoSize:true,
+            mobileScrollSupport:true,
+            swipeDistance:30,
+            clickEventForward:true,
+            useMouseEvents:options.useMouseEvents!==false
+        }
+    );
+
+
+
+
+
+    /*
+     * StPageFlip creates its UI wrapper when loadFromHTML() is called,
+     * not in the constructor. Do not access getUI()/getWrapper() here.
+     * The host/CSS owns centering; StPageFlip owns the book rectangle.
+     */
+
+    flipbook.on("init",event=>{
+
+
+        const index=event && event.data ? event.data.page : 0;
+        currentPage=pageIndexToSpreadStart(index);
+        busy=false;
+
+        /*
+         * The first layout pass now has a real page ratio, so apply the
+         * centered opening-spread position before the reader becomes visible.
+         */
+        applyHostAlignment(
+            flipbook.getPageCollection().getCurrentSpreadIndex(),
+            false
+        );
+        setCustomFlipLighting(false,false);
+
+        emit("init",currentPage,pageCount);
+        resolveReady({page:currentPage,pages:pageCount});
+    });
+
+    flipbook.on("flip",()=>{
+        /* StPageFlip has already changed its page collection.
+           Read the authoritative index from the instance. */
+        syncCurrentPage(true);
+    });
+
+    flipbook.on("changeState",event=>{
+        const state=event.data;
+        busy=state!=="read";
+
+        /*
+         * Keep custom lighting strictly scoped to the live turn. This avoids
+         * the permanent center line that occurred with a static overlay.
+         */
+        let coverReverse=false;
+        if(state==="flipping" && flipbook &&
+           typeof flipbook.getPageCollection==="function" &&
+           typeof flipbook.getFlipController==="function"){
+            const collection=flipbook.getPageCollection();
+            const controller=flipbook.getFlipController();
+            const spreadIndex=collection.getCurrentSpreadIndex();
+            const direction=typeof controller.getDirection==="function"
+                ? controller.getDirection()
+                : 0;
+            coverReverse=(spreadIndex===1 && direction===1);
+        }
+
+        setCustomFlipLighting(
+            state==="flipping" || state==="user_fold",
+            coverReverse
+        );
+
+        if(state==="read"){
+            if(flipbook && typeof flipbook.getPageCollection==="function"){
+                applyHostAlignment(
+                    flipbook.getPageCollection().getCurrentSpreadIndex(),
+                    false
+                );
+            }
+            syncCurrentPage(true);
+        }
+
+        if(state==="flipping"){
+            if(flipbook &&
+               typeof flipbook.getPageCollection==="function" &&
+               typeof flipbook.getFlipController==="function"){
+                const collection=flipbook.getPageCollection();
+                const controller=flipbook.getFlipController();
+                const sourceIndex=collection.getCurrentSpreadIndex();
+                const direction=typeof controller.getDirection==="function"
+                    ? controller.getDirection()
+                    : 0;
+                const targetIndex=sourceIndex+(direction===1 ? -1 : 1);
+
+                if(targetIndex>=0 && targetIndex<collection.getSpread().length){
+                    applyHostAlignment(targetIndex,true);
+                }
+            }
+
+
+            if(window.AudioController &&
+               typeof AudioController.playPageTurn==="function"){
+                AudioController.playPageTurn();
+            }
+        }
+
+        emit("state",state);
+    });
+
+    flipbook.on("changeOrientation",event=>{
+        emit("orientation",event.data);
+    });
+
+    try{
+        flipbook.loadFromHTML(options.pages);
+    }
+    catch(error){
+        emit("error",error);
+        rejectReady(error);
+        throw error;
+    }
+
+    return readyPromise;
+};
+
+engine.next=function(){
+    if(!flipbook || busy) return false;
+
+    const spread=typeof flipbook.getPageCollection==="function"
+        ? flipbook.getPageCollection()
+        : null;
+
+    if(spread && typeof spread.getCurrentSpreadIndex==="function" &&
+       typeof spread.getSpread==="function"){
+        const index=spread.getCurrentSpreadIndex();
+        const list=spread.getSpread();
+        if(index>=list.length-1) return false;
+    }
+
+    busy=true;
+
+    const targetSpreadIndex=
+        spread.getCurrentSpreadIndex()+1;
+
+    prepareHostForTransition(targetSpreadIndex);
+    flipbook.flipNext();
+    return true;
+};
+
+engine.previous=function(){
+    if(!flipbook || busy) return false;
+
+    const spread=typeof flipbook.getPageCollection==="function"
+        ? flipbook.getPageCollection()
+        : null;
+
+    if(spread && typeof spread.getCurrentSpreadIndex==="function" &&
+       spread.getCurrentSpreadIndex()<=0){
+        return false;
+    }
+
+    busy=true;
+
+    const targetSpreadIndex=
+        spread.getCurrentSpreadIndex()-1;
+
+    prepareHostForTransition(targetSpreadIndex);
+    flipbook.flipPrev();
+    return true;
+};
+
+engine.goTo=function(page){
+    if(!flipbook) return false;
+
+    const target=normalizeSpreadStart(page);
+    const previous=currentPage;
+
+    currentPage=target;
+    busy=true;
+
+    try{
+        const collection=flipbook.getPageCollection();
+        const targetSpreadIndex=collection.getSpreadIndexByPage(target);
+
+        applyHostAlignment(targetSpreadIndex,true);
+
+        flipbook.turnToPage(target);
+    }
+    catch(error){
+        currentPage=previous;
+        busy=false;
+        emit("error",error);
+        return false;
+    }
+
+    /* No movement is needed when the requested spread is already visible. */
+    if(target===previous){
+        busy=false;
+        emit("page",currentPage,pageCount);
+    }
+
+    return true;
+};
+
+engine.spread=function(){
+    const start=normalizeSpreadStart(currentPage);
+
+    if(start===1){
+        return {start:1,end:1,isCover:true,label:"1"};
+    }
+
+    const end=Math.min(pageCount,start+1);
+    return {
+        start,
+        end,
+        isCover:false,
+        label:start===end?String(start):start+"–"+end
+    };
+};
+
+engine.resize=function(){
+    if(!flipbook) return;
+
+    /*
+     * StPageFlip owns the book rectangle. Let it recalculate from the
+     * available viewer size, then re-apply the opening/closing spread alignment.
+     */
+    flipbook.update();
+
+    if(typeof flipbook.getPageCollection==="function"){
+        applyHostAlignment(
+            flipbook.getPageCollection().getCurrentSpreadIndex(),
+            false
+        );
+    }
+};
+
+engine.page=function(){
+    return currentPage;
+};
+
+engine.pages=function(){
+    return pageCount;
+};
+
+engine.busy=function(){
+    return busy;
+};
+
+engine.active=function(){
+    return flipbook!==null;
+};
+
+engine.close=function(){
+    if(flipbook){
+        try{
+            /*
+             * A failed open can leave a PageFlip instance constructed but
+             * not yet loaded. Its destroy() method assumes the UI exists,
+             * so only destroy after loadFromHTML() has created the UI.
+             */
+            const ui=typeof flipbook.getUI==="function"
+                ? flipbook.getUI()
+                : null;
+
+            if(ui && typeof ui.destroy==="function"){
+                flipbook.destroy();
+            }
+        }
+        catch(error){ console.warn("[Sky180FlipEngine] destroy failed",error); }
+    }
+
+    if(flipHost){
+        flipHost.classList.remove("sky180-is-flipping");
+    }
+
+    flipbook=null;
+    flipHost=null;
+    pageCount=0;
+    currentPage=1;
+    busy=false;
+};
+
+engine.destroy=engine.close;
+
+engine.on=function(name,callback){
+    if(Object.prototype.hasOwnProperty.call(handlers,name)){
+        handlers[name]=callback;
+    }
+    return engine;
+};
+
+engine.version="1.4.0";
+
+return engine;
+
+})();

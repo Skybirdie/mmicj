@@ -1,0 +1,1272 @@
+/* ===========================
+   SKYREADER READER
+=========================== */
+
+#readerPanel{
+position:relative;
+overflow:hidden;
+background:var(--panel2);
+}
+
+#viewerBackground{
+position:relative;
+flex:1;
+display:flex;
+justify-content:center;
+align-items:center;
+overflow:hidden;
+background-position:center;
+background-repeat:no-repeat;
+background-size:cover;
+user-select:none;
+touch-action:none;
+}
+
+#viewerArea{
+position:relative;
+display:flex;
+justify-content:center;
+align-items:center;
+width:100%;
+height:100%;
+padding:32px;
+overflow:hidden;
+}
+
+#pageContainer{
+position:relative;
+display:flex;
+justify-content:center;
+align-items:center;
+width:100%;
+height:100%;
+max-width:100%;
+max-height:100%;
+overflow:hidden;
+}
+
+/* Sky180FlipEngine creates its private StPageFlip host here. */
+.sky180FlipHost{
+position:relative;
+width:100%;
+height:100%;
+max-width:100%;
+max-height:100%;
+overflow:hidden;
+}
+
+/*
+ * During initial book selection the host is kept invisible until StPageFlip
+ * has measured the book and the engine has applied its opening/closing
+ * centering offset. This prevents the unpositioned host from flashing in
+ * from the right before the final centered position is known.
+ */
+.sky180FlipHost.sky180-layout-pending{
+visibility:hidden;
+opacity:0;
+}
+
+.sky180FlipHost.sky180-layout-ready{
+visibility:visible;
+opacity:1;
+transition:opacity 140ms ease-out;
+}
+
+/*
+ * StPageFlip calculates the wrapper height from the PDF aspect ratio.
+ * The engine centers the wrapper; these rules prevent it from expanding
+ * beyond the viewer and eliminate visual overflow below short pages.
+ */
+.sky180FlipHost > .stf__wrapper{
+max-width:100%;
+overflow:hidden;
+}
+
+/* ---------------------------------------------------------
+   Sky180 custom page-turn lighting
+   StPageFlip's native drawShadow remains disabled in JS.
+   These effects are CSS overlays attached to the actual page
+   surfaces, so they deform/clip with the curling page.
+--------------------------------------------------------- */
+
+.sky180Page{
+position:relative;
+overflow:hidden;
+background:#fff;
+isolation:isolate;
+}
+
+/* Synthetic spread partners are transparent windows to the real reader background.
+ * The engine temporarily hides page 2 only during the reverse cover turn so
+ * the PDF canvas cannot leak through the opening synthetic partner.
+ */
+.sky180SyntheticPage{
+background:transparent !important;
+z-index:30;
+}
+
+/*
+ * On the reverse opening turn, page 2 is intentionally left visible.
+ * StPageFlip uses the turning surface itself for the inner half of the
+ * first frame, so hiding page 2 exposes the viewer background in that
+ * region. The synthetic opening partner remains responsible for the outer
+ * half/camouflage.
+ */
+/*
+ * During the final forward turn, suppress the last PDF surface itself.
+ * StPageFlip uses that last surface as the next spread's turning surface;
+ * leaving its live canvas visible underneath the transparent closing partner
+ * produces the duplicate-image flash we are eliminating. The final page is
+ * restored automatically when the state returns to read.
+ */
+.sky180FlipHost.sky180-final-forward .sky180Page[data-page]:last-of-type{
+opacity:0 !important;
+}
+
+.sky180SyntheticMask{
+position:absolute;
+inset:0;
+pointer-events:none;
+z-index:100;
+background-repeat:no-repeat;
+/* Test17: keep the synthetic camouflage fully opaque across the
+ * entire page. This prevents the real page-2 artwork from appearing
+ * at the innermost edge during the reverse cover turn. */
+-webkit-mask-image:none;
+mask-image:none;
+opacity:0;
+}
+
+.sky180FlipHost.sky180-cover-reverse .sky180SyntheticPage[data-synthetic="opening"] .sky180SyntheticMask,
+.sky180FlipHost.sky180-final-forward .sky180SyntheticPage[data-synthetic="closing"] .sky180SyntheticMask{
+opacity:1;
+}
+
+
+/*
+ * Edge/underside lighting.
+ * ::before = broad page-edge falloff, aligned with the page edge.
+ * ::after  = narrower diagonal/corner falloff that becomes stronger
+ *            toward the active corner, creating a subtle curled-paper cue.
+ *
+ * The overlays are transparent while the book is at rest and become active
+ * only while Sky180FlipEngine marks the host as flipping.
+ */
+.sky180Page::before,
+.sky180Page::after{
+content:"";
+position:absolute;
+inset:0;
+pointer-events:none;
+z-index:20;
+opacity:0;
+transition:opacity 70ms linear;
+}
+
+.sky180FlipHost.sky180-is-flipping .sky180Page::before,
+.sky180FlipHost.sky180-is-flipping .sky180Page::after{
+opacity:1;
+}
+
+/* Left page: darken the inner/right edge and fade toward the page body. */
+.sky180Page.--left::before{
+background:
+linear-gradient(
+    to right,
+    rgba(0,0,0,0) 0%,
+    rgba(0,0,0,0) 72%,
+    rgba(0,0,0,.035) 82%,
+    rgba(0,0,0,.10) 94%,
+    rgba(0,0,0,.16) 100%
+);
+}
+
+/* Right page: mirrored inner/left edge falloff. */
+.sky180Page.--right::before{
+background:
+linear-gradient(
+    to left,
+    rgba(0,0,0,0) 0%,
+    rgba(0,0,0,0) 72%,
+    rgba(0,0,0,.035) 82%,
+    rgba(0,0,0,.10) 94%,
+    rgba(0,0,0,.16) 100%
+);
+}
+
+/*
+ * Diagonal corner-curl cue. It is intentionally softer than the edge
+ * shadow so it reads as changing page brightness rather than a hard line.
+ */
+.sky180Page.--left::after{
+background:
+radial-gradient(
+    ellipse 72% 58% at 100% 100%,
+    rgba(0,0,0,.15) 0%,
+    rgba(0,0,0,.075) 18%,
+    rgba(0,0,0,.025) 38%,
+    rgba(0,0,0,0) 68%
+);
+}
+
+.sky180Page.--right::after{
+background:
+radial-gradient(
+    ellipse 72% 58% at 0% 100%,
+    rgba(0,0,0,.15) 0%,
+    rgba(0,0,0,.075) 18%,
+    rgba(0,0,0,.025) 38%,
+    rgba(0,0,0,0) 68%
+);
+}
+
+/*
+ * Synthetic pages stay visually empty. Their lighting is still allowed
+ * during a turn so the fake surface can participate in the depth illusion.
+ */
+.sky180SyntheticPage::before,
+.sky180SyntheticPage::after{
+opacity:0;
+}
+
+.sky180FlipHost.sky180-is-flipping .sky180SyntheticPage::before,
+.sky180FlipHost.sky180-is-flipping .sky180SyntheticPage::after{
+opacity:.55;
+}
+
+/*
+ * Center-of-spread depth cue. It is a pseudo-element of the actual
+ * StPageFlip book block, so it is clipped to the book itself.
+ */
+.sky180FlipHost > .stf__wrapper .stf__block{
+overflow:hidden;
+}
+
+.sky180FlipHost > .stf__wrapper .stf__block::after{
+content:"";
+position:absolute;
+left:50%;
+top:var(--sky180-book-top, 0px);
+bottom:auto;
+height:var(--sky180-book-height, 100%);
+width:24px;
+transform:translateX(-50%);
+pointer-events:none;
+z-index:80;
+opacity:0;
+background:linear-gradient(
+    to right,
+    rgba(0,0,0,0) 0%,
+    rgba(0,0,0,.025) 20%,
+    rgba(0,0,0,.075) 42%,
+    rgba(0,0,0,.105) 50%,
+    rgba(0,0,0,.075) 58%,
+    rgba(0,0,0,.025) 80%,
+    rgba(0,0,0,0) 100%
+);
+clip-path:inset(0);
+-webkit-clip-path:inset(0);
+}
+
+.sky180FlipHost.sky180-open-spread > .stf__wrapper .stf__block::after{
+opacity:1;
+}
+
+.sky180FlipHost.sky180-is-flipping > .stf__wrapper .stf__block::after{
+opacity:0 !important;
+}
+
+/* Center spread depth is meaningful only when two real pages are visible.
+ * This class is set from the actual engine mode, not merely the viewport. */
+.sky180FlipHost.sky180-single-page > .stf__wrapper .stf__block::after{
+content:none !important;
+display:none !important;
+}
+
+/* --------------------------------------------------------- */
+
+.sky180Page .pageCanvas{
+display:block;
+width:100%;
+height:100%;
+max-width:100%;
+max-height:100%;
+background:#fff;
+image-rendering:auto;
+}
+
+
+.sky180Page .pdfLink{
+position:absolute;
+text-decoration:none;
+}
+
+
+#readerTitle{
+
+font-size:14px;
+
+font-weight:600;
+
+opacity:.85;
+
+white-space:nowrap;
+
+overflow:hidden;
+
+text-overflow:ellipsis;
+
+}
+
+#pageIndicator{
+font-size:13px;
+opacity:.82;
+min-width:70px;
+text-align:center;
+border:1px solid color-mix(in srgb,var(--muted) 28%,transparent);
+background:color-mix(in srgb,var(--panel) 72%,transparent);
+color:inherit;
+padding:3px 8px;
+border-radius:7px;
+cursor:pointer;
+font:inherit;
+transition:background .18s,border-color .18s,box-shadow .18s,opacity .18s;
+}
+
+#pageIndicator:not(.pageIndicatorActive){
+border-color:transparent;
+background:transparent;
+pointer-events:none;
+cursor:default;
+padding:0;
+min-width:0;
+}
+
+#pageIndicator.pageIndicatorActive:hover{
+opacity:1;
+border-color:color-mix(in srgb,var(--text) 42%,transparent);
+background:color-mix(in srgb,var(--panel) 88%,transparent);
+}
+
+#pageIndicator.pageIndicatorActive:focus-visible{
+opacity:1;
+outline:none;
+border-color:var(--text);
+box-shadow:0 0 0 2px color-mix(in srgb,var(--text) 16%,transparent);
+}
+
+#pageJump{
+position:absolute;
+z-index:1000;
+right:16px;
+bottom:52px;
+padding:10px;
+border-radius:10px;
+background:rgba(20,20,20,.94);
+box-shadow:0 8px 24px rgba(0,0,0,.25);
+color:#fff;
+}
+
+#pageJump[hidden]{display:none;}
+
+#pageJump label{display:block;font-size:12px;margin-bottom:6px;}
+
+.pageJumpRow{display:flex;gap:6px;}
+
+#pageJumpInput{width:72px;padding:5px 7px;}
+
+#pageJumpButton{padding:5px 10px;cursor:pointer;}
+
+
+#loading{
+position:absolute;
+inset:0;
+z-index:1000;
+display:flex;
+align-items:center;
+justify-content:center;
+pointer-events:none;
+opacity:0;
+visibility:hidden;
+transition:opacity .2s ease, visibility 0s linear .2s;
+}
+
+#loading.visible{
+opacity:1;
+visibility:visible;
+transition:opacity .2s ease;
+}
+
+.loadingOverlayInner{
+display:flex;
+flex-direction:column;
+align-items:center;
+justify-content:center;
+gap:10px;
+max-width:80%;
+text-align:center;
+}
+
+#loadingImage{
+display:block;
+max-width:min(180px,45vw);
+max-height:min(180px,35vh);
+width:auto;
+height:auto;
+object-fit:contain;
+}
+
+#loadingText{
+font-size:.9rem;
+line-height:1.3;
+opacity:.8;
+}
+
+
+
+/* ---------- LOADING ---------- */
+
+#loadingBar{
+
+width:min(360px,92%);
+height:4px;
+margin-top:14px;
+background:#d9dde3;
+border-radius:999px;
+overflow:hidden;
+
+}
+
+#loadingProgress{
+
+width:0%;
+height:100%;
+background:#444;
+transition:width .18s linear;
+
+}
+
+#loadingText{
+
+margin-top:10px;
+font-size:13px;
+font-weight:500;
+color:var(--muted);
+text-align:center;
+min-height:18px;
+
+}
+
+/* ---------- TOOLBAR ---------- */
+
+#toolbar{
+
+display:flex;
+justify-content:center;
+align-items:center;
+gap:22px;
+
+}
+
+#toolbar .iconButton{
+
+background:rgba(255,255,255,.78);
+
+backdrop-filter:blur(10px);
+
+box-shadow:
+0 8px 22px rgba(0,0,0,.12);
+
+transition:
+background .25s,
+transform .25s,
+box-shadow .25s;
+
+}
+
+#toolbar .iconButton:hover{
+
+background:white;
+
+transform:
+translateY(-2px);
+
+box-shadow:
+0 12px 24px rgba(0,0,0,.18);
+
+}
+
+#toolbar .iconButton:active{
+
+transform:scale(.95);
+
+}
+
+/* ---------- STATUS ---------- */
+
+#statusBar{
+font-size:13px;
+letter-spacing:.02em;
+padding:2px 8px;
+}
+
+
+/*-------------------------------------------------------
+ Reader Status
+-------------------------------------------------------*/
+
+.sr-reader-status{
+
+display:flex;
+
+flex-direction:column;
+
+gap:8px;
+
+padding:12px 20px;
+
+margin-bottom:12px;
+
+background:rgba(255,255,255,.72);
+
+backdrop-filter:blur(10px);
+
+border-radius:16px;
+
+box-shadow:0 8px 24px rgba(0,0,0,.18);
+
+}
+
+.sr-status-title{
+
+font-size:18px;
+
+font-weight:600;
+
+color:#222;
+
+white-space:nowrap;
+
+overflow:hidden;
+
+text-overflow:ellipsis;
+
+}
+
+.sr-status-page{
+
+display:flex;
+
+justify-content:space-between;
+
+font-size:13px;
+
+color:#555;
+
+}
+
+.sr-progress{
+
+height:6px;
+
+background:#d6d6d6;
+
+border-radius:999px;
+
+overflow:hidden;
+
+}
+
+.sr-progress-fill{
+
+height:100%;
+
+width:0%;
+
+background:#444;
+
+transition:width .25s ease;
+
+border-radius:999px;
+
+}
+
+/*======================================================
+ Control Dock
+======================================================*/
+
+.sr-control-dock{
+
+position:absolute;
+
+left:50%;
+
+bottom:24px;
+
+transform:translateX(-50%);
+
+display:flex;
+
+flex-direction:column;
+
+gap:12px;
+
+align-items:center;
+
+transition:
+
+opacity .35s ease,
+
+transform .35s ease;
+
+opacity:1;
+
+pointer-events:auto;
+
+z-index:200;
+
+}
+
+.sr-control-dock.dock-hidden{
+
+opacity:.25;
+
+}
+
+.sr-control-dock:hover{
+
+opacity:1;
+
+}
+
+@media (max-width:900px){
+
+.sr-control-dock{
+
+left:12px;
+
+right:12px;
+
+bottom:12px;
+
+transform:none;
+
+}
+
+}
+
+/* ---------- RESPONSIVE ---------- */
+
+@media (max-width:1000px){
+
+#viewerArea{
+
+padding:24px;
+
+}
+
+}
+
+@media (max-width:700px){
+
+#viewerArea{
+
+padding:14px;
+
+}
+
+#pageCanvas{
+
+border-radius:8px;
+
+}
+
+#toolbar{
+
+gap:14px;
+
+}
+
+}
+
+@media (max-width:480px){
+
+#viewerArea{
+
+padding:8px;
+
+}
+
+#loadingText{
+
+font-size:12px;
+
+}
+
+}
+
+.sr-toolbar-button.active{
+
+background:#444;
+
+color:#fff;
+
+transform:scale(.94);
+
+transition:
+
+background .15s ease,
+
+transform .15s ease;
+
+}
+
+/*======================================================
+ Bookmark Panel
+======================================================*/
+
+.sr-bookmark-panel{
+
+position:absolute;
+
+top:20px;
+
+right:20px;
+
+width:280px;
+
+max-height:70vh;
+
+overflow:auto;
+
+  background:var(--panel2);
+  color:var(--text);
+
+backdrop-filter:blur(12px);
+
+border-radius:18px;
+
+box-shadow:0 12px 36px rgba(0,0,0,.22);
+
+padding:16px;
+
+z-index:300;
+
+}
+
+.sr-bookmark-header{
+
+display:flex;
+
+justify-content:space-between;
+
+align-items:center;
+
+margin-bottom:14px;
+border-bottom: 1px grey solid;
+
+}
+
+.sr-bookmark-header h3{
+
+margin:10px;
+
+font-size:18px;
+
+font-weight:600;
+
+}
+
+.sr-bookmark-close{
+
+border:none;
+
+background:none;
+
+cursor:pointer;
+
+font-size:18px;
+
+  background:var(--panel2);
+  color:var(--text);
+
+}
+
+.sr-bookmark-list{
+
+display:flex;
+
+flex-direction:column;
+
+gap:10px;
+
+}
+
+.sr-bookmark-row{
+
+display:flex;
+
+justify-content:space-between;
+
+align-items:center;
+
+gap:10px;
+
+}
+
+.sr-bookmark-page{
+
+flex:1;
+
+padding:10px 12px;
+
+border:none;
+
+border-radius:10px;
+
+  background:var(--panel2);
+  color:var(--text);
+
+cursor:pointer;
+
+text-align:left;
+
+white-space:nowrap;
+
+overflow:hidden;
+
+text-overflow:ellipsis;
+
+transition:background .2s ease;
+
+}
+
+.sr-bookmark-page:hover{
+
+background:#dcdcdc;
+
+}
+
+.sr-bookmark-delete{
+
+width:36px;
+
+height:50px;
+
+border:none;
+
+border-radius:10px;
+
+  background:var(--panel2);
+  color:var(--text);
+
+cursor:pointer;
+font-size:18px;
+
+}
+
+.sr-bookmark-delete:hover{
+
+background:#721C24;
+  color:#dcdcdc;
+}
+
+.sr-bookmark-empty{
+
+padding:20px;
+
+text-align:center;
+
+color:#777;
+
+font-style:italic;
+
+}
+
+/*======================================================
+ Table Of Contents
+======================================================*/
+
+.sr-toc-panel{
+
+position:absolute;
+
+top:20px;
+
+left:20px;
+
+width:320px;
+
+max-height:70vh;
+
+overflow:auto;
+
+background:rgba(255,255,255,.94);
+
+backdrop-filter:blur(12px);
+
+border-radius:18px;
+
+padding:18px;
+
+box-shadow:0 12px 36px rgba(0,0,0,.22);
+
+z-index:300;
+
+}
+
+.sr-toc-header{
+
+display:flex;
+
+justify-content:space-between;
+
+align-items:center;
+
+margin-bottom:14px;
+
+}
+
+.sr-toc-header h3{
+
+margin:0;
+
+font-size:18px;
+
+font-weight:600;
+
+}
+
+.sr-toc-close{
+
+border:none;
+
+background:none;
+
+cursor:pointer;
+
+font-size:18px;
+
+}
+
+.sr-toc-list{
+
+display:flex;
+
+flex-direction:column;
+
+gap:6px;
+
+}
+
+.sr-toc-item{
+
+border:none;
+
+background:#f2f2f2;
+
+padding:10px 12px;
+
+border-radius:10px;
+
+text-align:left;
+
+cursor:pointer;
+
+transition:background .2s ease;
+
+}
+
+.sr-toc-item:hover{
+
+background:#dddddd;
+
+}
+
+.sr-toc-empty{
+
+padding:18px;
+
+text-align:center;
+
+color:#777;
+
+font-style:italic;
+
+}
+
+
+/*======================================================
+ Search Panel
+======================================================*/
+
+.sr-search-panel{
+
+position:absolute;
+
+top:20px;
+
+right:20px;
+
+width:360px;
+
+max-height:72vh;
+
+overflow:hidden;
+
+display:flex;
+
+flex-direction:column;
+
+background:rgba(255,255,255,.94);
+
+backdrop-filter:blur(12px);
+
+border-radius:18px;
+
+box-shadow:0 12px 36px rgba(0,0,0,.22);
+
+z-index:320;
+
+}
+
+.sr-search-header{
+
+display:flex;
+
+justify-content:space-between;
+
+align-items:center;
+
+padding:16px 18px 10px;
+
+}
+
+.sr-search-header h3{
+
+margin:0;
+
+font-size:18px;
+
+font-weight:600;
+
+}
+
+.sr-search-close{
+
+border:none;
+
+background:none;
+
+cursor:pointer;
+
+font-size:18px;
+
+color:#444;
+
+}
+
+.sr-search-input{
+
+margin:0 18px 14px;
+
+padding:12px 14px;
+
+border:1px solid #d7d7d7;
+
+border-radius:12px;
+
+font-size:14px;
+
+outline:none;
+
+}
+
+.sr-search-input:focus{
+
+border-color:#444;
+
+}
+
+.sr-search-results{
+
+flex:1;
+
+overflow:auto;
+
+padding:0 12px 14px;
+
+display:flex;
+
+flex-direction:column;
+
+gap:10px;
+
+}
+
+.sr-search-result{
+
+border:none;
+
+background:#f4f4f4;
+
+padding:12px 14px;
+
+border-radius:12px;
+
+text-align:left;
+
+cursor:pointer;
+
+transition:background .2s ease, transform .15s ease;
+
+}
+
+.sr-search-result:hover{
+
+background:#e4e4e4;
+
+transform:translateY(-1px);
+
+}
+
+.sr-search-result-title{
+
+font-weight:600;
+
+color:#222;
+
+margin-bottom:6px;
+
+}
+
+.sr-search-result-excerpt{
+
+font-size:13px;
+
+line-height:1.4;
+
+color:#666;
+
+display:-webkit-box;
+
+-webkit-line-clamp:2;
+
+-webkit-box-orient:vertical;
+
+overflow:hidden;
+
+}
+
+.sr-search-empty{
+
+padding:28px 16px;
+
+text-align:center;
+
+color:#777;
+
+font-style:italic;
+
+}
+
+
+/* Zoomed-book grab/pan states */
+#viewerArea .skyreader-zoomed{cursor:grab;}
+#viewerArea .skyreader-zoomed.skyreader-panning{cursor:grabbing;}
+#viewerArea .skyreader-zoomed *{touch-action:none;}
+
+/* PDF.js media annotation layer */
+.sky180Page .skyreaderMediaAnnotationLayer{position:absolute;inset:0;width:100%;height:100%;z-index:20;overflow:visible;pointer-events:none;}
+.sky180Page .skyreaderMediaAnnotationLayer .annotationLayer{position:absolute;inset:0;}
+.sky180Page .skyreaderMediaAnnotationLayer video.mediaContent,.sky180Page .skyreaderMediaAnnotationLayer audio.mediaContent{max-width:100%;max-height:100%;}
+
+
+/* PDF.js embedded media */
+.sky180Page .skyreaderMediaAnnotationLayer .mediaAnnotation{
+  position:absolute;
+  overflow:visible;
+  cursor:pointer;
+  pointer-events:auto;
+}
+.sky180Page .skyreaderMediaAnnotationLayer .mediaAnnotation .mediaPlayButton{
+  cursor:pointer;
+}
+.sky180Page .skyreaderMediaAnnotationLayer .mediaAnnotation .mediaContent{
+  width:100%;
+  height:100%;
+  max-width:100%;
+  max-height:100%;
+  display:block;
+  object-fit:contain;
+}
+
+/* SkyReader embedded-video controls. Keep all playback controls inside the
+   PDF media rectangle so browser-native menus cannot escape above the viewer. */
+.sky180Page .skyreaderMediaAnnotationLayer .mediaAnnotation .skyreaderMediaControls{
+  position:absolute;
+  left:50%;
+  top:auto;
+  bottom:-45px;
+  transform:translateX(-50%) translateY(-4px);
+  z-index:40;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:7px;
+  padding:5px 7px;
+  box-sizing:border-box;
+  border:1px solid color-mix(in srgb,var(--line) 75%,transparent);
+  border-radius:10px;
+  background:transparent;
+  color:var(--text);
+  box-shadow:0 6px 18px rgba(0,0,0,.16);
+  backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);
+  pointer-events:auto;
+  touch-action:manipulation;
+  -webkit-user-select:none;
+  user-select:none;
+  opacity:0;
+  visibility:hidden;
+  transition:opacity .18s ease,transform .18s ease,visibility .18s ease;
+}
+.sky180Page .skyreaderMediaAnnotationLayer .mediaAnnotation .skyreaderMediaControls.skyreaderMediaControlsVisible{
+  opacity:1;
+  visibility:visible;
+  transform:translateX(-50%) translateY(0);
+}
+.sky180Page .skyreaderMediaAnnotationLayer .mediaAnnotation .skyreaderMediaControl{
+  width:36px;
+  height:32px;
+  min-width:36px;
+  padding:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  border:1px solid color-mix(in srgb,var(--line) 85%,transparent);
+  border-radius:7px;
+  background:color-mix(in srgb,var(--panel) 62%,transparent);
+  color:var(--text);
+  font:600 15px/1 sans-serif;
+  cursor:pointer;
+  touch-action:manipulation;
+}
+.sky180Page .skyreaderMediaAnnotationLayer .mediaAnnotation .skyreaderMediaControl:hover,
+.sky180Page .skyreaderMediaAnnotationLayer .mediaAnnotation .skyreaderMediaControl:focus-visible{
+  background:color-mix(in srgb,var(--text) 12%,var(--panel));
+}
+@media(max-width:480px){
+  .sky180Page .skyreaderMediaAnnotationLayer .mediaAnnotation .skyreaderMediaControls{
+    top:auto;
+    bottom:-45px;
+    gap:4px;
+    padding:4px 5px;
+  }
+  .sky180Page .skyreaderMediaAnnotationLayer .mediaAnnotation .skyreaderMediaControl{
+    width:32px;
+    height:30px;
+    min-width:32px;
+    font-size:13px;
+  }
+}

@@ -1,0 +1,52 @@
+/* SkyReader Library content primitives.
+   Layout and responsive geometry are owned by style.css. */
+
+.libraryView{animation:fadeIn .25s ease;}
+
+.emptyLibrary{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  height:220px;
+  padding:20px;
+  font-size:15px;
+  color:var(--muted);
+  text-align:center;
+}
+
+.libraryLoading{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  height:200px;
+  font-size:15px;
+  color:var(--muted);
+}
+
+.listItem{
+  display:flex;
+  align-items:center;
+  gap:16px;
+  padding:12px;
+  border-radius:16px;
+  cursor:pointer;
+  transition:background .2s ease,transform .2s ease;
+}
+
+.listItem:hover{background:var(--card-soft);transform:translateX(4px);}
+
+.listThumb{
+  width:54px;
+  height:76px;
+  flex:0 0 54px;
+  border-radius:8px;
+  overflow:hidden;
+  background:#dde2e8;
+  box-shadow:0 4px 12px rgba(0,0,0,.12);
+}
+
+.listThumb img{width:100%;height:100%;object-fit:cover;display:block;}
+.listInfo{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;}
+.listTitle{font-size:15px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.listSubtitle{margin-top:4px;font-size:13px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.listCategory{margin-top:8px;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#888;}

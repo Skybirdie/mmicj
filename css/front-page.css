@@ -1,0 +1,875 @@
+/* =========================================================
+   SkyMedia Front Page — CSS portal geometry
+
+   The six peripheral doors are built as three consecutive pieces
+   of two continuous waves. The geometry uses CSS polygon() with
+   rounded joins rather than the newer CSS shape() syntax, for broader support.
+   ========================================================= */
+
+#frontPage{
+    --front-text:#18202a;
+    --front-muted:#ffffff;
+    --front-menu-bg:rgba(255,255,255,.82);
+    --front-menu-border:rgba(24,32,42,.22);
+    --front-menu-shadow:0 12px 34px rgba(0,0,0,.18);
+    --front-c1:linear-gradient(90deg, #43cea2 0%, #185a9d 100%);
+    --front-c2:linear-gradient(180deg, #00FA9A 0%, #20B2AA 50%, #2c5364 100%);
+    --front-c3:linear-gradient(135deg, #008080 0%, #1affff 100%);
+    --front-c4:linear-gradient(45deg, #11998e 0%, #38ef7d 100%);
+    --front-c5:linear-gradient(270deg, #00f2fe 0%, #4facfe 100%);
+    --front-c6:linear-gradient(225deg, #aaffa9 0%, #11ffbd 100%);
+    --front-c7:linear-gradient(315deg, #00cdac 0%, #02aab0 100%);
+    --front-upper-backdrop:url("../assets/front-top-graphic.png");
+    --front-lower-backdrop:url("../assets/front-bottom-graphic.png");
+
+    position:fixed;
+    inset:0;
+    z-index:5000;
+    display:none;
+    width:100vw;
+    height:100dvh;
+    min-height:100svh;
+    overflow:hidden;
+    background:#000;
+    isolation:isolate;
+}
+
+html[data-theme="dark"] #frontPage{
+    --front-text:#f4f7fa;
+    --front-menu-bg:rgba(12,16,22,.84);
+    --front-menu-border:rgba(244,247,250,.24);
+    --front-menu-shadow:0 14px 38px rgba(0,0,0,.48);
+    --front-c1:linear-gradient(90deg, #43cea2 0%, #185a9d 100%);
+    --front-c2:linear-gradient(180deg, #00FA9A 0%, #2c5364 50%, #203a43 100%);
+    --front-c3:linear-gradient(135deg, #008080 0%, #1affff 100%);
+    --front-c4:linear-gradient(45deg, #11998e 0%, #38ef7d 100%);
+    --front-c5:linear-gradient(270deg, #00f2fe 0%, #4facfe 100%);
+    --front-c6:linear-gradient(225deg, #aaffa9 0%, #11ffbd 100%);
+    --front-c7:linear-gradient(315deg, #00cdac 0%, #02aab0 100%);
+}
+
+#frontPage.app-section-active{display:block;}
+#frontPage.app-section-hidden{display:none!important;}
+
+#frontBackground{
+    position:absolute;
+    inset:0;
+    width:100%;
+    height:100%;
+    object-fit:cover;
+    object-position:center;
+    z-index:0;
+    user-select:none;
+    pointer-events:none;
+}
+
+#frontStage{
+    position:absolute;
+    inset:0;
+    width:100%;
+    height:100%;
+    z-index:10;
+}
+
+/* ---------------------------------------------------------
+   Shared doors
+   --------------------------------------------------------- */
+.front-door{
+    position:absolute;
+    display:block;
+    padding:0;
+    margin:0;
+    border:0;
+    overflow:hidden;
+    background:var(--front-door-color,#222);
+    color:var(--front-door-text,#fff);
+    cursor:pointer;
+    isolation:isolate;
+    appearance:none;
+    -webkit-appearance:none;
+    outline:none;
+    box-shadow:none;
+    font:600 clamp(11px,1vw,16px)/1.2 Inter,Arial,sans-serif;
+    transition:filter .22s ease, transform .22s ease;
+}
+
+.front-door:hover{filter:brightness(1.08);}
+.front-door:focus-visible{
+    box-shadow:0 0 0 3px var(--front-focus,#fff), 0 0 0 6px color-mix(in srgb,var(--front-door-color,#222) 70%,transparent);
+    z-index:90;
+}
+
+.front-door img{
+    position:absolute;
+    inset:0;
+    width:100%;
+    height:100%;
+    object-fit:cover;
+    object-position:center;
+    user-select:none;
+    -webkit-user-drag:none;
+    opacity:.9;
+    transition:transform .35s ease, filter .35s ease;
+}
+.front-door:hover img,
+.front-door:focus-visible img{transform:scale(1.030);filter:brightness(1.08);}
+
+.front-door::after{
+    content:"";
+    position:absolute;
+    inset:0;
+    background:linear-gradient(180deg,rgba(0,0,0,.03),rgba(0,0,0,.22));
+    pointer-events:none;
+    z-index:1;
+}
+
+.front-door-label{
+    position:absolute;
+    left:50%;
+    top:auto;
+    bottom:10%;
+    transform:translateX(-50%);
+    z-index:4;
+    max-width:86%;
+    padding:6px 11px;
+    border:1px solid color-mix(in srgb,var(--front-door-text,#fff) 24%,transparent);
+    border-radius:999px;
+    background:color-mix(in srgb,var(--front-door-color,#222) 76%,transparent);
+    color:var(--front-door-text,#fff);
+    text-align:center;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    text-shadow:0 2px 8px rgba(0,0,0,.55);
+    pointer-events:none;
+}
+
+/* Top-door labels sit at the top */
+#frontTopWave .front-door-label{
+    top:10%;
+    bottom:auto;
+}
+
+/* Bottom-door labels sit at the bottom */
+#frontWave .front-door-label{
+    top:auto;
+    bottom:10%;
+}
+
+.front-door-placeholder{font-weight:700;}
+.front-door.is-empty{cursor:default;}
+.front-door.is-empty::after{background:rgba(0,0,0,.08);}
+
+/* Category-specific colors. Light and dark variants are declared above. */
+.front-door[data-front-position="top-left"],
+.front-door[data-front-position="bottom-left"]{--front-door-color:var(--front-c1);}
+.front-door[data-front-position="top-middle"],
+.front-door[data-front-position="bottom-middle"]{--front-door-color:var(--front-c2);}
+.front-door[data-front-position="top-right"],
+.front-door[data-front-position="bottom-right"]{--front-door-color:var(--front-c3);}
+.front-door[data-front-position="center"]{--front-door-color:var(--front-c4);}
+
+/* ---------------------------------------------------------
+   Centerpiece — square, approximately 75% of viewport height.
+   --------------------------------------------------------- */
+.front-door-center{
+    left:50%;
+    top:50%;
+    width:min(75dvh,82vw);
+    height:min(75dvh,82vw);
+    transform:translate(-50%,-50%);
+    aspect-ratio:1 / 1;
+    border-radius:clamp(34px,8%,110px);
+    z-index:50;
+    border:1px solid color-mix(in srgb,var(--front-door-text,#fff) 26%,transparent);
+
+}
+
+.front-door-center .front-door-label{
+    bottom:50%;
+    transform:translate(-50%,50%);
+    max-width:74%;
+    padding:10px 18px;
+    font-size:clamp(15px,2.2vw,33px);
+
+}
+
+.front-door-center img{
+    object-fit:contain;
+}
+
+
+/* ---------------------------------------------------------
+   Upper / lower portal doors
+
+   Three equal-width rounded shapes fill the complete viewport
+   width. The boxes physically overlap at their boundaries,
+   while the total group remains exactly 100% wide.
+
+   --door-overlap controls the amount of overlap.
+   --------------------------------------------------------- */
+
+.front-wave{
+    position:absolute;
+    left:0;
+    right:0;
+    width:100%;
+    height:10dvh;
+
+    display:block;
+
+    z-index:20;
+    isolation:isolate;
+    pointer-events:none;
+
+    --door-overlap:30px;
+}
+
+#frontWave{
+    bottom:0;
+    --front-wave-backdrop:var(--front-lower-backdrop,none);
+}
+
+#frontTopWave{
+    top:0;
+    --front-wave-backdrop:var(--front-upper-backdrop,none);
+}
+
+
+/* ---------------------------------------------------------
+   Backdrop
+   --------------------------------------------------------- */
+
+.front-wave::before{
+    content:"";
+    position:absolute;
+    inset:0;
+
+    z-index:-1;
+    pointer-events:none;
+
+    background-image:var(--front-wave-backdrop);
+    background-position:center;
+    background-repeat:no-repeat;
+    background-size:100% 150%;
+}
+
+
+
+
+
+
+
+/* ---------------------------------------------------------
+   Door geometry
+
+   Three doors are mathematically sized so that:
+
+       3 × door-width - 2 × overlap = 100%
+
+   Therefore the entire group always fills exactly the
+   available width without creating a left or right overflow.
+
+   Example with 30px overlap:
+
+       door width = (100% + 60px) / 3
+
+   Starts occur one overlap-width before the preceding door's
+   nominal boundary.
+   --------------------------------------------------------- */
+
+.front-wave .front-door{
+    position:absolute;
+
+    top:0;
+    bottom:0;
+
+    /*
+       Equal visual widths with physical overlap.
+    */
+    width:calc((100% + (2 * var(--door-overlap))) / 3);
+
+    height:100%;
+
+    min-width:0;
+    min-height:0;
+
+    margin:0;
+
+    border-radius:clamp(18px,2.5vw,42px);
+
+    pointer-events:auto;
+
+    box-sizing:border-box;
+}
+
+
+/* ---------------------------------------------------------
+   Exact horizontal positions
+
+   The resulting geometry is:
+
+       ┌────────────┐
+       │    LEFT    │
+       └────────────┘
+             ┌────────────┐
+             │   MIDDLE   │
+             └────────────┘
+                   ┌────────────┐
+                   │   RIGHT    │
+                   └────────────┘
+
+   but the combined outer boundary is exactly 100%.
+   --------------------------------------------------------- */
+
+.front-wave .front-door[data-front-position$="-left"]{
+    left:0;
+}
+
+.front-wave .front-door[data-front-position$="-middle"]{
+    left:calc(
+        (100% - var(--door-overlap)) / 3
+    );
+}
+
+.front-wave .front-door[data-front-position$="-right"]{
+    left:calc(
+        2 * ((100% - var(--door-overlap)) / 3)
+    );
+}
+
+
+/* ---------------------------------------------------------
+   Layering
+
+   Middle door sits above both neighboring doors at the
+   overlap points.
+   --------------------------------------------------------- */
+
+.front-wave .front-door[data-front-position$="-left"]{
+    z-index:2;
+}
+
+.front-wave .front-door[data-front-position$="-middle"]{
+    z-index:3;
+}
+
+.front-wave .front-door[data-front-position$="-right"]{
+    z-index:2;
+}
+
+
+/* =========================================================
+   BOTTOM WAVE
+   ========================================================= */
+
+#frontWave .front-door[data-front-position="bottom-left"]{
+  clip-path: shape(from 0 100%,vline to 25px,curve to 8.82% 25px with 5.88% 20px,smooth to 14.71% 23.5px,smooth to 20.59% 11px,smooth to 26.47% 2.5px,smooth to 32.35% 10.5px,smooth to 38.24% 23px,smooth to 44.12% 13px,smooth to 50% 0.5px,smooth to 55.88% 4.5px,smooth to 61.76% 9.5px,smooth to 67.65% 15px,smooth to 73.53% 11.5px,smooth to 79.41% 18px,smooth to 85.29% 36px,smooth to 91.18% 27.5px,smooth to 100% 25px,vline to 100%, hline to 0);
+}
+
+
+#frontWave .front-door[data-front-position="bottom-middle"]{
+  clip-path: shape(from 0 100%,vline to 25px,curve to 8.82% 34px with 5.88% 32px,smooth to 14.71% 42px,smooth to 20.59% 32.5px,smooth to 26.47% 23px,smooth to 32.35% 15px,smooth to 38.24% 14px,smooth to 44.12% 26.5px,smooth to 50% 34.5px,smooth to 55.88% 38px,smooth to 61.76% 38.5px,smooth to 67.65% 43px,smooth to 73.53% 23px,smooth to 79.41% 10.5px,smooth to 85.29% 18px,smooth to 91.18% 29px,smooth to 100% 25px,vline to 100%, hline to 0);
+}
+
+
+
+#frontWave .front-door[data-front-position="bottom-right"]{
+  clip-path: shape(from 0 100%,vline to 25px,curve to 8.82% 34.5px with 5.88% 24px,smooth to 14.71% 39px,smooth to 20.59% 32px,smooth to 26.47% 17.5px,smooth to 32.35% 24px,smooth to 38.24% 38px,smooth to 44.12% 16.5px,smooth to 50% 2.5px,smooth to 55.88% 2px,smooth to 61.76% 14.5px,smooth to 67.65% 17px,smooth to 73.53% 17px,smooth to 79.41% 27.5px,smooth to 85.29% 23.5px,smooth to 91.18% 12px,smooth to 100% 25px,vline to 100%, hline to 0);
+}
+
+
+
+
+/* =========================================================
+   TOP WAVE
+   ========================================================= */
+
+#frontTopWave .front-door[data-front-position="top-left"]{
+  clip-path: shape(from 0 0,vline to calc(100% - 25px),curve to 8.82% calc(100% - 24.5px) with 5.88% calc(100% - 39px),smooth to 14.71% calc(100% - 7px),smooth to 20.59% calc(100% - 24px),smooth to 26.47% calc(100% - 30.5px),smooth to 32.35% calc(100% - 33.5px),smooth to 38.24% calc(100% - 31px),smooth to 44.12% calc(100% - 20px),smooth to 50% calc(100% - 21.5px),smooth to 55.88% calc(100% - 31px),smooth to 61.76% calc(100% - 40px),smooth to 67.65% calc(100% - 16.5px),smooth to 73.53% calc(100% - 1.5px),smooth to 79.41% calc(100% - 12.5px),smooth to 85.29% calc(100% - 20px),smooth to 91.18% calc(100% - 32px),smooth to 100% calc(100% - 25px),vline to 0, hline to 0);
+}
+
+#frontTopWave .front-door[data-front-position="top-middle"]{
+  clip-path: shape(from 0 0,vline to calc(100% - 25px),curve to 8.82% calc(100% - 21px) with 5.88% calc(100% - 31px),smooth to 14.71% calc(100% - 11px),smooth to 20.59% calc(100% - 22.5px),smooth to 26.47% calc(100% - 25.5px),smooth to 32.35% calc(100% - 19.5px),smooth to 38.24% calc(100% - 36px),smooth to 44.12% calc(100% - 29px),smooth to 50% calc(100% - 13px),smooth to 55.88% calc(100% - 27px),smooth to 61.76% calc(100% - 21px),smooth to 67.65% calc(100% - 11px),smooth to 73.53% calc(100% - 28px),smooth to 79.41% calc(100% - 37px),smooth to 85.29% calc(100% - 40px),smooth to 91.18% calc(100% - 45.5px),smooth to 100% calc(100% - 25px),vline to 0, hline to 0);
+}
+
+#frontTopWave .front-door[data-front-position="top-right"]{
+  clip-path: shape(from 0 0,vline to calc(100% - 25px),curve to 8.82% calc(100% - 33px) with 5.88% calc(100% - 17px),smooth to 14.71% calc(100% - 49px),smooth to 20.59% calc(100% - 46px),smooth to 26.47% calc(100% - 22px),smooth to 32.35% calc(100% - 19.5px),smooth to 38.24% calc(100% - 19.5px),smooth to 44.12% calc(100% - 8.5px),smooth to 50% calc(100% - 11.5px),smooth to 55.88% calc(100% - 15px),smooth to 61.76% calc(100% - 32.5px),smooth to 67.65% calc(100% - 42px),smooth to 73.53% calc(100% - 29.5px),smooth to 79.41% calc(100% - 19.5px),smooth to 85.29% calc(100% - 14.5px),smooth to 91.18% calc(100% - 27px),smooth to 100% calc(100% - 25px),vline to 0, hline to 0);
+}
+
+
+
+
+
+
+
+/* =========================================================
+   RESPONSIVE
+   ========================================================= */
+
+@media (max-width:700px){
+    .front-wave{height:15dvh;}
+
+    .front-door-label{
+        font-size:clamp(10px,2.8vw,15px);
+        padding:5px 8px;
+    }
+
+    #frontTopWave .front-door-label{
+        top:12%;
+        bottom:auto;
+    }
+
+    #frontWave .front-door-label{
+        top:auto;
+        bottom:12%;
+    }
+
+    .front-door-center{
+        width:min(75dvh,84vw);
+        height:min(75dvh,84vw);
+        border-radius:clamp(28px,9%,72px);
+    }
+
+    .front-door-center .front-door-label{
+        font-size:clamp(14px,4vw,22px);
+    }
+
+    #frontMenuPanel{min-width:158px;}
+}
+
+/* ---------------------------------------------------------
+   Front-page navigation menu
+   --------------------------------------------------------- */
+#frontMenuButton{
+    position:absolute;
+    top:clamp(23px,5vh,37px);
+    right:clamp(10px,2vw,22px);
+    z-index:120;
+    width:clamp(38px,4.2vw,50px);
+    height:clamp(38px,4.2vw,50px);
+    display:grid;
+    place-items:center;
+    padding:0;
+    border:1px solid white;
+    border-radius:14px;
+    color:#fff;
+    cursor:pointer;
+    backdrop-filter:blur(7px);
+    box-shadow:0 0 10px #ACE1AF,
+               0 0 10px #ACE1AF,
+               inset 0 0 5px #ACE1AF;
+    background:rgba(255,255,255,.30)!important;
+
+    animation:frontMenuGlow 6.8s ease-in-out infinite;
+}
+
+@keyframes frontMenuGlow{ 0%,100%{ box-shadow: 0 0 4px #ACE1AF, 0 0 7px #ACE1AF, inset 0 0 5px #ACE1AF; } 45%{ box-shadow: 0 0 6px #ACE1AF, 0 0 7px #ACE1AF, inset 0 0 20px #00FA9A; } 52%{ box-shadow: 0 0 3px #ACE1AF, 0 0 5px #ACE1AF, inset 0 0 6px #ACE1AF; } 60%{ box-shadow: 0 0 8px #ACE1AF, 0 0 20px #00FA9A, inset 0 0 8px #ACE1AF; } }
+
+
+#frontMenuButton .icon{width:22px;height:22px;display:block;}
+#frontMenuButton:hover{filter:brightness(1.20);transform:translateY(2px);}
+
+#frontMenuPanel{
+    position:absolute;
+    top:calc(clamp(19px,3.9vh,33px) + clamp(38px,4.2vw,50px) + 8px);
+    right:clamp(10px,2vw,22px);
+    z-index:119;
+    display:flex;
+    flex-direction:column;
+    gap:7px;
+    min-width:170px;
+    padding:9px;
+    border:1px solid var(--front-menu-border);
+    border-radius:16px;
+    background:color-mix(in srgb,var(--panel) 30%,transparent);;
+    color:var(--front-text);
+    box-shadow:var(--front-menu-shadow);
+    backdrop-filter:blur(16px);
+    opacity:0;
+    visibility:hidden;
+    transform:translateY(-5px);
+    transition:opacity .18s ease,transform .18s ease,visibility .18s ease;
+}
+#frontMenuPanel.is-open{
+    opacity:1;
+    visibility:visible;
+    transform:translateY(0);
+}
+.front-menu-switch{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    width:100%;
+    min-height:38px;
+    padding:8px 11px;
+    border:1px solid transparent;
+    border-radius:11px;
+    background:transparent;
+    color:var(--front-text);
+    font:600 13px/1 Inter,Arial,sans-serif;
+    text-align:left;
+    cursor:pointer;
+}
+.front-menu-switch:hover,
+.front-menu-switch[aria-pressed="true"]{
+    background:color-mix(in srgb,var(--front-text) 9%,transparent);
+    border-color:color-mix(in srgb,var(--front-text) 14%,transparent);
+}
+.front-menu-switch .icon{width:20px;height:20px;flex:0 0 20px;}
+
+@media (max-width:700px){
+    .front-wave{height:15dvh;}
+    .front-door-label{font-size:clamp(10px,2.8vw,15px);bottom:12%;padding:5px 8px;}
+    .front-door-center{width:min(75dvh,84vw);height:min(75dvh,84vw);border-radius:clamp(28px,9%,72px);}
+    .front-door-center .front-door-label{font-size:clamp(14px,4vw,22px);}
+    #frontMenuPanel{min-width:158px;}
+}
+
+@media (prefers-reduced-motion:reduce){
+    .front-door,.front-door img,#frontMenuPanel{transition:none;}
+}
+
+/* The portal background receives the requested visual treatment. */
+#frontBackground{
+    filter:saturate(.8) sepia(.6) hue-rotate(-10deg) brightness(1.3) blur(.2rem);
+}
+
+/* ---------------------------------------------------------
+   Centerpiece live media viewport
+   --------------------------------------------------------- */
+.front-door-center .front-door-label{display:none;}
+.front-media-host{
+    position:absolute;
+    inset:0;
+    z-index:5;
+    display:grid;
+    grid-template-rows:auto minmax(0,1fr) auto auto;
+    gap:clamp(5px,.8vw,10px);
+    padding:clamp(10px,1.2vw,18px);
+    box-sizing:border-box;
+    background:color-mix(in srgb,var(--front-door-color,#222) 10%,transparent);
+    color:var(--front-door-text,#fff);
+    pointer-events:none;
+
+}
+.front-media-title{
+    text-align:center;
+    font:700 clamp(20px,5.0vw,35px)/1.2 Inter,Arial,sans-serif;
+    text-shadow:0 2px 10px rgba(0,0,0,.55);
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    pointer-events:none;
+
+}
+.front-media-content{
+    position:relative;
+    display:flex;align-items:center;justify-content:center;
+    overflow:hidden;
+    border-radius:clamp(14px,3vw,34px);
+    background:rgba(0,0,0,.05);
+    pointer-events:auto;
+    width:100%;
+    height:100%;
+    min-width:0;
+    min-height:0;
+    perspective:900px;
+}
+.front-media-video,.front-media-slide,.front-media-pdf,.front-media-fallback{
+    display:block;
+    max-width:100%;max-height:100%;
+    width:auto;height:auto;
+    object-fit:contain;
+}
+.front-media-video{width:100%;height:100%;background:transparent;}
+.front-media-slide{width:100%;height:100%;object-fit:contain;}
+.front-media-pdf{background:#fff;box-shadow:0 4px 20px rgba(0,0,0,.24);}
+.front-media-fallback{width:100%;height:100%;object-fit:cover;}
+.front-media-slide.is-entering,.front-media-pdf.is-entering{animation:frontMediaEnter .28s ease both;}
+@keyframes frontMediaEnter{from{opacity:.35}to{opacity:1}}
+
+/*
+ * Directional page-turn transition for the book/PDF centerpiece:
+ * next slides in from the right, previous from the left, so a page
+ * change visually reads as a turn rather than a flat cross-fade.
+ */
+.front-media-pdf.is-entering-next{animation:frontMediaEnterNext .3s ease both;}
+.front-media-pdf.is-entering-prev{animation:frontMediaEnterPrev .3s ease both;}
+@keyframes frontMediaEnterNext{from{opacity:.3}to{opacity:1}}
+@keyframes frontMediaEnterPrev{from{opacity:.3}to{opacity:1}}
+
+
+
+/* ---------------------------------------------------------
+   Centerpiece controls
+
+   Standardized gap.
+   No wrapping — all controls remain on one row.
+   --------------------------------------------------------- */
+
+.front-media-controls{
+    flex:0 0 auto;
+
+    display:flex;
+    flex-direction:row;
+    flex-wrap:nowrap;
+
+    align-items:center;
+    justify-content:center;
+
+    gap:8px;
+
+    width:100%;
+    min-width:0;
+
+    overflow:hidden;
+
+    pointer-events:auto;
+}
+
+.front-media-controls-left,
+.front-media-controls-center,
+.front-media-controls-right{
+    display:flex;
+    flex-direction:row;
+    flex-wrap:nowrap;
+
+    align-items:center;
+    justify-content:center;
+
+    gap:8px;
+
+    min-width:0;
+}
+
+
+/* ---------------------------------------------------------
+   Control buttons
+   --------------------------------------------------------- */
+
+.front-media-control{
+    width:clamp(30px,3vw,42px);
+    height:clamp(30px,3vw,42px);
+
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+
+    flex:0 0 auto;
+
+    padding:0;
+
+    border:1px solid color-mix(
+        in srgb,
+        var(--front-door-text,#fff) 34%,
+        transparent
+    );
+
+    border-radius:50%;
+
+    background:color-mix(
+        in srgb,
+        var(--front-door-color,#222) 68%,
+        transparent
+    );
+
+    color:var(--front-door-text,#fff);
+
+    box-shadow:0 3px 12px rgba(0,0,0,.18);
+
+    cursor:pointer;
+
+    appearance:none;
+    -webkit-appearance:none;
+
+    backdrop-filter:blur(6px);
+    -webkit-backdrop-filter:blur(6px);
+
+    box-sizing:border-box;
+}
+
+.front-media-control:hover{
+    filter:brightness(1.12);
+}
+
+.front-media-control:focus-visible{
+    outline:2px solid currentColor;
+    outline-offset:2px;
+}
+
+.front-media-control:disabled{
+    opacity:.35;
+    cursor:default;
+    filter:none;
+}
+
+.front-media-control .icon{
+    width:clamp(14px,1.7vw,22px);
+    height:clamp(14px,1.7vw,22px);
+
+    flex:0 0 auto;
+}
+
+
+/* ---------------------------------------------------------
+   Video progress
+   --------------------------------------------------------- */
+
+.front-media-progress{
+    flex:1 1 auto;
+
+    min-width:40px;
+    max-width:38%;
+
+    height:5px;
+
+    accent-color:#32de84;
+    cursor:pointer;
+
+}
+
+
+
+
+
+
+
+/* ---------------------------------------------------------
+   Status
+   --------------------------------------------------------- */
+
+.front-media-status{
+    flex:0 0 auto;
+
+    min-height:1em;
+
+    text-align:center;
+
+    font:600 clamp(10px,1vw,14px)/1
+        Inter,Arial,sans-serif;
+
+    opacity:.9;
+
+    text-shadow:0 2px 8px rgba(0,0,0,.5);
+
+    pointer-events:none;
+}
+
+.front-media-host[data-media-type="reader"]
+.front-media-content{
+    background:rgba(255,255,255,.10);
+}
+
+.front-media-host[data-media-type="reader"]
+.front-media-controls{
+    margin-top:-2px;
+}
+
+
+/* ---------------------------------------------------------
+   Mobile
+   --------------------------------------------------------- */
+
+@media (max-width:700px){
+
+    .front-media-host{
+        padding:8px;
+        gap:5px;
+    }
+
+    .front-media-title{
+        /*
+           Larger than the old mobile title, but still responsive.
+           It may wrap rather than being cropped.
+        */
+        font-size:clamp(18px,4.8vw,27px);
+        line-height:1.08;
+
+        padding:4px 8px;
+    }
+
+    .front-media-controls{
+        gap:6px;
+    }
+
+    .front-media-controls-left,
+    .front-media-controls-center,
+    .front-media-controls-right{
+        gap:6px;
+    }
+
+    .front-media-control{
+        width:32px;
+        height:32px;
+    }
+
+    .front-media-control .icon{
+        width:16px;
+        height:16px;
+    }
+
+    .front-media-progress{
+        max-width:42%;
+    }
+}
+
+
+/* ---------------------------------------------------------
+   Very narrow screens
+   --------------------------------------------------------- */
+
+@media (max-width:480px){
+
+    .front-media-host{
+        padding:7px;
+        gap:4px;
+    }
+
+    .front-media-title{
+        font-size:clamp(16px,5vw,23px);
+        line-height:1.08;
+        padding:3px 6px;
+    }
+
+    .front-media-controls{
+        gap:5px;
+    }
+
+    .front-media-controls-left,
+    .front-media-controls-center,
+    .front-media-controls-right{
+        gap:5px;
+    }
+
+    .front-media-control{
+        width:29px;
+        height:29px;
+    }
+
+    .front-media-control .icon{
+        width:14px;
+        height:14px;
+    }
+
+    .front-media-status{
+        font-size:10px;
+    }
+}
+/* =========================================================
+   MEDIA ZOOM — Front Page centerpiece and fullscreen view
+========================================================= */
+.front-media-content.skymedia-zoom-container{
+    touch-action:none;
+}
+.front-media-content.skymedia-zoom-container .skymedia-zoom-indicator{
+    top:10px;
+    left:10px;
+}
+.front-media-content.skymedia-zoom-container .skymedia-zoom-target{
+    will-change:transform;
+}
+.front-media-content.skymedia-zoom-container.is-zoomed .skymedia-zoom-target{
+    cursor:grab;
+}
+.front-media-content.skymedia-zoom-container.is-zoomed .skymedia-zoom-target:active{
+    cursor:grabbing;
+}

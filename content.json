@@ -1,0 +1,238 @@
+{
+  "version": "1.0",
+  "content": [
+    {
+      "id": "book-001",
+      "type": "book",
+      "title": "Roboto Specimen Book",
+      "subtitle": "Sample Magazine",
+      "thumbnail": "assets/thumbnails/Roboto_Specimen_Image.jpg",
+      "media": "pdf/Roboto_Specimen_Book.pdf",
+      "audio": "",
+      "author": "",
+      "category": "Book Club",
+      "date": "202609020901"
+    },
+    {
+      "id": "book-002",
+      "type": "book",
+      "title": "Source",
+      "subtitle": "Sample Magazine",
+      "thumbnail": "assets/thumbnails/source.jpg",
+      "media": "pdf/Source.pdf",
+      "audio": "",
+      "author": "",
+      "category": "Affirmations",
+      "date": "202609010830"
+    },
+    {
+      "id": "video-001",
+      "type": "video",
+      "title": "The Holy Spirit as Guide",
+      "subtitle": "Sample Magazine",
+      "thumbnail": "test-content/thumbnails/The Holy Spirit as Guide.png",
+      "media": "https://youtu.be/0K3VS8zlet0",
+      "audio": "",
+      "author": "Derek Prince",
+      "category": "Feed My Sheep",
+      "date": "202609020800"
+    },
+    {
+      "id": "video-002",
+      "type": "video",
+      "title": "Ministries of the Holy Spirit",
+      "subtitle": "Sample Magazine",
+      "thumbnail": "test-content/thumbnails/Ministries of the Holy Spirit.png",
+      "media": "https://www.youtube.com/watch?v=VumkOJiZV20",
+      "audio": "",
+      "author": "Derek Prince",
+      "category": "Feed My Sheep",
+      "date": "202609011900"
+    },
+    {
+      "id": "slideshow-001",
+      "type": "slideshow",
+      "title": "Not trees",
+      "subtitle": "Sample Magazine",
+      "thumbnail": "assets/thumbnails/khurasan.jpg",
+      "media": [
+        "test-content/slideshows/Brick-Navy-Blue-Color-Palette-1024x691.webp",
+        "test-content/slideshows/Cool-White-Navy-Blue-Color-Palette-1024x691.webp",
+        "test-content/slideshows/Coral-Navy-Blue-Color-Palette-1024x691.webp",
+        "test-content/slideshows/Sage-Green-Navy-Blue-Color-Palette-1024x691.webp"
+      ],
+      "audio": "test-content/audio/freesound_community-harp-motif2-36586.mp3",
+      "author": "",
+      "category": "Affirmations",
+      "date": "202309020902"
+    },
+    {
+      "id": "slideshow-002",
+      "type": "slideshow",
+      "title": "Nature Collection",
+      "subtitle": "Sample Magazine",
+      "thumbnail": "test-content/thumbnails/shapes.jpg",
+      "media": "test-content/slideshows/shapes.jpg",
+      "audio": "test-content/audio/file_example_MP3_700KB.mp3",
+      "author": "",
+      "category": "BYOB",
+      "date": "202609011200"
+    },
+    {
+      "id": "slideshow-003",
+      "type": "slideshow",
+      "title": "Silent Gallery",
+      "subtitle": "Sample Magazine",
+      "thumbnail": "test-content/thumbnails/file-sample_150kB.png",
+      "media": [
+        "test-content/slideshows/Pastel-Yellow-Navy-Blue-Color-Palette-1024x691.webp",
+        "test-content/slideshows/Pewter-Navy-Blue-Color-Palette-1024x691.webp",
+        "test-content/slideshows/Sage-Green-Navy-Blue-Color-Palette-1024x691.webp"
+      ],
+      "audio": "",
+      "author": "",
+      "category": "Sayings",
+      "date": "202608301000"
+    },
+    {
+      "id": "book-003",
+      "type": "book",
+      "title": "The Morning Reader",
+      "subtitle": "Sample Magazine",
+      "thumbnail": "test-content/thumbnails/file-sample_150kB.jpg",
+      "media": "test-content/books/file-sample_150kB.pdf",
+      "audio": "",
+      "author": "",
+      "category": "General",
+      "date": "202609020901"
+    },
+    {
+      "id": "book-004",
+      "type": "book",
+      "title": "A Walk Through Nature",
+      "subtitle": "Sample Magazine",
+      "thumbnail": "assets/thumbnails/trees.jpg",
+      "media": "pdf/Trees.pdf",
+      "audio": "",
+      "author": "",
+      "category": "Booklet",
+      "date": "202609010830"
+    },
+    {
+      "id": "video-003",
+      "type": "video",
+      "title": "Breathing",
+      "subtitle": "DESTINY SERIES LESSON FIVE",
+      "thumbnail": "test-content/thumbnails/Destiny Series Lesson Five Breathing.png",
+      "media": "https://youtu.be/XrQXzgo1QNU?list=PLd025Vxj243Ax1bNO3ZhoK191U1yZ2wLo",
+      "audio": "",
+      "author": "Kim Clement",
+      "category": "Meditation",
+      "date": "202609020800"
+    },
+    {
+      "id": "video-004",
+      "type": "video",
+      "title": "Dying to Self",
+      "subtitle": "Total Surrender to the Holy Spirit",
+      "thumbnail": "test-content/thumbnails/Dying to Self-Total Surrender to the Holy Spirit.png",
+      "media": "https://youtu.be/ZnWqLkx79nc?list=PLd025Vxj243Ax1bNO3ZhoK191U1yZ2wLo",
+      "audio": "",
+      "author": "Kathryn Kuhlman",
+      "category": "Testimonies",
+      "date": "202609011900"
+    },
+    {
+      "id": "slideshow-004",
+      "type": "slideshow",
+      "title": "Morning Reflection",
+      "subtitle": "Sample Magazine",
+      "thumbnail": "test-content/thumbnails/Cool-White-Navy-Blue-Color-Palette-1024x691.webp",
+      "media": [
+        "test-content/slideshows/Brick-Navy-Blue-Color-Palette-1024x691.webp",
+        "test-content/slideshows/Cool-White-Navy-Blue-Color-Palette-1024x691.webp",
+        "test-content/slideshows/Coral-Navy-Blue-Color-Palette-1024x691.webp",
+        "test-content/slideshows/Sage-Green-Navy-Blue-Color-Palette-1024x691.webp"
+      ],
+      "audio": "test-content/audio/freesound_community-group-talking-29731.mp3",
+      "author": "",
+      "category": "Meditation",
+      "date": "202609020902"
+    },
+    {
+      "id": "slideshow-005",
+      "type": "slideshow",
+      "title": "Trees",
+      "subtitle": "Sample Magazine",
+      "thumbnail": "",
+      "media": "pdf/Trees.pdf",
+      "audio": "test-content/audio/freesound_community-harp-glissando-down-69334.mp3",
+      "author": "",
+      "category": "Affirmations",
+      "date": "202609070400"
+    },
+    {
+      "id": "slideshow-007",
+      "type": "slideshow",
+      "title": "Exchange",
+      "subtitle": "Sample Magazine",
+      "thumbnail": "test-content/thumbnails/The-Exchange-at-the-Cross-0.jpg",
+      "media": "test-content/slideshows/The-Exchange-at-the-Cross.jpg",
+      "audio": "test-content/audio/freesound_community-harp-glissando-down-69334.mp3",
+      "author": "",
+      "category": "Affirmations",
+      "date": "202609070500"
+    },
+    {
+      "id": "slideshow-006",
+      "type": "slideshow",
+      "title": "Silent Gallery",
+      "subtitle": "Sample Magazine",
+      "thumbnail": "test-content/thumbnails/file_example_JPG_100kB.jpg",
+      "media": [
+        "test-content/thumbnails/Destiny Series Lesson Five Breathing.png",
+        "test-content/thumbnails/Dying to Self-Total Surrender to the Holy Spirit.png",
+        "test-content/thumbnails/The Holy Spirit as Guide.png"
+      ],
+      "audio": "",
+      "author": "",
+      "category": "Book Club",
+      "date": "202608301000"
+    },
+    {
+      "id": "video-005",
+      "type": "video",
+      "title": "He sent His Son",
+      "subtitle": "",
+      "thumbnail": "test-content/thumbnails/Meditation green and white.jpg",
+      "media": "test-content/videos/meditation-test.mp4",
+      "audio": "",
+      "author": "naph",
+      "category": "Meditation",
+      "date": "202609042200"
+    },
+    {
+      "id": "book-005",
+      "type": "book",
+      "title": "Video-Embed-Test",
+      "subtitle": "Sample Magazine",
+      "thumbnail": "",
+      "media": "pdf/test1.pdf",
+      "audio": "",
+      "author": "",
+      "category": "Book Club",
+      "date": "202609090330"
+    }
+  ],
+  "frontPage": {
+    "categories": [
+      "Book Club",
+      "Affirmations",
+      "Feed My Sheep",
+      "BYOB",
+      "Sayings",
+      "Meditation",
+      "Testimonies"
+    ]
+  }
+}
