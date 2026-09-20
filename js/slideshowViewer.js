@@ -137,9 +137,17 @@ window.SlideshowViewer = (function () {
         }
 
         renderLanding();
-        loadMusicLibrary();
-        setAudioMode(current?.audio ? "original" : "effects");
-        return true;
+loadMusicLibrary();
+setAudioMode(current?.audio ? "original" : "effects");
+
+/*
+ * Initialize the persistent status bar while the Slideshow
+ * viewer is idle. With no current slideshow, updateStatus()
+ * displays "MMicj" and clears the slide indicator.
+ */
+updateStatus();
+
+return true;
     }
 
 
