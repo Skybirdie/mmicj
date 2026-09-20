@@ -10,19 +10,31 @@
 
      /s/<section>/<id>
 
+ The selected item is already encoded as a ONE-ITEM
+ SR2 contract before it reaches this Worker.
+
  Flow:
 
      ShareManager
           ↓
      POST /__sky_share_prime
           ↓
-     Worker stores one-item record in MEDIA_KV
+     Worker stores the one-item record by section + ID
           ↓
      Worker returns /s/<section>/<id>
           ↓
-     Worker retrieves item
+     Worker retrieves payload
           ↓
-     Share Mode receives one-item manifest
+     window.SkyMediaContract
+     window.__SKY_SHARE_TARGET
+          ↓
+     existing GlideContract / Manifest
+          ↓
+     existing ShareManager
+          ↓
+     existing ShareViewer
+
+ The browser address bar NEVER receives the long contract.
 =========================================================
 */
 
@@ -31,6 +43,10 @@ const KEY_LENGTH = 16;
 
 const SKYMEDIA_BASE_URL =
   "https://mmicj.meditation-mornings-icj.workers.dev";
+
+/* =========================================================
+   Open Graph / Social Preview
+========================================================= */
 
 const OG_SITE_NAME =
   "Meditation Mornings";
@@ -53,7 +69,29 @@ const SHARE_RECORD_PREFIX =
 const CATALOG_RECORD_PREFIX =
   "catalog:v1:";
 
-const KV_CACHE_TTL = 300;
+const KV_CACHE_TTL =
+  300;
+
+/* =========================================================
+   KV READ HELPER
+========================================================= */
+
+function kvGet(
+  env,
+  key
+) {
+  return env.MEDIA_KV.get(
+    key,
+    {
+      cacheTtl:
+        KV_CACHE_TTL
+    }
+  );
+}
+
+/* =========================================================
+   TEMPORARY CATALOG PUBLISH TEST
+========================================================= */
 
 const CATALOG_TEST_TOKEN =
   "SMCAT-TEST-9f7b2d4c-20260918";
@@ -61,26 +99,14 @@ const CATALOG_TEST_TOKEN =
 const CATALOG_TEST_STATUS_KEY =
   "catalog:test:last";
 
-
-/* =========================================================
-   KV
-========================================================= */
-
-function kvGet(env, key) {
-  return env.MEDIA_KV.get(
-    key,
-    {
-      cacheTtl: KV_CACHE_TTL
-    }
-  );
-}
-
-
 /* =========================================================
    FNV-1A
 ========================================================= */
 
-function fnv1a32(value, seed) {
+function fnv1a32(
+  value,
+  seed
+) {
   let hash =
     (0x811c9dc5 ^ seed) >>> 0;
 
@@ -89,7 +115,8 @@ function fnv1a32(value, seed) {
     i < value.length;
     i++
   ) {
-    hash ^= value.charCodeAt(i);
+    hash ^=
+      value.charCodeAt(i);
 
     hash =
       Math.imul(
@@ -101,14 +128,18 @@ function fnv1a32(value, seed) {
   return hash >>> 0;
 }
 
-function hex8(value) {
+function hex8(
+  value
+) {
   return value
     .toString(16)
     .padStart(8, "0")
     .toUpperCase();
 }
 
-function makeKey(payload) {
+function makeKey(
+  payload
+) {
   const hash1 =
     fnv1a32(
       payload,
@@ -127,77 +158,14 @@ function makeKey(payload) {
   );
 }
 
-
 /* =========================================================
-   SECTION NORMALIZATION
+   DIRECT SHARE RECORDS
 ========================================================= */
 
-function normalizeSection(section) {
-  const value =
-    String(
-      section || ""
-    )
-      .trim()
-      .toLowerCase();
-
-  if (
-    value === "book" ||
-    value === "books" ||
-    value === "reader" ||
-    value === "pdf" ||
-    value === "pdfs"
-  ) {
-    return "reader";
-  }
-
-  if (
-    value === "video" ||
-    value === "videos"
-  ) {
-    return "video";
-  }
-
-  if (
-    value === "slideshow" ||
-    value === "slideshows" ||
-    value === "slide" ||
-    value === "slides"
-  ) {
-    return "slideshow";
-  }
-
-  return value;
-}
-
-function sectionFromItem(item) {
-  const type =
-    String(
-      item?.type || ""
-    )
-      .trim()
-      .toLowerCase();
-
-  if (type === "book") {
-    return "reader";
-  }
-
-  if (type === "video") {
-    return "video";
-  }
-
-  if (type === "slideshow") {
-    return "slideshow";
-  }
-
-  return normalizeSection(type);
-}
-
-
-/* =========================================================
-   DIRECT SHARE KEYS
-========================================================= */
-
-function makeShareRecordKey(section, id) {
+function makeShareRecordKey(
+  section,
+  id
+) {
   const normalizedSection =
     normalizeSection(section);
 
@@ -214,7 +182,10 @@ function makeShareRecordKey(section, id) {
   );
 }
 
-function makeCatalogRecordKey(section, id) {
+function makeCatalogRecordKey(
+  section,
+  id
+) {
   const normalizedSection =
     normalizeSection(section);
 
@@ -223,8 +194,10 @@ function makeCatalogRecordKey(section, id) {
 
   /*
    * IMPORTANT:
-   * Existing catalog records use the literal "\\0"
-   * construction. Keep this exactly as-is.
+   * Keep the literal "\\0" here.
+   *
+   * Existing catalog records were written using this
+   * exact key construction.
    */
   return (
     CATALOG_RECORD_PREFIX +
@@ -236,14 +209,17 @@ function makeCatalogRecordKey(section, id) {
   );
 }
 
-
 /* =========================================================
    MEDIA NORMALIZATION
 ========================================================= */
 
-function normalizeMediaValue(media, type) {
-
-  if (Array.isArray(media)) {
+function normalizeMediaValue(
+  media,
+  type
+) {
+  if (
+    Array.isArray(media)
+  ) {
     return media
       .map(
         value =>
@@ -272,7 +248,9 @@ function normalizeMediaValue(media, type) {
       const decoded =
         JSON.parse(value);
 
-      if (Array.isArray(decoded)) {
+      if (
+        Array.isArray(decoded)
+      ) {
         return decoded
           .map(
             item =>
@@ -283,7 +261,7 @@ function normalizeMediaValue(media, type) {
           .filter(Boolean);
       }
     } catch (_) {
-      /* Continue as normal string. */
+      /* Continue below. */
     }
   }
 
@@ -303,13 +281,13 @@ function normalizeMediaValue(media, type) {
   return value;
 }
 
-
 /* =========================================================
    SHARE ITEM NORMALIZATION
 ========================================================= */
 
-function normalizeShareItem(item) {
-
+function normalizeShareItem(
+  item
+) {
   if (
     !item ||
     typeof item !== "object"
@@ -403,7 +381,9 @@ function normalizeShareItem(item) {
   return result;
 }
 
-function buildShareManifest(item) {
+function buildShareManifest(
+  item
+) {
   return {
     version:
       "1.0",
@@ -417,16 +397,15 @@ function buildShareManifest(item) {
   };
 }
 
-
-/* =========================================================
-   DIRECT SHARE TARGET
-========================================================= */
-
-function getDirectShareTarget(url) {
+function getDirectShareTarget(
+  url
+) {
+  const prefix =
+    SHARE_PATH_PREFIX;
 
   if (
     !url.pathname.startsWith(
-      SHARE_PATH_PREFIX
+      prefix
     )
   ) {
     return null;
@@ -434,9 +413,7 @@ function getDirectShareTarget(url) {
 
   const parts =
     url.pathname
-      .slice(
-        SHARE_PATH_PREFIX.length
-      )
+      .slice(prefix.length)
       .split("/")
       .filter(Boolean);
 
@@ -488,16 +465,14 @@ function getDirectShareTarget(url) {
   };
 }
 
-
 /* =========================================================
-   GET DIRECT SHARE RECORD
+   DIRECT SHARE READ
 ========================================================= */
 
 async function getDirectShareRecord(
   env,
   target
 ) {
-
   const key =
     makeShareRecordKey(
       target.section,
@@ -513,7 +488,6 @@ async function getDirectShareRecord(
         key
       );
   } catch (error) {
-
     console.error(
       "MMicjMedia direct-share KV read failed:",
       error
@@ -534,7 +508,6 @@ async function getDirectShareRecord(
   }
 
   try {
-
     const record =
       JSON.parse(raw);
 
@@ -572,9 +545,7 @@ async function getDirectShareRecord(
           item
         )
     };
-
   } catch (error) {
-
     console.error(
       "MMicjMedia direct-share record decode failed:",
       error
@@ -584,16 +555,14 @@ async function getDirectShareRecord(
   }
 }
 
-
 /* =========================================================
-   GET CATALOG SHARE RECORD
+   CATALOG SHARE RECORD
 ========================================================= */
 
 async function getCatalogShareRecord(
   env,
   target
 ) {
-
   const key =
     makeCatalogRecordKey(
       target.section,
@@ -603,15 +572,12 @@ async function getCatalogShareRecord(
   let raw;
 
   try {
-
     raw =
       await kvGet(
         env,
         key
       );
-
   } catch (error) {
-
     console.error(
       "MMicjMedia catalog KV read failed:",
       error
@@ -628,7 +594,6 @@ async function getCatalogShareRecord(
   }
 
   if (!raw) {
-
     console.warn(
       "MMicjMedia catalog item not found:",
       key
@@ -638,7 +603,6 @@ async function getCatalogShareRecord(
   }
 
   try {
-
     const record =
       JSON.parse(raw);
 
@@ -646,12 +610,6 @@ async function getCatalogShareRecord(
       !record ||
       !record.item
     ) {
-
-      console.error(
-        "MMicjMedia catalog record has no item:",
-        key
-      );
-
       return null;
     }
 
@@ -661,12 +619,6 @@ async function getCatalogShareRecord(
       );
 
     if (!item) {
-
-      console.error(
-        "MMicjMedia catalog record contains invalid item:",
-        key
-      );
-
       return null;
     }
 
@@ -679,7 +631,6 @@ async function getCatalogShareRecord(
       item.id !== target.id ||
       actualSection !== target.section
     ) {
-
       console.error(
         "MMicjMedia catalog identity mismatch:",
         {
@@ -709,9 +660,7 @@ async function getCatalogShareRecord(
           item
         )
     };
-
   } catch (error) {
-
     console.error(
       "MMicjMedia catalog record decode failed:",
       error
@@ -721,22 +670,29 @@ async function getCatalogShareRecord(
   }
 }
 
-
 /* =========================================================
    VALIDATION
 ========================================================= */
 
-function isValidKey(key) {
-
+function isValidKey(
+  key
+) {
   return (
-    typeof key === "string" &&
-    key.length === KEY_LENGTH &&
-    /^[A-Fa-f0-9]{16}$/.test(key)
+    typeof key ===
+      "string" &&
+
+    key.length ===
+      KEY_LENGTH &&
+
+    /^[A-Fa-f0-9]{16}$/.test(
+      key
+    )
   );
 }
 
-function isValidPayload(payload) {
-
+function isValidPayload(
+  payload
+) {
   if (!payload) {
     return false;
   }
@@ -763,13 +719,11 @@ function isValidPayload(payload) {
   );
 }
 
-
 /* =========================================================
-   RESPONSE HEADERS
+   RESPONSE HELPERS
 ========================================================= */
 
 function htmlHeaders() {
-
   return {
     "content-type":
       "text/html; charset=UTF-8",
@@ -783,7 +737,6 @@ function htmlHeaders() {
 }
 
 function textHeaders() {
-
   return {
     "content-type":
       "text/plain; charset=UTF-8",
@@ -796,13 +749,13 @@ function textHeaders() {
   };
 }
 
-
 /* =========================================================
    ASSET REQUEST
 ========================================================= */
 
-function makeCleanAssetRequest(request) {
-
+function makeCleanAssetRequest(
+  request
+) {
   const assetUrl =
     new URL(
       "/index.html",
@@ -821,15 +774,14 @@ function makeCleanAssetRequest(request) {
   );
 }
 
-
 /* =========================================================
-   BASE64URL DECODER
+   C2.2 BASE64URL DECODER
 ========================================================= */
 
-function base64UrlDecode(value) {
-
+function base64UrlDecode(
+  value
+) {
   try {
-
     let base64 =
       value
         .replace(
@@ -848,7 +800,9 @@ function base64UrlDecode(value) {
     }
 
     const binary =
-      atob(base64);
+      atob(
+        base64
+      );
 
     const bytes =
       new Uint8Array(
@@ -865,20 +819,18 @@ function base64UrlDecode(value) {
     }
 
     return bytes;
-
-  } catch (error) {
-
+  } catch (_) {
     return null;
   }
 }
-
 
 /* =========================================================
    C2.2 DECOMPRESSOR
 ========================================================= */
 
-function decompressBytes(bytes) {
-
+function decompressBytes(
+  bytes
+) {
   if (
     !bytes ||
     bytes.length < 2
@@ -891,25 +843,33 @@ function decompressBytes(bytes) {
   const version =
     bytes[0];
 
-  if (version !== 2) {
+  if (
+    version !== 2
+  ) {
     throw new Error(
       "Unsupported C2.2 codec version: " +
       version
     );
   }
 
-  const windowSize = 4095;
-  const maxLen = 18;
-  const minLen = 3;
+  const windowSize =
+    4095;
 
-  const output = [];
+  const maxLen =
+    18;
 
-  let pos = 1;
+  const minLen =
+    3;
+
+  const output =
+    [];
+
+  let pos =
+    1;
 
   while (
     pos < bytes.length
   ) {
-
     const flags =
       bytes[pos++];
 
@@ -919,7 +879,6 @@ function decompressBytes(bytes) {
       pos < bytes.length;
       bit++
     ) {
-
       const isMatch =
         (
           flags &
@@ -927,7 +886,6 @@ function decompressBytes(bytes) {
         ) !== 0;
 
       if (!isMatch) {
-
         output.push(
           bytes[pos++]
         );
@@ -986,7 +944,6 @@ function decompressBytes(bytes) {
         i < length;
         i++
       ) {
-
         const sourceIndex =
           output.length -
           offset;
@@ -1003,13 +960,13 @@ function decompressBytes(bytes) {
   );
 }
 
-
 /* =========================================================
    DECODE SR2
 ========================================================= */
 
-function decodeContractPayload(payload) {
-
+function decodeContractPayload(
+  payload
+) {
   if (
     !isValidPayload(
       payload
@@ -1043,18 +1000,22 @@ function decodeContractPayload(payload) {
 
   const json =
     new TextDecoder()
-      .decode(utf8);
+      .decode(
+        utf8
+      );
 
-  return JSON.parse(json);
+  return JSON.parse(
+    json
+  );
 }
-
 
 /* =========================================================
    CONTRACT NORMALIZATION
 ========================================================= */
 
-function normalizeContractArray(contract) {
-
+function normalizeContractArray(
+  contract
+) {
   if (
     Array.isArray(
       contract
@@ -1065,24 +1026,25 @@ function normalizeContractArray(contract) {
 
   if (
     contract &&
-    typeof contract === "object"
+    typeof contract ===
+      "object"
   ) {
-    return [contract];
+    return [
+      contract
+    ];
   }
 
   return [];
 }
 
-
 /* =========================================================
-   SHARED ITEM SELECTION
+   ITEM SELECTION
 ========================================================= */
 
 function getSharedItem(
   contract,
   url
 ) {
-
   const items =
     normalizeContractArray(
       contract
@@ -1100,7 +1062,6 @@ function getSharedItem(
     ).trim();
 
   if (requestedId) {
-
     const match =
       items.find(
         item =>
@@ -1118,13 +1079,89 @@ function getSharedItem(
   return items[0];
 }
 
+/* =========================================================
+   TYPE → SHARE SECTION
+========================================================= */
+
+function normalizeSection(
+  section
+) {
+  const value =
+    String(
+      section || ""
+    )
+      .trim()
+      .toLowerCase();
+
+  if (
+    value === "book" ||
+    value === "books" ||
+    value === "reader" ||
+    value === "pdf" ||
+    value === "pdfs"
+  ) {
+    return "reader";
+  }
+
+  if (
+    value === "video" ||
+    value === "videos"
+  ) {
+    return "video";
+  }
+
+  if (
+    value === "slideshow" ||
+    value === "slideshows" ||
+    value === "slide" ||
+    value === "slides"
+  ) {
+    return "slideshow";
+  }
+
+  return value;
+}
+
+function sectionFromItem(
+  item
+) {
+  const type =
+    String(
+      item?.type || ""
+    )
+      .trim()
+      .toLowerCase();
+
+  if (
+    type === "book"
+  ) {
+    return "reader";
+  }
+
+  if (
+    type === "video"
+  ) {
+    return "video";
+  }
+
+  if (
+    type === "slideshow"
+  ) {
+    return "slideshow";
+  }
+
+  return normalizeSection(
+    type
+  );
+}
 
 /* =========================================================
    CLEAN MEDIA URL
 ========================================================= */
 
-function cleanMediaUrl(value) {
-
+function cleanMediaUrl(
+  value
+) {
   if (
     value === null ||
     value === undefined
@@ -1145,11 +1182,11 @@ function cleanMediaUrl(value) {
     text.startsWith('"') &&
     text.endsWith('"')
   ) {
-
     try {
-
       const decoded =
-        JSON.parse(text);
+        JSON.parse(
+          text
+        );
 
       if (
         typeof decoded ===
@@ -1158,9 +1195,7 @@ function cleanMediaUrl(value) {
         text =
           decoded.trim();
       }
-
     } catch (_) {
-
       text =
         text
           .slice(1, -1)
@@ -1189,13 +1224,13 @@ function cleanMediaUrl(value) {
   return "";
 }
 
-
 /* =========================================================
    HTML ESCAPING
 ========================================================= */
 
-function escapeHtml(value) {
-
+function escapeHtml(
+  value
+) {
   return String(
     value ?? ""
   )
@@ -1221,9 +1256,8 @@ function escapeHtml(value) {
     );
 }
 
-
 /* =========================================================
-   OPEN GRAPH TAGS
+   OPEN GRAPH
 ========================================================= */
 
 function buildOgTags(
@@ -1231,7 +1265,6 @@ function buildOgTags(
   item,
   imageQuery
 ) {
-
   const url =
     new URL(
       request.url
@@ -1247,17 +1280,14 @@ function buildOgTags(
     imageQuery &&
     imageQuery.key
   ) {
-
     imageUrl.searchParams.set(
       "k",
       imageQuery.key
     );
-
   } else if (
     imageQuery &&
     imageQuery.target
   ) {
-
     imageUrl.searchParams.set(
       "section",
       imageQuery.target.section
@@ -1285,9 +1315,8 @@ function buildOgTags(
   );
 }
 
-
 /* =========================================================
-   SHARE MODE BOOTSTRAP
+   BOOTSTRAP
 ========================================================= */
 
 function injectContractBootstrap(
@@ -1297,7 +1326,6 @@ function injectContractBootstrap(
   target,
   imageQuery = null
 ) {
-
   const item =
     manifest?.content?.[0] ||
     null;
@@ -1349,6 +1377,20 @@ function injectContractBootstrap(
   const marker =
     "</head>";
 
+  const index =
+    html.indexOf(
+      marker
+    );
+
+  if (
+    index < 0
+  ) {
+    return html;
+  }
+
+  const baseTag =
+    '<base href="/">';
+
   const headMatch =
     /<head[^>]*>/i.exec(
       html
@@ -1357,25 +1399,12 @@ function injectContractBootstrap(
   let withBase =
     html;
 
-  /*
-   * CRITICAL:
-   *
-   * Share URLs are /s/<section>/<id>.
-   * index.html contains document-relative
-   * stylesheet/script paths.
-   *
-   * Without <base href="/"> they resolve beneath
-   * /s/<section>/ and the application never loads.
-   */
-
-  const baseTag =
-    '<base href="/">';
-
   if (
     headMatch &&
-    !/<base\s/i.test(html)
+    !/<base\s/i.test(
+      html
+    )
   ) {
-
     const insertAt =
       headMatch.index +
       headMatch[0].length;
@@ -1385,9 +1414,7 @@ function injectContractBootstrap(
         0,
         insertAt
       ) +
-
       baseTag +
-
       html.slice(
         insertAt
       );
@@ -1409,27 +1436,22 @@ function injectContractBootstrap(
       0,
       headEnd
     ) +
-
     ogTags +
-
     script +
-
     withBase.slice(
       headEnd
     )
   );
 }
 
-
 /* =========================================================
-   GET INDEX.HTML
+   SERVE INDEX.HTML
 ========================================================= */
 
 async function getIndexHtml(
   env,
   request
 ) {
-
   const assetResponse =
     await env.ASSETS.fetch(
       makeCleanAssetRequest(
@@ -1451,7 +1473,9 @@ async function getIndexHtml(
   if (
     !contentType
       .toLowerCase()
-      .includes("text/html")
+      .includes(
+        "text/html"
+      )
   ) {
     return assetResponse;
   }
@@ -1459,18 +1483,12 @@ async function getIndexHtml(
   return assetResponse.text();
 }
 
-
-/* =========================================================
-   SERVE SR2 CONTRACT
-========================================================= */
-
 async function serveWithContract(
   request,
   env,
   payload,
   key = ""
 ) {
-
   const html =
     await getIndexHtml(
       env,
@@ -1487,7 +1505,6 @@ async function serveWithContract(
   let manifest;
 
   try {
-
     const contract =
       decodeContractPayload(
         payload
@@ -1516,11 +1533,9 @@ async function serveWithContract(
       buildShareManifest(
         normalized
       );
-
   } catch (error) {
-
     console.error(
-      "MMicjMedia contract decode failed:",
+      "MMicjMedia publication decode failed:",
       error
     );
 
@@ -1564,7 +1579,6 @@ async function serveWithContract(
   );
 }
 
-
 /* =========================================================
    SERVE DIRECT SHARE
 ========================================================= */
@@ -1574,7 +1588,6 @@ async function serveDirectShare(
   env,
   target
 ) {
-
   const record =
     await getDirectShareRecord(
       env,
@@ -1582,7 +1595,6 @@ async function serveDirectShare(
     );
 
   if (!record) {
-
     return new Response(
       "MMicjMedia shared item was not found.",
       {
@@ -1631,7 +1643,6 @@ async function serveDirectShare(
   );
 }
 
-
 /* =========================================================
    SERVE CATALOG SHARE
 ========================================================= */
@@ -1641,7 +1652,6 @@ async function serveCatalogShare(
   env,
   target
 ) {
-
   const record =
     await getCatalogShareRecord(
       env,
@@ -1688,7 +1698,6 @@ async function serveCatalogShare(
   );
 }
 
-
 /* =========================================================
    OG IMAGE
 ========================================================= */
@@ -1697,9 +1706,7 @@ async function serveOgImage(
   request,
   env
 ) {
-
   if (!env.IMAGES) {
-
     return new Response(
       "MMicjMedia Images binding is not configured.",
       {
@@ -1726,31 +1733,36 @@ async function serveOgImage(
       .trim()
       .toUpperCase();
 
-  let item = null;
+  let item =
+    null;
 
   if (
-    isValidKey(key)
+    isValidKey(
+      key
+    )
   ) {
-
-    let payload = null;
+    let payload =
+      null;
 
     try {
-
       payload =
         await kvGet(
           env,
           key
         );
-
     } catch (error) {
-
       console.error(
         "MMicjMedia OG KV read failed:",
         error
       );
 
       return new Response(
-        "MMicjMedia KV read failed.",
+        "MMicjMedia KV read failed: " +
+        (
+          error instanceof Error
+            ? error.message
+            : String(error)
+        ),
         {
           status:
             500,
@@ -1763,9 +1775,10 @@ async function serveOgImage(
 
     if (
       !payload ||
-      !isValidPayload(payload)
+      !isValidPayload(
+        payload
+      )
     ) {
-
       return new Response(
         "MMicjMedia publication not found.",
         {
@@ -1779,7 +1792,6 @@ async function serveOgImage(
     }
 
     try {
-
       const contract =
         decodeContractPayload(
           payload
@@ -1792,9 +1804,7 @@ async function serveOgImage(
             url
           )
         );
-
     } catch (error) {
-
       console.error(
         "MMicjMedia OG legacy contract decode failed:",
         error
@@ -1811,11 +1821,8 @@ async function serveOgImage(
         }
       );
     }
-
   } else {
-
     const target = {
-
       section:
         normalizeSection(
           url.searchParams.get(
@@ -1835,7 +1842,6 @@ async function serveOgImage(
       !target.section ||
       !target.id
     ) {
-
       return new Response(
         "Invalid MMicjMedia OG target.",
         {
@@ -1855,7 +1861,6 @@ async function serveOgImage(
       );
 
     if (!record) {
-
       record =
         await getDirectShareRecord(
           env,
@@ -1864,7 +1869,6 @@ async function serveOgImage(
     }
 
     if (!record) {
-
       return new Response(
         "MMicjMedia shared item was not found.",
         {
@@ -1882,7 +1886,6 @@ async function serveOgImage(
   }
 
   if (!item) {
-
     return new Response(
       "MMicjMedia shared item is invalid.",
       {
@@ -1925,12 +1928,10 @@ async function serveOgImage(
     !baseResponse.ok ||
     !baseResponse.body
   ) {
-
     if (
       thumbnailUrl !==
       OG_DEFAULT_THUMBNAIL
     ) {
-
       baseResponse =
         await fetch(
           OG_DEFAULT_THUMBNAIL,
@@ -1943,7 +1944,6 @@ async function serveOgImage(
     !baseResponse.ok ||
     !baseResponse.body
   ) {
-
     return new Response(
       "MMicjMedia OG thumbnail could not be loaded.",
       {
@@ -1966,7 +1966,6 @@ async function serveOgImage(
     !logoResponse.ok ||
     !logoResponse.body
   ) {
-
     return new Response(
       "MMicjMedia OG logo could not be loaded.",
       {
@@ -1982,24 +1981,23 @@ async function serveOgImage(
   const baseStreams =
     baseResponse.body.tee();
 
-  let imageInfo = null;
+  let imageInfo =
+    null;
 
   try {
-
     imageInfo =
       await env.IMAGES.info(
         baseStreams[0]
       );
-
   } catch (error) {
-
     console.error(
       "MMicjMedia OG image info failed:",
       error
     );
   }
 
-  let logoWidth = 160;
+  let logoWidth =
+    160;
 
   if (
     imageInfo &&
@@ -2009,7 +2007,6 @@ async function serveOgImage(
       )
     )
   ) {
-
     logoWidth =
       Math.round(
         Number(
@@ -2058,22 +2055,25 @@ async function serveOgImage(
     );
 
   const result =
-    await imagePipeline.output({
-      format:
-        "image/webp",
+    await imagePipeline.output(
+      {
+        format:
+          "image/webp",
 
-      quality:
-        85
-    });
+        quality:
+          85
+      }
+    );
 
-  return result.response({
-    headers: {
-      "Cache-Control":
-        "public, max-age=86400, stale-while-revalidate=604800"
+  return result.response(
+    {
+      headers: {
+        "Cache-Control":
+          "public, max-age=86400, stale-while-revalidate=604800"
+      }
     }
-  });
+  );
 }
-
 
 /* =========================================================
    SHARE PRIME
@@ -2083,9 +2083,7 @@ async function handleSharePrime(
   request,
   env
 ) {
-
   const corsHeaders = {
-
     "access-control-allow-origin":
       "*",
 
@@ -2106,7 +2104,6 @@ async function handleSharePrime(
     request.method ===
     "OPTIONS"
   ) {
-
     return new Response(
       null,
       {
@@ -2123,7 +2120,6 @@ async function handleSharePrime(
     request.method !==
     "POST"
   ) {
-
     return new Response(
       JSON.stringify({
         error:
@@ -2142,12 +2138,9 @@ async function handleSharePrime(
   let body;
 
   try {
-
     body =
       await request.json();
-
   } catch (_) {
-
     return new Response(
       JSON.stringify({
         error:
@@ -2178,22 +2171,16 @@ async function handleSharePrime(
       body?.item
     );
 
-  /* -------------------------------------------------------
-     NEW DIRECT-ID REGISTRATION
-  ------------------------------------------------------- */
-
   if (
     section &&
     id &&
     item
   ) {
-
     if (
       item.id !== id ||
       sectionFromItem(item) !==
         section
     ) {
-
       return new Response(
         JSON.stringify({
           error:
@@ -2228,39 +2215,36 @@ async function handleSharePrime(
       });
 
     /*
-     * THIS IS THE CRITICAL DIRECT-SHARE BLOCK.
+     * IMPORTANT:
      *
-     * First WRITE the record.
-     * Then READ it back.
+     * This MUST be a PUT.
      *
-     * The previous version accidentally contained only
-     * MEDIA_KV.get(), meaning nothing was being stored.
+     * The previous broken version accidentally contained
+     * env.MEDIA_KV.get(key) here, which did not create the
+     * share record at all.
      */
-
     try {
-
       await env.MEDIA_KV.put(
         key,
         record
       );
 
+      /*
+       * Bypass kvGet() cache for verification.
+       */
       const stored =
         await env.MEDIA_KV.get(
           key
         );
 
       if (
-        stored !==
-        record
+        stored !== record
       ) {
-
         throw new Error(
-          "Direct-share KV verification failed."
+          "KV verification failed: stored value did not match the value written."
         );
       }
-
     } catch (error) {
-
       console.error(
         "MMicjMedia direct-share KV write failure:",
         error
@@ -2274,7 +2258,9 @@ async function handleSharePrime(
           detail:
             error instanceof Error
               ? error.message
-              : String(error)
+              : String(error),
+
+          key
         }),
         {
           status:
@@ -2316,9 +2302,9 @@ async function handleSharePrime(
     );
   }
 
-  /* -------------------------------------------------------
+  /* =======================================================
      LEGACY SR2 REGISTRATION
-  ------------------------------------------------------- */
+  ======================================================= */
 
   const payload =
     String(
@@ -2330,7 +2316,6 @@ async function handleSharePrime(
       payload
     )
   ) {
-
     return new Response(
       JSON.stringify({
         error:
@@ -2352,29 +2337,25 @@ async function handleSharePrime(
     );
 
   try {
-
     await env.MEDIA_KV.put(
       key,
       payload
     );
 
     const stored =
-      await env.MEDIA_KV.get(
+      await kvGet(
+        env,
         key
       );
 
     if (
-      stored !==
-      payload
+      stored !== payload
     ) {
-
       throw new Error(
         "KV verification failed."
       );
     }
-
   } catch (error) {
-
     console.error(
       "MMicjMedia share-prime KV failure:",
       error
@@ -2419,7 +2400,6 @@ async function handleSharePrime(
   );
 }
 
-
 /* =========================================================
    LEGACY ?k=<key>&contractz=<payload>
 ========================================================= */
@@ -2430,7 +2410,6 @@ async function handleLegacyPrime(
   keyParam,
   contractz
 ) {
-
   const key =
     String(
       keyParam || ""
@@ -2442,7 +2421,6 @@ async function handleLegacyPrime(
     !isValidKey(key) ||
     !isValidPayload(contractz)
   ) {
-
     return new Response(
       "MMicjMedia publication link is invalid.",
       {
@@ -2459,7 +2437,6 @@ async function handleLegacyPrime(
     makeKey(contractz) !==
     key
   ) {
-
     return new Response(
       "MMicjMedia publication link is invalid.",
       {
@@ -2473,21 +2450,23 @@ async function handleLegacyPrime(
   }
 
   try {
-
     await env.MEDIA_KV.put(
       key,
       contractz
     );
-
   } catch (error) {
-
     console.error(
       "MMicjMedia legacy KV write failed:",
       error
     );
 
     return new Response(
-      "MMicjMedia KV write failed.",
+      "MMicjMedia KV write failed: " +
+      (
+        error instanceof Error
+          ? error.message
+          : String(error)
+      ),
       {
         status:
           500,
@@ -2529,7 +2508,6 @@ async function handleLegacyPrime(
   );
 }
 
-
 /* =========================================================
    SHARE SUBRESOURCE FALLBACK
 ========================================================= */
@@ -2538,7 +2516,6 @@ async function serveShareSubresource(
   request,
   env
 ) {
-
   const url =
     new URL(
       request.url
@@ -2559,9 +2536,7 @@ async function serveShareSubresource(
   }
 
   const last =
-    parts[
-      parts.length - 1
-    ];
+    parts[parts.length - 1];
 
   if (
     !/\.[A-Za-z0-9]{2,6}$/.test(
@@ -2576,7 +2551,6 @@ async function serveShareSubresource(
     i < parts.length;
     i++
   ) {
-
     const candidate =
       new URL(
         "/" +
@@ -2613,16 +2587,14 @@ async function serveShareSubresource(
   return null;
 }
 
-
 /* =========================================================
-   DIRECT SHARE ROUTING
+   DIRECT SHARE ROUTER
 ========================================================= */
 
 async function handleDirectShare(
   request,
   env
 ) {
-
   const target =
     getDirectShareTarget(
       new URL(
@@ -2633,10 +2605,6 @@ async function handleDirectShare(
   if (!target) {
     return null;
   }
-
-  /*
-   * Phase 4 catalog is primary.
-   */
 
   const catalogResponse =
     await serveCatalogShare(
@@ -2649,17 +2617,12 @@ async function handleDirectShare(
     return catalogResponse;
   }
 
-  /*
-   * Temporary share:v1 compatibility fallback.
-   */
-
   return serveDirectShare(
     request,
     env,
     target
   );
 }
-
 
 /* =========================================================
    LEGACY /s/<16-character-key>
@@ -2669,15 +2632,17 @@ async function handleShortShare(
   request,
   env
 ) {
-
   const url =
     new URL(
       request.url
     );
 
+  const prefix =
+    SHARE_PATH_PREFIX;
+
   if (
     !url.pathname.startsWith(
-      SHARE_PATH_PREFIX
+      prefix
     )
   ) {
     return null;
@@ -2686,16 +2651,17 @@ async function handleShortShare(
   const key =
     url.pathname
       .slice(
-        SHARE_PATH_PREFIX.length
+        prefix.length
       )
       .split("/")[0]
       .trim()
       .toUpperCase();
 
   if (
-    !isValidKey(key)
+    !isValidKey(
+      key
+    )
   ) {
-
     return new Response(
       "MMicjMedia publication key is invalid.",
       {
@@ -2708,25 +2674,28 @@ async function handleShortShare(
     );
   }
 
-  let payload = null;
+  let payload =
+    null;
 
   try {
-
     payload =
       await kvGet(
         env,
         key
       );
-
   } catch (error) {
-
     console.error(
       "MMicjMedia short-link KV read failed:",
       error
     );
 
     return new Response(
-      "MMicjMedia KV read failed.",
+      "MMicjMedia KV read failed: " +
+      (
+        error instanceof Error
+          ? error.message
+          : String(error)
+      ),
       {
         status:
           500,
@@ -2738,7 +2707,6 @@ async function handleShortShare(
   }
 
   if (!payload) {
-
     return new Response(
       "MMicjMedia publication not found.",
       {
@@ -2752,9 +2720,10 @@ async function handleShortShare(
   }
 
   if (
-    !isValidPayload(payload)
+    !isValidPayload(
+      payload
+    )
   ) {
-
     return new Response(
       "MMicjMedia publication data is invalid.",
       {
@@ -2775,15 +2744,12 @@ async function handleShortShare(
   );
 }
 
-
 /* =========================================================
-   CATALOG TEST CORS
+   TEMPORARY CATALOG PUBLISH TEST
 ========================================================= */
 
 function catalogTestCorsHeaders() {
-
   return {
-
     "access-control-allow-origin":
       "*",
 
@@ -2801,16 +2767,10 @@ function catalogTestCorsHeaders() {
   };
 }
 
-
-/* =========================================================
-   CATALOG TEST AUTHORIZATION
-========================================================= */
-
 function catalogTestAuthorized(
   request,
   url
 ) {
-
   const headerToken =
     String(
       request.headers.get(
@@ -2834,16 +2794,10 @@ function catalogTestAuthorized(
   );
 }
 
-
-/* =========================================================
-   CATALOG PUBLISH TEST
-========================================================= */
-
 async function handleCatalogPublishTest(
   request,
   env
 ) {
-
   const url =
     new URL(
       request.url
@@ -2856,7 +2810,6 @@ async function handleCatalogPublishTest(
     request.method ===
     "OPTIONS"
   ) {
-
     return new Response(
       null,
       {
@@ -2874,7 +2827,6 @@ async function handleCatalogPublishTest(
       url
     )
   ) {
-
     return new Response(
       JSON.stringify({
         error:
@@ -2889,15 +2841,14 @@ async function handleCatalogPublishTest(
     );
   }
 
-  /* -------------------------------------------------------
+  /* =======================================================
      GET
-  ------------------------------------------------------- */
+  ======================================================= */
 
   if (
     request.method ===
     "GET"
   ) {
-
     const section =
       normalizeSection(
         url.searchParams.get(
@@ -2916,7 +2867,6 @@ async function handleCatalogPublishTest(
       section &&
       id
     ) {
-
       const key =
         makeCatalogRecordKey(
           section,
@@ -2926,14 +2876,11 @@ async function handleCatalogPublishTest(
       let stored;
 
       try {
-
         stored =
           await env.MEDIA_KV.get(
             key
           );
-
       } catch (error) {
-
         console.error(
           "MMicjMedia catalog item KV read failure:",
           error
@@ -2947,7 +2894,9 @@ async function handleCatalogPublishTest(
             detail:
               error instanceof Error
                 ? error.message
-                : String(error)
+                : String(error),
+
+            key
           }),
           {
             status:
@@ -2959,7 +2908,6 @@ async function handleCatalogPublishTest(
       }
 
       if (!stored) {
-
         return new Response(
           JSON.stringify({
             found:
@@ -2967,7 +2915,9 @@ async function handleCatalogPublishTest(
 
             section,
 
-            id
+            id,
+
+            key
           }),
           {
             status:
@@ -2992,14 +2942,11 @@ async function handleCatalogPublishTest(
     let statusRecord;
 
     try {
-
       statusRecord =
         await env.MEDIA_KV.get(
           CATALOG_TEST_STATUS_KEY
         );
-
     } catch (error) {
-
       console.error(
         "MMicjMedia catalog status KV read failure:",
         error
@@ -3013,7 +2960,10 @@ async function handleCatalogPublishTest(
           detail:
             error instanceof Error
               ? error.message
-              : String(error)
+              : String(error),
+
+          key:
+            CATALOG_TEST_STATUS_KEY
         }),
         {
           status:
@@ -3042,15 +2992,14 @@ async function handleCatalogPublishTest(
     );
   }
 
-  /* -------------------------------------------------------
+  /* =======================================================
      POST
-  ------------------------------------------------------- */
+  ======================================================= */
 
   if (
     request.method !==
     "POST"
   ) {
-
     return new Response(
       JSON.stringify({
         error:
@@ -3068,12 +3017,9 @@ async function handleCatalogPublishTest(
   let body;
 
   try {
-
     body =
       await request.json();
-
   } catch (_) {
-
     return new Response(
       JSON.stringify({
         error:
@@ -3099,7 +3045,6 @@ async function handleCatalogPublishTest(
     !contract ||
     contract.length === 0
   ) {
-
     return new Response(
       JSON.stringify({
         error:
@@ -3124,24 +3069,21 @@ async function handleCatalogPublishTest(
   let skippedCount =
     0;
 
-  const sample = [];
+  const sample =
+    [];
 
   try {
-
     for (
       const rawItem of
       contract
     ) {
-
       const item =
         normalizeShareItem(
           rawItem
         );
 
       if (!item) {
-
         skippedCount++;
-
         continue;
       }
 
@@ -3151,9 +3093,7 @@ async function handleCatalogPublishTest(
         );
 
       if (!section) {
-
         skippedCount++;
-
         continue;
       }
 
@@ -3164,7 +3104,6 @@ async function handleCatalogPublishTest(
         );
 
       const record = {
-
         version:
           "1.0",
 
@@ -3180,7 +3119,9 @@ async function handleCatalogPublishTest(
 
       await env.MEDIA_KV.put(
         key,
-        JSON.stringify(record)
+        JSON.stringify(
+          record
+        )
       );
 
       storedCount++;
@@ -3188,7 +3129,6 @@ async function handleCatalogPublishTest(
       if (
         sample.length < 10
       ) {
-
         sample.push({
           section,
 
@@ -3201,7 +3141,6 @@ async function handleCatalogPublishTest(
     }
 
     const statusRecord = {
-
       received:
         true,
 
@@ -3232,13 +3171,19 @@ async function handleCatalogPublishTest(
       sample
     };
 
-    await env.MEDIA_KV.put(
-      CATALOG_TEST_STATUS_KEY,
+    const statusJson =
       JSON.stringify(
         statusRecord
-      )
+      );
+
+    await env.MEDIA_KV.put(
+      CATALOG_TEST_STATUS_KEY,
+      statusJson
     );
 
+    /*
+     * Uncached verification.
+     */
     const statusReadBack =
       await env.MEDIA_KV.get(
         CATALOG_TEST_STATUS_KEY
@@ -3246,11 +3191,8 @@ async function handleCatalogPublishTest(
 
     if (
       statusReadBack !==
-      JSON.stringify(
-        statusRecord
-      )
+      statusJson
     ) {
-
       throw new Error(
         "Catalog status KV verification failed."
       );
@@ -3259,14 +3201,12 @@ async function handleCatalogPublishTest(
     if (
       sample.length > 0
     ) {
-
       const firstStored =
         await env.MEDIA_KV.get(
           sample[0].key
         );
 
       if (!firstStored) {
-
         throw new Error(
           "First catalog item KV verification failed."
         );
@@ -3284,9 +3224,7 @@ async function handleCatalogPublishTest(
         headers
       }
     );
-
   } catch (error) {
-
     console.error(
       "MMicjMedia catalog publish KV failure:",
       error
@@ -3312,7 +3250,6 @@ async function handleCatalogPublishTest(
   }
 }
 
-
 /* =========================================================
    WORKER
 ========================================================= */
@@ -3324,21 +3261,19 @@ export default {
     env,
     ctx
   ) {
-
     const url =
       new URL(
         request.url
       );
 
     /* -----------------------------------------------------
-       OG IMAGE
+       OG image
     ----------------------------------------------------- */
 
     if (
       url.pathname ===
       OG_IMAGE_PATH
     ) {
-
       return serveOgImage(
         request,
         env
@@ -3346,14 +3281,13 @@ export default {
     }
 
     /* -----------------------------------------------------
-       TEMPORARY CATALOG PUBLISH TEST
+       Temporary catalog publish test
     ----------------------------------------------------- */
 
     if (
       url.pathname ===
       "/__sky_catalog_publish"
     ) {
-
       return handleCatalogPublishTest(
         request,
         env
@@ -3361,14 +3295,13 @@ export default {
     }
 
     /* -----------------------------------------------------
-       SHARE PRIME
+       Share prime
     ----------------------------------------------------- */
 
     if (
       url.pathname ===
       "/__sky_share_prime"
     ) {
-
       return handleSharePrime(
         request,
         env
@@ -3376,7 +3309,7 @@ export default {
     }
 
     /* -----------------------------------------------------
-       /s/ SHARE ROUTES
+       Canonical /s/<section>/<id>
     ----------------------------------------------------- */
 
     if (
@@ -3384,11 +3317,6 @@ export default {
         SHARE_PATH_PREFIX
       )
     ) {
-
-      /*
-       * Defensive asset handling.
-       */
-
       const assetResponse =
         await serveShareSubresource(
           request,
@@ -3399,12 +3327,6 @@ export default {
         return assetResponse;
       }
 
-      /*
-       * New canonical:
-       *
-       * /s/<section>/<id>
-       */
-
       const directResponse =
         await handleDirectShare(
           request,
@@ -3414,12 +3336,6 @@ export default {
       if (directResponse) {
         return directResponse;
       }
-
-      /*
-       * Legacy:
-       *
-       * /s/<16-character-key>
-       */
 
       return handleShortShare(
         request,
@@ -3438,14 +3354,13 @@ export default {
       );
 
     /* -----------------------------------------------------
-       LEGACY ?k=<key>&contractz=<payload>
+       Legacy ?k=<key>&contractz=<payload>
     ----------------------------------------------------- */
 
     if (
       keyParam &&
       contractz
     ) {
-
       return handleLegacyPrime(
         request,
         env,
@@ -3455,20 +3370,22 @@ export default {
     }
 
     /* -----------------------------------------------------
-       LEGACY ?k=<key>
+       Legacy ?k=<key>
     ----------------------------------------------------- */
 
-    if (keyParam) {
-
+    if (
+      keyParam
+    ) {
       const key =
         keyParam
           .trim()
           .toUpperCase();
 
       if (
-        !isValidKey(key)
+        !isValidKey(
+          key
+        )
       ) {
-
         return new Response(
           "MMicjMedia publication key is invalid.",
           {
@@ -3481,25 +3398,28 @@ export default {
         );
       }
 
-      let payload = null;
+      let payload =
+        null;
 
       try {
-
         payload =
           await kvGet(
             env,
             key
           );
-
       } catch (error) {
-
         console.error(
           "MMicjMedia KV read failed:",
           error
         );
 
         return new Response(
-          "MMicjMedia KV read failed.",
+          "MMicjMedia KV read failed: " +
+          (
+            error instanceof Error
+              ? error.message
+              : String(error)
+          ),
           {
             status:
               500,
@@ -3511,7 +3431,6 @@ export default {
       }
 
       if (!payload) {
-
         return new Response(
           "MMicjMedia publication not found.",
           {
@@ -3533,17 +3452,17 @@ export default {
     }
 
     /* -----------------------------------------------------
-       LEGACY DIRECT CONTRACT
+       Legacy direct contract
     ----------------------------------------------------- */
 
-    if (contractz) {
-
+    if (
+      contractz
+    ) {
       if (
         !isValidPayload(
           contractz
         )
       ) {
-
         return new Response(
           "MMicjMedia contract is invalid.",
           {
@@ -3570,7 +3489,7 @@ export default {
     }
 
     /* -----------------------------------------------------
-       NORMAL APPLICATION
+       Normal application
     ----------------------------------------------------- */
 
     return env.ASSETS.fetch(
