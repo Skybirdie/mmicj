@@ -2500,10 +2500,9 @@ async function handleSharePrime(
       );
 
       const stored =
-        await kvGet(
-          env,
-          key
-        );
+    await env.MEDIA_KV.get(
+        key
+    );
 
       if (
         stored !== record
@@ -3499,10 +3498,9 @@ async function handleCatalogPublishTest(
     );
 
     const statusReadBack =
-      await kvGet(
-        env,
+    await env.MEDIA_KV.get(
         CATALOG_TEST_STATUS_KEY
-      );
+    );
 
     if (
       statusReadBack !==
