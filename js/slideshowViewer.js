@@ -361,18 +361,20 @@ container.appendChild(b);
     }
 
     function updateStatus(){
-        const indicator = document.getElementById("slideshowIndicator");
-        const total = slideCount();
+    const indicator = document.getElementById("slideshowIndicator");
+    const total = slideCount();
 
-        if(status) {
-            status.textContent = current ? (current.title || "") : "";
-        }
-
-        if(indicator) {
-            indicator.textContent =
-                current && total ? `${index+1} / ${total}` : "";
-        }
+    if(status) {
+        status.textContent = current
+            ? (current.title || "")
+            : "MMicj";
     }
+
+    if(indicator) {
+        indicator.textContent =
+            current && total ? `${index+1} / ${total}` : "";
+    }
+}
     function setStatus(message){
     const el = document.getElementById("slideshowPlaybackStatus");
 
