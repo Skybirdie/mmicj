@@ -32,7 +32,7 @@ Build
 
 search.build=function(parent){
 
-```
+MMicjMedia
 if(initialized){
 
     return;
@@ -101,7 +101,7 @@ root.appendChild(list);
 parent.appendChild(root);
 
 initialized=true;
-```
+MMicjMedia
 
 };
 
@@ -111,7 +111,7 @@ Execute
 
 search.execute=async function(query){
 
-```
+MMicjMedia
 currentQuery=(query||"").trim();
 
 if(!currentQuery){
@@ -141,7 +141,7 @@ if(
 }
 
 renderResults();
-```
+MMicjMedia
 
 };
 
@@ -151,7 +151,7 @@ Render
 
 function renderLoading(){
 
-```
+MMicjMedia
 list.innerHTML="";
 
 const loading=document.createElement("div");
@@ -161,13 +161,13 @@ loading.className="sr-search-empty";
 loading.textContent="Searching...";
 
 list.appendChild(loading);
-```
+MMicjMedia
 
 }
 
 function renderEmpty(text){
 
-```
+MMicjMedia
 list.innerHTML="";
 
 const empty=document.createElement("div");
@@ -177,13 +177,13 @@ empty.className="sr-search-empty";
 empty.textContent=text;
 
 list.appendChild(empty);
-```
+MMicjMedia
 
 }
 
 function renderResults(){
 
-```
+MMicjMedia
 list.innerHTML="";
 
 if(currentResults.length===0){
@@ -202,7 +202,7 @@ currentResults.forEach(result=>{
     );
 
 });
-```
+MMicjMedia
 
 }
 
@@ -212,7 +212,7 @@ Result Row
 
 function createResult(result){
 
-```
+MMicjMedia
 const row=document.createElement("button");
 
 row.className="sr-search-result";
@@ -246,7 +246,7 @@ row.addEventListener(
 );
 
 return row;
-```
+MMicjMedia
 
 }
 
@@ -256,29 +256,29 @@ Visibility
 
 search.show=function(){
 
-```
+MMicjMedia
 root.hidden=false;
 
 input.focus();
-```
+MMicjMedia
 
 };
 
 search.hide=function(){
 
-```
+MMicjMedia
 root.hidden=true;
-```
+MMicjMedia
 
 };
 
 search.toggle=function(){
 
-```
+MMicjMedia
 root.hidden
     ? search.show()
     : search.hide();
-```
+MMicjMedia
 
 };
 
@@ -288,17 +288,17 @@ State
 
 search.query=function(){
 
-```
+MMicjMedia
 return currentQuery;
-```
+MMicjMedia
 
 };
 
 search.results=function(){
 
-```
+MMicjMedia
 return currentResults.slice();
-```
+MMicjMedia
 
 };
 
@@ -308,17 +308,17 @@ Helpers
 
 search.element=function(){
 
-```
+MMicjMedia
 return root;
-```
+MMicjMedia
 
 };
 
 search.initialized=function(){
 
-```
+MMicjMedia
 return initialized;
-```
+MMicjMedia
 
 };
 
@@ -328,7 +328,7 @@ Cleanup
 
 search.destroy=function(){
 
-```
+MMicjMedia
 currentQuery="";
 currentResults=[];
 
@@ -345,7 +345,7 @@ root=null;
 input=null;
 list=null;
 initialized=false;
-```
+MMicjMedia
 
 };
 
