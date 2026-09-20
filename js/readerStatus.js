@@ -143,9 +143,15 @@ status.hide=function(){
 
 status.reset=function(){
 
-    status.setTitle("");
+    status.setTitle("MMicj");
 
-    status.update(1,1);
+    if(pageElement){
+        pageElement.textContent="";
+    }
+
+    if(progressFill){
+        progressFill.style.width="0%";
+    }
 
 };
 
