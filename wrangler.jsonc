@@ -1,0 +1,74 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+
+  "name": "skyreader-prototype",
+
+  "main": "worker.js",
+
+  "compatibility_date": "2026-09-18",
+
+  /*
+   * OBSERVABILITY
+   *
+   * invocation_logs: false
+   *
+   *   Cloudflare writes one automatic event for EVERY request
+   *   that reaches the Worker, whether or not the Worker logs
+   *   anything. That is what made observability events track
+   *   request count almost exactly during troubleshooting.
+   *
+   *   With invocation_logs off, an event is written only when
+   *   the Worker actually emits something - which, after the
+   *   catalog-lookup log was removed, means console.error and
+   *   console.warn only. Successful share views become silent.
+   *
+   * head_sampling_rate: 1
+   *
+   *   Kept at 100% deliberately. Sampling would throw away
+   *   nine out of ten error traces, which is the opposite of
+   *   what you want while the books and videos routes are
+   *   still being built. Because only failures now produce
+   *   events, full fidelity is cheap.
+   *
+   *   For live debugging use `npx wrangler tail` instead -
+   *   it streams in real time and does not consume the
+   *   observability events quota.
+   */
+
+  "observability": {
+    "enabled": true,
+
+    "logs": {
+      "invocation_logs": false,
+      "head_sampling_rate": 1
+    }
+  },
+
+  /*
+   * ASSETS
+   *
+   * run_worker_first stays false. Requests that match a file
+   * in this directory are served straight from Cloudflare's
+   * asset layer and never invoke the Worker, so they are free
+   * and unlimited. Setting it to true would route every
+   * stylesheet, script, image and audio file through the
+   * Worker and bill each one.
+   */
+
+  "assets": {
+    "directory": ".",
+    "binding": "ASSETS",
+    "run_worker_first": false
+  },
+
+  "kv_namespaces": [
+    {
+      "binding": "MEDIA_KV",
+      "id": "8a4f692a796b4aeab25262e831739781"
+    }
+  ],
+
+  "images": {
+    "binding": "IMAGES"
+  }
+}
