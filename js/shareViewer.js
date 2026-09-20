@@ -2264,49 +2264,67 @@ function stopShareLoading() {
 
 
         share?.addEventListener(
-            "click",
-            async event => {
+    "click",
+    async event => {
 
-                event.preventDefault();
-                event.stopPropagation();
+        event.preventDefault();
+        event.stopPropagation();
 
+        const book =
+            window.Reader &&
+            typeof Reader.book === "function"
+                ? Reader.book()
+                : null;
 
-                const book =
-                    window.Reader &&
-                    typeof Reader.book ===
-                        "function"
-                        ? Reader.book()
-                        : activeItem;
+        const item =
+            book && book.id
+                ? book
+                : (
+                    activeItem &&
+                    activeItem.id
+                        ? activeItem
+                        : null
+                );
 
+        if (
+            !item ||
+            !item.id
+        ) {
+            console.warn(
+                "[SkyMedia Share] Share requested before the current book was ready."
+            );
+            return;
+        }
 
-                if (
-                    book &&
-                    book.id &&
-                    window.ShareManager &&
-                    typeof ShareManager.share ===
-                        "function"
-                ) {
+        if (
+            !window.ShareManager ||
+            typeof ShareManager.share !== "function"
+        ) {
+            console.error(
+                "[SkyMedia Share] ShareManager.share() is not available."
+            );
+            return;
+        }
 
-                    try {
+        try {
 
-                        await ShareManager.share(
-                            "reader",
-                            book
-                        );
+            await ShareManager.share(
+                "reader",
+                item
+            );
 
-                        showShareCopiedCue();
+            showShareCopiedCue();
 
-                    }
-                    catch (error) {
+        }
+        catch (error) {
 
-                        console.error(
-                            "[SkyMedia Share] Share-link action failed:",
-                            error
-                        );
-                    }
-                }
-            }
-        );
+            console.error(
+                "[SkyMedia Share] Share-link action failed:",
+                error
+            );
+        }
+    }
+);
 
 
         fullscreen?.addEventListener(
