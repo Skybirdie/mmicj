@@ -281,39 +281,57 @@ window.ShareManager = (function () {
     ===================================================== */
 
     async function buildUrl(
-        section,
-        id,
-        item
-    ) {
+    section,
+    id,
+    item
+) {
 
-        const normalizedSection =
-            normalizeSection(
-                section
-            );
+    const normalizedSection =
+        normalizeSection(
+            section
+        );
 
-        const normalizedId =
-            cleanString(id);
+    const normalizedId =
+        cleanString(id);
 
-        if (!normalizedSection) {
+    if (!normalizedSection) {
 
-            throw new Error(
-                "Cannot create share link: section is missing."
-            );
-        }
-
-        if (!normalizedId) {
-
-            throw new Error(
-                "Cannot create share link: item id is missing."
-            );
-        }
-
-        return primeShare(
-            item,
-            normalizedSection,
-            normalizedId
+        throw new Error(
+            "Cannot create share link: section is missing."
         );
     }
+
+    if (!normalizedId) {
+
+        throw new Error(
+            "Cannot create share link: item id is missing."
+        );
+    }
+
+    /*
+     * IMPORTANT:
+     *
+     * The Share button no longer sends anything to
+     * /__sky_share_prime and therefore performs NO KV write.
+     *
+     * The Worker receives the section and item ID directly
+     * in the permanent short URL.
+     */
+    const baseUrl =
+        window.location.origin;
+
+    return (
+        baseUrl +
+        "/s/" +
+        encodeURIComponent(
+            normalizedSection
+        ) +
+        "/" +
+        encodeURIComponent(
+            normalizedId
+        )
+    );
+}
 
 
     /* =====================================================
