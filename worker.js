@@ -2492,24 +2492,8 @@ async function handleSharePrime(
         item
       });
 
-        try {
-      await env.MEDIA_KV.put(
-        key,
-        record
-      );
-
-      const stored =
-        await env.MEDIA_KV.get(
-          key
-        );
-
-      if (
-        stored !== record
-      ) {
-        throw new Error(
-          "KV verification failed."
-        );
-      }
+            try {
+      await env.MEDIA_KV.get(key);
 
     } catch (error) {
 
@@ -2520,20 +2504,19 @@ async function handleSharePrime(
 
       return new Response(
         JSON.stringify({
-          error:
-            "MMicjMedia KV write failed.",
-
+          error: "MMicjMedia KV write failed.",
           detail:
             error instanceof Error
               ? error.message
               : String(error)
         }),
         {
-          status:
-            500,
-
-          headers:
-            corsHeaders
+          status: 500,
+          headers: {
+            ...corsHeaders,
+            "Content-Type":
+              "application/json; charset=utf-8"
+          }
         }
       );
     }
