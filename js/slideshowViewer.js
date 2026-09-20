@@ -374,9 +374,26 @@ container.appendChild(b);
         }
     }
     function setStatus(message){
-        const el=document.getElementById("slideshowPlaybackStatus");
-        if(el) el.textContent=message||"";
+    const el = document.getElementById("slideshowPlaybackStatus");
+
+    if(!el) return;
+
+    const text = message || "";
+
+    /*
+     * Playback status is intentionally hidden during normal
+     * slideshow operation. Only the final completion state
+     * should be displayed.
+     */
+    if(text === "Finished"){
+        el.textContent = text;
+        el.hidden = false;
+        return;
     }
+
+    el.textContent = "";
+    el.hidden = true;
+}
     function updateTitle(){ if(title) title.textContent=current?current.title||"":""; }
     function stopTimer(){ if(timer){clearTimeout(timer);timer=null;} }
     function schedule(){
