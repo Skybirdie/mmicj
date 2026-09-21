@@ -283,6 +283,14 @@ AppSwitcher marks the active section.
 
 .video-library-org-button:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(0,0,0,.18)}
 
+/* Larger glyph on mobile so it fills more of the 32px button - the
+   clamp() above bottoms out at 15px on narrow screens, matching the
+   same mobile increase given to .libraryOrgButton (reader) and
+   .slideshow-org-button (slideshow.css). */
+@media (max-width:999px){
+    .video-library-org-button{font-size:24px;}
+}
+
 .video-library-org-button .icon{
     width:20px;
     height:20px;

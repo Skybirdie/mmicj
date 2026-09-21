@@ -202,6 +202,15 @@ transform:translateY(-2px)
 }
 .slideshow-org-button:hover,.slideshow-view-button:hover,.slideshow-view-button.active,.slideshow-library-drawer-close:hover{transform:translateY(-2px);border:1px solid rgba(255,255,255,.18);border-radius:10px;
     box-shadow:0 10px 30px rgba(0,0,0,.3);backdrop-filter:blur(12px)}
+
+/* Larger glyph on mobile so it fills more of the 30px button - the
+   clamp() above bottoms out at 16px on narrow screens, matching the
+   same mobile increase given to .libraryOrgButton (reader) and
+   .video-library-org-button (video.css). Scoped to the sort button
+   only, not the view/drawer-close buttons that share the base rule. */
+@media (max-width:999px){
+    .slideshow-org-button{font-size:23px;}
+}
 .slideshow-org-button .icon,.slideshow-view-button .icon,.slideshow-library-drawer-close .icon{width:18px;height:18px;filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .55));}
 .slideshow-library-drawer-close{display:none}
 .slideshow-org-menu{

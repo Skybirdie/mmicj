@@ -2153,8 +2153,8 @@ html[data-theme="dark"] #readerPanel #toolbar .iconButton{
   margin-left:auto;
 }
 #libraryOrganizationControls select{
+  width:100%;
   min-width:0;
-  max-width:112px;
   height:28px;
   padding:0 24px 0 8px;
   border:1px solid color-mix(in srgb,var(--control-text) 18%,transparent);
@@ -2166,10 +2166,10 @@ html[data-theme="dark"] #readerPanel #toolbar .iconButton{
 }
 @media (max-width:999px){
   #libraryOrganizationControls{gap:4px;}
-  #libraryOrganizationControls select{max-width:92px;font-size:11px;}
+  #libraryOrganizationControls select{font-size:11px;}
 }
 @media (max-width:600px){
-  #libraryOrganizationControls select{max-width:78px;height:26px;padding-left:6px;}
+  #libraryOrganizationControls select{height:26px;padding-left:6px;}
 }
 
 
@@ -2177,6 +2177,12 @@ html[data-theme="dark"] #readerPanel #toolbar .iconButton{
 #libraryOrganizationControls{position:relative;display:flex;align-items:center;gap:3px;flex:0 0 auto;margin-left:auto;}
 .libraryOrgButton{position:relative;width:25px;height:25px;min-width:25px;padding:0;border:0;border-radius:7px;background:transparent;color:var(--text);font:700 17px/1 Inter,Arial,sans-serif;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;}
 .libraryOrgButton:hover{background:color-mix(in srgb,var(--text) 8%,transparent);}
+/* Larger glyph on mobile so it fills more of the 25px button, matching
+   the same mobile increase given to .video-library-org-button and
+   .slideshow-org-button (video.css / slideshow.css). */
+@media (max-width:999px){
+  .libraryOrgButton{font-size:20px;}
+}
 .libraryFilterIcon{font-size:18px;line-height:1;transform:rotate(180deg);}
 .libraryFilterActive{display:none;position:absolute;right:2px;top:2px;width:6px;height:6px;border-radius:50%;background:#d72626;box-shadow:0 0 0 1px var(--panel);}
 .libraryOrgButton.isFiltered .libraryFilterActive{display:block;}
