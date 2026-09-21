@@ -1371,6 +1371,62 @@ function normalizeCatalogPublishItem(rawItem) {
  * we can verify the transformation before allowing
  * publishing.
  */
+/* =========================================================
+   CATALOG RECORD COMPARISON
+========================================================= */
+
+/*
+ * publishedAt is deliberately excluded from comparison.
+ * It changes on every publish request and therefore must not
+ * make an otherwise identical catalog item look changed.
+ *
+ * The comparison includes the stable record identity and the
+ * fully cleaned catalog item. This makes publishing idempotent:
+ * repeated publish requests do NOT rewrite unchanged items.
+ */
+function catalogRecordComparable(record) {
+  if (!record || typeof record !== "object") {
+    return null;
+  }
+
+  return {
+    version: String(record.version ?? ""),
+    section: normalizeSection(record.section || ""),
+    id: String(record.id ?? "").trim(),
+    item: record.item || null
+  };
+}
+
+function catalogRecordsEqual(existingRecord, incomingRecord) {
+  const existingComparable =
+    catalogRecordComparable(existingRecord);
+
+  const incomingComparable =
+    catalogRecordComparable(incomingRecord);
+
+  if (!existingComparable || !incomingComparable) {
+    return false;
+  }
+
+  return JSON.stringify(existingComparable) ===
+    JSON.stringify(incomingComparable);
+}
+
+async function getCatalogRecordForPublish(env, key) {
+  /*
+   * IMPORTANT: do NOT use kvGet() here.
+   *
+   * kvGet() intentionally uses a cacheTtl for normal share reads.
+   * Publishing needs a fresh comparison so a recent change is not
+   * hidden behind a cached catalog record.
+   */
+  return env.MEDIA_KV.get(key);
+}
+
+/* =========================================================
+   STAGE 1 CATALOG PREVIEW
+========================================================= */
+
 function buildCatalogPreview(
   contract
 ) {
@@ -3306,6 +3362,9 @@ async function handleCatalogPublishTest(
   let skippedCount =
     0;
 
+  let unchangedCount =
+    0;
+
   const sample =
     [];
 
@@ -3360,6 +3419,76 @@ async function handleCatalogPublishTest(
         publishedAt
       };
 
+      /*
+       * Idempotent publish: read the existing record first and
+       * write only when the catalog content is new or changed.
+       *
+       * This means a repeated request with the same contract is
+       * effectively a zero-item-write operation.
+       */
+      let existingRaw;
+
+      try {
+        existingRaw =
+          await getCatalogRecordForPublish(
+            env,
+            key
+          );
+      } catch (error) {
+        throw new Error(
+          "Catalog comparison KV read failed for " +
+          key +
+          ": " +
+          (
+            error instanceof Error
+              ? error.message
+              : String(error)
+          )
+        );
+      }
+
+      let existingRecord = null;
+
+      if (existingRaw) {
+        try {
+          existingRecord =
+            JSON.parse(existingRaw);
+        } catch (_) {
+          /*
+           * A malformed existing record is treated as changed so
+           * the publish can repair it.
+           */
+          existingRecord = null;
+        }
+      }
+
+      if (
+        catalogRecordsEqual(
+          existingRecord,
+          record
+        )
+      ) {
+        unchangedCount++;
+
+        if (
+          sample.length < 10
+        ) {
+          sample.push({
+            section,
+
+            id:
+              item.id,
+
+            key,
+
+            action:
+              "unchanged"
+          });
+        }
+
+        continue;
+      }
+
       await env.MEDIA_KV.put(
         key,
         JSON.stringify(
@@ -3378,7 +3507,12 @@ async function handleCatalogPublishTest(
           id:
             item.id,
 
-          key
+          key,
+
+          action:
+            existingRecord
+              ? "updated"
+              : "created"
         });
       }
     }
@@ -3408,6 +3542,8 @@ async function handleCatalogPublishTest(
         contract.length,
 
       storedCount,
+
+      unchangedCount,
 
       skippedCount,
 
