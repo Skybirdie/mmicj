@@ -1178,341 +1178,122 @@ function sectionFromItem(
  * =========================================================
  */
 
-function unwrapMarkdown(
-  value
-) {
-  let text =
-    String(
-      value ?? ""
-    ).trim();
+function cleanString(value) {
+  return value === null || value === undefined
+    ? ""
+    : String(value).trim();
+}
 
-  if (!text) {
-    return "";
+
+function unwrapMarkdown(value) {
+  let text = cleanString(value);
+
+  if (!text) return "";
+
+  const markdownMatch = text.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+
+  if (markdownMatch) {
+    return cleanString(markdownMatch[2] || markdownMatch[1]);
   }
-
-  /*
-   * -------------------------------------------------------
-   * 1. Remove Markdown code fences.
-   *
-   * Glide can sometimes pass the entire Markdown value
-   * inside triple-backtick fencing.
-   *
-   * Example:
-   *
-   * ```[URL](URL)```
-   * -------------------------------------------------------
-   */
-
-  text =
-    text.replace(
-      /^```(?:[A-Za-z0-9_-]+)?\s*/i,
-      ""
-    );
-
-  text =
-    text.replace(
-      /\s*```$/i,
-      ""
-    );
-
-  text =
-    text.trim();
-
-  /*
-   * -------------------------------------------------------
-   * 2. Proven Glide Markdown handling.
-   *
-   * Glide commonly produces:
-   *
-   * [URL](URL)
-   *
-   * The destination URL is preferred.
-   * -------------------------------------------------------
-   */
-
-  const markdownMatch =
-    text.match(
-      /^\[([^\]]+)\]\(([^)]+)\)$/
-    );
-
-  if (
-    markdownMatch
-  ) {
-    return String(
-      markdownMatch[2] ||
-      markdownMatch[1] ||
-      ""
-    ).trim();
-  }
-
-  /*
-   * -------------------------------------------------------
-   * 3. Occasionally Glide adds surrounding quotes.
-   * -------------------------------------------------------
-   */
 
   if (
     text.length >= 2 &&
     text.startsWith('"') &&
     text.endsWith('"')
   ) {
-    text =
-      text.slice(
-        1,
-        -1
-      );
+    text = text.slice(1, -1);
   }
 
-  /*
-   * -------------------------------------------------------
-   * 4. Remove code fences again in case the quotes
-   *    surrounded the fence.
-   * -------------------------------------------------------
-   */
-
-  text =
-    text
-      .replace(
-        /^```(?:[A-Za-z0-9_-]+)?\s*/i,
-        ""
-      )
-      .replace(
-        /\s*```$/i,
-        ""
-      )
-      .trim();
-
-  return text;
+  return text.trim();
 }
 
 
-/*
- * ---------------------------------------------------------
- * Clean one URL-like value.
- *
- * This deliberately follows the Glide adapter's forgiving
- * behavior rather than imposing stricter URL validation.
- * ---------------------------------------------------------
- */
-
-function cleanMediaUrl(
-  value
-) {
-  if (
-    value === null ||
-    value === undefined
-  ) {
-    return "";
+function splitMediaValue(value) {
+  if (value === null || value === undefined) {
+    return [];
   }
 
-  let text =
-    unwrapMarkdown(
-      value
-    );
-
-  if (!text) {
-    return "";
+  // Real array
+  if (Array.isArray(value)) {
+    return value
+      .flatMap(part => splitMediaValue(part))
+      .filter(Boolean);
   }
 
-  /*
-   * Glide can occasionally contain another layer of
-   * wrapping. Apply the same cleanup a second time.
-   */
-  const secondPass =
-    unwrapMarkdown(
-      text
-    );
+  let text = cleanString(value);
 
-  if (
-    secondPass &&
-    secondPass !== text
-  ) {
-    text =
-      secondPass;
-  }
+  if (!text) return [];
 
-  text =
-    text.trim();
-
-  /*
-   * -------------------------------------------------------
-   * If the entire cleaned value is a URL, return it.
-   * -------------------------------------------------------
-   */
-
-  if (
-    /^https?:\/\/[^\s<>"')]+$/i.test(
-      text
-    )
-  ) {
-    return text;
-  }
-
-  /*
-   * -------------------------------------------------------
-   * Forgiving fallback:
-   *
-   * Find a URL anywhere inside the remaining value.
-   *
-   * This is important for Glide values that contain
-   * additional formatting around the Markdown URL.
-   * -------------------------------------------------------
-   */
-
-  const urlMatch =
-    text.match(
-      /https?:\/\/[^\s<>"')`]+/i
-    );
-
-  if (
-    urlMatch
-  ) {
-    return urlMatch[0];
-  }
-
-  return "";
-}
-/*
- * Clean a catalog media field.
- *
- * Handles:
- *
- *   1. Array values
- *   2. JSON arrays
- *   3. Comma-separated slideshow URLs
- *   4. Comma-separated Markdown URLs
- *   5. Single Markdown URL
- *   6. Single plain URL
- */
-function cleanCatalogMediaValue(
-  media,
-  type
-) {
-  if (
-    media === null ||
-    media === undefined
-  ) {
-    return "";
-  }
-
-  /*
-   * Already an actual JavaScript array.
-   */
-  if (
-    Array.isArray(media)
-  ) {
-    const cleaned =
-      media
-        .flatMap(
-          value =>
-            cleanCatalogMediaValue(
-              value,
-              type
-            )
-        )
-        .filter(Boolean);
-
-    return cleaned;
-  }
-
-  let text =
-    String(
-      media
-    ).trim();
-
-  if (!text) {
-    return "";
-  }
-
-  /*
-   * Remove invisible/control characters without changing
-   * ordinary URL characters.
-   */
-  text =
-    text
-      .replace(
-        /[\u0000-\u001F\u007F\u200B-\u200D\uFEFF]/g,
-        ""
-      )
-      .trim();
-
-  /*
-   * JSON array.
-   */
-  if (
-    text.startsWith("[") &&
-    text.endsWith("]")
-  ) {
+  // JSON array stored as text
+  if (text.startsWith("[") && text.endsWith("]")) {
     try {
-      const decoded =
-        JSON.parse(
-          text
-        );
+      const parsed = JSON.parse(text);
 
-      if (
-        Array.isArray(decoded)
-      ) {
-        return decoded
-          .flatMap(
-            value =>
-              cleanCatalogMediaValue(
-                value,
-                type
-              )
-          )
+      if (Array.isArray(parsed)) {
+        return parsed
+          .flatMap(part => splitMediaValue(part))
           .filter(Boolean);
       }
-    } catch (_) {
-      /*
-       * Not JSON.
-       * Continue to the Markdown/plain-text logic.
-       */
+    } catch {
+      // Not JSON; continue normally.
     }
   }
 
-  /*
-   * Slideshow fields can arrive as a comma-separated
-   * collection of Markdown URLs.
-   *
-   * Split first, then apply the proven unwrapMarkdown()
-   * cleanup to each individual value.
-   */
-  if (
-    type === "slideshow" &&
-    text.includes(",")
-  ) {
-    const parts =
-      text
-        .split(/\s*,\s*(?=\[|https?:\/\/)/i)
-        .map(
-          part =>
-            cleanMediaUrl(
-              part
-            )
-        )
-        .filter(Boolean);
+  // Glide Markdown URL list
+  const markdownParts = text
+    .split(/\s*,\s*(?=\[)/g)
+    .map(part => unwrapMarkdown(part))
+    .filter(Boolean);
 
-    if (
-      parts.length > 1
-    ) {
-      return parts;
-    }
-
-    if (
-      parts.length === 1
-    ) {
-      return parts[0];
-    }
+  if (markdownParts.length > 1) {
+    return markdownParts;
   }
 
-  /*
-   * Single Markdown URL or ordinary URL.
-   */
-  return cleanMediaUrl(
-    text
-  );
+  // Single value containing a Markdown URL
+  if (markdownParts.length === 1) {
+    return markdownParts;
+  }
+
+  // Plain comma-separated values
+  if (text.includes(",")) {
+    return text
+      .split(",")
+      .map(part => unwrapMarkdown(part))
+      .filter(Boolean);
+  }
+
+  return [unwrapMarkdown(text)].filter(Boolean);
 }
 
+
+function cleanMediaUrl(value) {
+  const values = splitMediaValue(value);
+
+  if (!values.length) return "";
+
+  return values[0];
+}
+
+
+function cleanCatalogMediaValue(value, type) {
+  const values = splitMediaValue(value);
+
+  if (!values.length) {
+    return "";
+  }
+
+  const normalizedType = normalizeSection(type);
+
+  // Slideshows can contain multiple images.
+  if (normalizedType === "slideshow") {
+    return values.length === 1
+      ? values[0]
+      : values;
+  }
+
+  // Reader/video items use one media value.
+  return values[0];
+}
 /*
  * Normalize catalog input using the proven Glide cleanup
  * before it reaches normalizeShareItem().
