@@ -3550,35 +3550,37 @@ async function handleCatalogPublishTest(
       sample
     };
 
-    if (storedCount > 0) {
-  const statusJson =
-    JSON.stringify(
-      statusRecord
-    );
+    const statusJson =
+  JSON.stringify(
+    statusRecord
+  );
 
+if (storedCount > 0) {
   await env.MEDIA_KV.put(
     CATALOG_TEST_STATUS_KEY,
     statusJson
   );
+
+  /*
+   * Uncached verification of the status record.
+   *
+   * Only verify it when this publish actually wrote
+   * catalog data and therefore wrote a new status record.
+   */
+  const statusReadBack =
+    await env.MEDIA_KV.get(
+      CATALOG_TEST_STATUS_KEY
+    );
+
+  if (
+    statusReadBack !==
+    statusJson
+  ) {
+    throw new Error(
+      "Catalog status KV verification failed."
+    );
+  }
 }
-
-    /*
-     * Uncached verification.
-     */
-    const statusReadBack =
-      await env.MEDIA_KV.get(
-        CATALOG_TEST_STATUS_KEY
-      );
-
-    if (
-      statusReadBack !==
-      statusJson
-    ) {
-      throw new Error(
-        "Catalog status KV verification failed."
-      );
-    }
-
     if (
       sample.length > 0
     ) {
