@@ -394,7 +394,7 @@ progress(
             useSystemFonts:true
         });
 
-        pdf=await task.promise;
+        const resolvedPdf=await task.promise;
 
         if(
     token!==openToken ||
@@ -410,6 +410,18 @@ progress(
 
     return;
 }
+
+        /*
+         * Only commit to the shared `pdf` variable once this load is
+         * confirmed to still be the current one. Two overlapping loads
+         * (the user picking a different book while one is still
+         * loading) can have their pdfjsLib.getDocument() promises
+         * settle in either order - assigning `pdf` unconditionally
+         * here let a stale/superseded load clobber the correct one
+         * even though it was about to bail out on the very next line,
+         * breaking all further rendering for the book actually wanted.
+         */
+        pdf=resolvedPdf;
 
         pageCount=pdf.numPages;
 

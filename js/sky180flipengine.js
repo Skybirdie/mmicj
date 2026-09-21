@@ -37,6 +37,25 @@ let initialized=false;
 let engineReady=false;
 let pendingReadyReject=null;
 let normalFlippingTime=650;
+
+/*
+ * Bumped by every open() call and by close(). open() itself has no
+ * way to be interrupted mid-flight otherwise: between creating
+ * flipHost/appending it to host and constructing `new St.PageFlip()`,
+ * it awaits two animation frames with nothing yet for close() to
+ * destroy (flipbook is still null at that point). If a second
+ * open() call - and its own close() beforehand - runs during that
+ * window, the first call's suspended continuation would resume
+ * afterward with no idea it had been superseded, and go on to
+ * construct a PageFlip instance against a flipHost that has since
+ * been detached from `host` (the second call's own close()/open()
+ * already replaced it), silently overwriting the second call's
+ * module-level flipbook/flipHost/pendingReadyReject state. That is
+ * exactly the "picking a different book while one is still loading
+ * breaks all rendering" failure. Checking this after the await lets
+ * a superseded call bail out before touching any shared state.
+ */
+let openSequence=0;
 let pageTurnAudioPlayed=false;
 let pageCurlAudioPlayed=false;
 let handlers={
@@ -280,6 +299,8 @@ engine.open=async function(options={}){
      * is still waiting for it to become ready.
      */
 
+    const sequence=++openSequence;
+
     let resolveReady;
     let rejectReady;
     const readyPromise=new Promise((resolve,reject)=>{
@@ -339,6 +360,20 @@ engine.open=async function(options={}){
     await new Promise(resolve=>requestAnimationFrame(()=>
         requestAnimationFrame(resolve)
     ));
+
+    /*
+     * Superseded by a newer open() (or cancelled outright by a
+     * close()) while waiting out the frames above - flipbook does
+     * not exist yet at this point for that newer call's close() to
+     * have cleaned up, so it has no way to stop this continuation
+     * except this check. Bail out now, before creating a PageFlip
+     * instance against a flipHost that has likely already been
+     * detached from `host` by whatever ran after us, and before
+     * touching any of the shared module state it has since set up.
+     */
+    if(sequence!==openSequence){
+        return;
+    }
 
     flipbook=new St.PageFlip(
         flipHost,
@@ -728,5 +763,4 @@ engine.spread=function(){
 
 
 
-engine.resize=function(){ /* * IMPORTANT: ResizeObserver can fire immediately after the private * StPageFlip host is appended, while loadFromHTML() is still building * the PageFlip UI. Calling update() during that interval can interrupt * the first initialization and produce the intermittent cold-start * failure where the book does not appear until a second interaction. * * Ignore resize requests until StPageFlip has emitted its init event. * Renderer will call resize again after Renderer.open() awaits the * engine readiness promise. */ if(!flipbook || !engineReady) return; /* * StPageFlip owns the book rectangle. Let it recalculate from the * available viewer size, then re-apply the opening/closing spread alignment. */ flipbook.update(); syncCenterShadowBounds(); if(typeof flipbook.getPageCollection==="function"){ applyHostAlignment( flipbook.getPageCollection().getCurrentSpreadIndex(), false ); } }; engine.page=function(){ return currentPage; }; engine.pages=function(){ return pageCount; }; engine.isSinglePage=function(){ return singlePageMode; }; engine.isTwoPageDocument=function(){ return twoPageDocumentMode; }; engine.busy=function(){ return busy; }; engine.active=function(){ return flipbook!==null; }; engine.close=function(){ if(pendingReadyReject){ try{ pendingReadyReject(new Error("Sky180FlipEngine: open cancelled.")); }catch(error){} pendingReadyReject=null; } if(flipbook){ try{ /* * A failed open can leave a PageFlip instance constructed but * not yet loaded. Its destroy() method assumes the UI exists, * so only destroy after loadFromHTML() has created the UI. */ const ui=typeof flipbook.getUI==="function" ? flipbook.getUI() : null; if(ui && typeof ui.destroy==="function"){ flipbook.destroy(); } } catch(error){ console.warn("[Sky180FlipEngine] destroy failed",error); } } if(flipHost){ flipHost.classList.remove("sky180-is-flipping","sky180-layout-pending","sky180-layout-ready"); } flipbook=null; flipHost=null; engineReady=false; pageCount=0; currentPage=1; singlePageMode=false; twoPageDocumentMode=false; busy=false; }; engine.destroy=engine.close; engine.on=function(name,callback){ if(Object.prototype.hasOwnProperty.call(handlers,name)){ handlers[name]=callback; } return engine; }; engine.version="1.6.0"; return engine; })();
-
+engine.resize=function(){ /* * IMPORTANT: ResizeObserver can fire immediately after the private * StPageFlip host is appended, while loadFromHTML() is still building * the PageFlip UI. Calling update() during that interval can interrupt * the first initialization and produce the intermittent cold-start * failure where the book does not appear until a second interaction. * * Ignore resize requests until StPageFlip has emitted its init event. * Renderer will call resize again after Renderer.open() awaits the * engine readiness promise. */ if(!flipbook || !engineReady) return; /* * StPageFlip owns the book rectangle. Let it recalculate from the * available viewer size, then re-apply the opening/closing spread alignment. */ flipbook.update(); syncCenterShadowBounds(); if(typeof flipbook.getPageCollection==="function"){ applyHostAlignment( flipbook.getPageCollection().getCurrentSpreadIndex(), false ); } }; engine.page=function(){ return currentPage; }; engine.pages=function(){ return pageCount; }; engine.isSinglePage=function(){ return singlePageMode; }; engine.isTwoPageDocument=function(){ return twoPageDocumentMode; }; engine.busy=function(){ return busy; }; engine.active=function(){ return flipbook!==null; }; engine.close=function(){ openSequence++; if(pendingReadyReject){ try{ pendingReadyReject(new Error("Sky180FlipEngine: open cancelled.")); }catch(error){} pendingReadyReject=null; } if(flipbook){ try{ /* * A failed open can leave a PageFlip instance constructed but * not yet loaded. Its destroy() method assumes the UI exists, * so only destroy after loadFromHTML() has created the UI. */ const ui=typeof flipbook.getUI==="function" ? flipbook.getUI() : null; if(ui && typeof ui.destroy==="function"){ flipbook.destroy(); } } catch(error){ console.warn("[Sky180FlipEngine] destroy failed",error); } } if(flipHost){ flipHost.classList.remove("sky180-is-flipping","sky180-layout-pending","sky180-layout-ready"); } flipbook=null; flipHost=null; engineReady=false; pageCount=0; currentPage=1; singlePageMode=false; twoPageDocumentMode=false; busy=false; }; engine.destroy=engine.close; engine.on=function(name,callback){ if(Object.prototype.hasOwnProperty.call(handlers,name)){ handlers[name]=callback; } return engine; }; engine.version="1.6.0"; return engine; })();
