@@ -1352,6 +1352,14 @@ position:relative;    height: fit-content;
     opacity:.7;
     min-width:50px;
     text-align:center;
+
+    /* Matches #pageIndicator (reader.css) and .video-status-indicator
+       (video.css) - same light outline/pill treatment for consistency
+       across all three sections. */
+    border:1px solid color-mix(in srgb,var(--muted) 28%,transparent);
+    background:color-mix(in srgb,var(--panel) 72%,transparent);
+    padding:2px 8px;
+    border-radius:7px;
 }
 
 /* When there's no index/count to show, the indicator is left with an

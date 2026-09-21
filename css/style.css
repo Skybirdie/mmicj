@@ -3052,6 +3052,11 @@ body:not(.sky-share-mode):has(#videoSection.videoFocus) #workspacePrimaryLogo:no
     display: flex;
     align-items: center;
     justify-content: center;
+    /* Matches the 14px gap video.css/slideshow.css already set on their
+       own status bars (.video-status-bar center, .slideshow-status-bar
+       center) - #statusBar had no equivalent of its own, so the Reader's
+       title and page indicator sat with no space between them. */
+    gap: 14px;
 }
 
 /* Preserve the Reader status bar's compact horizontal spacing. */
