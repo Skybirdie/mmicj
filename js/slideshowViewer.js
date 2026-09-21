@@ -98,44 +98,6 @@ window.SlideshowViewer = (function () {
         });
         window.addEventListener("resize", refreshLayout);
 
-        if (!window.__skySlideshowAppSwitchListenerBound) {
-
-            window.__skySlideshowAppSwitchListenerBound = true;
-
-            /*
-             * Reader already floats #viewerLibrary back in when the
-             * user switches to it via the app-switcher menu (its
-             * "isReturning" keyframe animation naturally replays
-             * once #app stops being display:none). .slideshow-landing
-             * instead relies on a plain CSS transition tied to the
-             * "hidden" class, which does NOT replay just from an
-             * ancestor's display toggling - so without this listener,
-             * switching to Slideshow showed the landing with no
-             * float-in at all. Re-running the same add/remove
-             * "hidden" sequence used in close() (with a forced
-             * reflow in between, since here the landing starts out
-             * visible rather than already hidden) reproduces that
-             * same float-in on tab switch.
-             */
-            window.addEventListener("app:switched", event => {
-
-                if (
-                    !event.detail ||
-                    event.detail.id !== "slideshow" ||
-                    current ||
-                    !landing
-                ) {
-                    return;
-                }
-
-                landing.classList.add("hidden");
-                void landing.offsetWidth;
-                landing.classList.remove("hidden");
-
-            });
-
-        }
-
         renderLanding();
 loadMusicLibrary();
 setAudioMode(current?.audio ? "original" : "effects");

@@ -301,6 +301,11 @@ landing.classList.remove("isReturning");
 if(animate){
     void landing.offsetWidth;
     landing.classList.add("isReturning");
+    landing.addEventListener(
+        "animationend",
+        ()=>landing.classList.remove("isReturning"),
+        {once:true}
+    );
 }
 
 if(typeof Library!=="undefined" && typeof Library.buildViewerLibrary==="function"){
