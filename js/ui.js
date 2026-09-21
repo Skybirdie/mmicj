@@ -2013,6 +2013,20 @@ Reader.on(
 ()=>{
 
 clearProductionError();
+
+/*
+ * Reader.close() sets #statusMessage to "MMicj" as the idle
+ * status-bar text (see reader.js). Nothing on the open path
+ * cleared it back out again, so it kept sitting next to the
+ * real title in #readerTitle once a book was open. #readerTitle
+ * already carries the actual title via updateReaderTitle()
+ * below, so #statusMessage has nothing left to say here.
+ */
+const statusMessage=document.getElementById("statusMessage");
+if(statusMessage){
+    statusMessage.textContent="";
+}
+
 updateReaderTitle();
 
 updatePageIndicator();

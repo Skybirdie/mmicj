@@ -83,8 +83,8 @@ ui:{
 libraryOpen:true,
 shelfView:true,
 organization:{
-main:{sort:"alphabetical",filter:"all",category:""},
-viewer:{sort:"alphabetical",filter:"all",category:""}
+main:{sort:"random",filter:"all",category:""},
+viewer:{sort:"newest",filter:"all",category:""}
 },
 loading:false,
 loadingProgress:0,
