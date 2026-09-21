@@ -1,41 +1,20 @@
 "use strict";
 
 /*
+=========================================================
+ MMicjMedia Worker
 
-MMicjMedia Worker
+ FINAL SHORT SHARE LINK ARCHITECTURE
 
-FINAL SHORT SHARE LINK ARCHITECTURE
+ Public share URL:
 
-Public share URL:
+     /s/<section>/<id>
 
-/s/<section>/<id>
+ The selected item is retrieved from the catalog or
+ direct-share KV record.
 
-The selected item is already encoded as a ONE-ITEM
-SR2 contract before it reaches this Worker.
-
-Flow:
-
-ShareManager
-      ↓
-POST /__sky_share_prime
-      ↓
-Worker stores the one-item record by section + ID
-      ↓
-Worker returns /s/<section>/<id>
-      ↓
-Worker retrieves payload
-      ↓
-window.SkyMediaContract
-window.__SKY_SHARE_TARGET
-      ↓
-existing GlideContract / Manifest
-      ↓
-existing ShareManager
-      ↓
-existing ShareViewer
-
-# The browser address bar NEVER receives the long contract.
-
+ The browser address bar NEVER receives the long contract.
+=========================================================
 */
 
 const CONTRACT_PREFIX = "sr2.";
@@ -45,7 +24,7 @@ const SKYMEDIA_BASE_URL =
   "https://mmicj.meditation-mornings-icj.workers.dev";
 
 /* =========================================================
-Open Graph / Social Preview
+   Open Graph / Social Preview
 ========================================================= */
 
 const OG_SITE_NAME =
@@ -73,17 +52,7 @@ const KV_CACHE_TTL =
   300;
 
 /* =========================================================
-TEMPORARY CATALOG PUBLISH TEST
-========================================================= */
-
-const CATALOG_TEST_TOKEN =
-  "SMCAT-TEST-9f7b2d4c-20260918";
-
-const CATALOG_TEST_STATUS_KEY =
-  "catalog:test:last";
-
-/* =========================================================
-KV READ HELPER
+   KV READ HELPER
 ========================================================= */
 
 function kvGet(
@@ -100,7 +69,17 @@ function kvGet(
 }
 
 /* =========================================================
-FNV-1A
+   TEMPORARY CATALOG PUBLISH TEST
+========================================================= */
+
+const CATALOG_TEST_TOKEN =
+  "SMCAT-TEST-9f7b2d4c-20260918";
+
+const CATALOG_TEST_STATUS_KEY =
+  "catalog:test:last";
+
+/* =========================================================
+   FNV-1A
 ========================================================= */
 
 function fnv1a32(
@@ -159,7 +138,7 @@ function makeKey(
 }
 
 /* =========================================================
-DIRECT SHARE RECORDS
+   DIRECT SHARE RECORDS
 ========================================================= */
 
 function makeShareRecordKey(
@@ -194,7 +173,7 @@ function makeCatalogRecordKey(
 
   /*
    * IMPORTANT:
-   * Keep the literal "\0" here.
+   * Keep the literal "\\0" here.
    *
    * Existing catalog records were written using this
    * exact key construction.
@@ -203,14 +182,14 @@ function makeCatalogRecordKey(
     CATALOG_RECORD_PREFIX +
     makeKey(
       normalizedSection +
-      "\0" +
+      "\\0" +
       normalizedId
     )
   );
 }
 
 /* =========================================================
-MEDIA NORMALIZATION
+   MEDIA NORMALIZATION
 ========================================================= */
 
 function normalizeMediaValue(
@@ -282,7 +261,7 @@ function normalizeMediaValue(
 }
 
 /* =========================================================
-SHARE ITEM NORMALIZATION
+   SHARE ITEM NORMALIZATION
 ========================================================= */
 
 function normalizeShareItem(
@@ -397,10 +376,6 @@ function buildShareManifest(
   };
 }
 
-/* =========================================================
-DIRECT SHARE TARGET
-========================================================= */
-
 function getDirectShareTarget(
   url
 ) {
@@ -470,7 +445,7 @@ function getDirectShareTarget(
 }
 
 /* =========================================================
-DIRECT SHARE READ
+   DIRECT SHARE READ
 ========================================================= */
 
 async function getDirectShareRecord(
@@ -560,7 +535,7 @@ async function getDirectShareRecord(
 }
 
 /* =========================================================
-CATALOG SHARE RECORD
+   CATALOG SHARE RECORD
 ========================================================= */
 
 async function getCatalogShareRecord(
@@ -675,7 +650,7 @@ async function getCatalogShareRecord(
 }
 
 /* =========================================================
-VALIDATION
+   VALIDATION
 ========================================================= */
 
 function isValidKey(
@@ -724,7 +699,7 @@ function isValidPayload(
 }
 
 /* =========================================================
-RESPONSE HELPERS
+   RESPONSE HELPERS
 ========================================================= */
 
 function htmlHeaders() {
@@ -754,7 +729,7 @@ function textHeaders() {
 }
 
 /* =========================================================
-ASSET REQUEST
+   ASSET REQUEST
 ========================================================= */
 
 function makeCleanAssetRequest(
@@ -779,7 +754,7 @@ function makeCleanAssetRequest(
 }
 
 /* =========================================================
-C2.2 BASE64URL DECODER
+   C2.2 BASE64URL DECODER
 ========================================================= */
 
 function base64UrlDecode(
@@ -829,7 +804,7 @@ function base64UrlDecode(
 }
 
 /* =========================================================
-C2.2 DECOMPRESSOR
+   C2.2 DECOMPRESSOR
 ========================================================= */
 
 function decompressBytes(
@@ -965,7 +940,7 @@ function decompressBytes(
 }
 
 /* =========================================================
-DECODE SR2
+   DECODE SR2
 ========================================================= */
 
 function decodeContractPayload(
@@ -1014,7 +989,7 @@ function decodeContractPayload(
 }
 
 /* =========================================================
-CONTRACT NORMALIZATION
+   CONTRACT NORMALIZATION
 ========================================================= */
 
 function normalizeContractArray(
@@ -1042,7 +1017,7 @@ function normalizeContractArray(
 }
 
 /* =========================================================
-ITEM SELECTION
+   ITEM SELECTION
 ========================================================= */
 
 function getSharedItem(
@@ -1084,7 +1059,7 @@ function getSharedItem(
 }
 
 /* =========================================================
-TYPE → SHARE SECTION
+   TYPE → SHARE SECTION
 ========================================================= */
 
 function normalizeSection(
@@ -1160,53 +1135,121 @@ function sectionFromItem(
 }
 
 /* =========================================================
-PROVEN GLIDE CLEANUP
+   GLIDE CLEANUP
 ========================================================= */
 
 /*
- * This is based directly on the working GlideContract
- * adapter cleanup method.
+ * This is the cleanup method proven in the GlideContract
+ * adapter.
  *
- * Example:
+ * Glide may provide a media value like:
  *
  * [https://example.com/image.jpg](https://example.com/image.jpg)
  *
- * becomes:
+ * We want:
  *
  * https://example.com/image.jpg
  *
- * We deliberately take markdownMatch[2], which is the
- * destination URL, rather than trying to reconstruct the
- * URL from the visible markdown text.
+ * The destination URL in the Markdown expression is
+ * preferred, exactly as in the proven adapter.
+ */
+/*
+ * =========================================================
+ * GLIDE URL CLEANUP — STAGE 1A
+ * =========================================================
+ *
+ * This follows the proven GlideContract adapter behavior,
+ * with one additional normalization step for Glide values
+ * that arrive wrapped in Markdown code fences.
+ *
+ * Examples accepted:
+ *
+ *   https://example.com/image.jpg
+ *
+ *   [https://example.com/image.jpg](https://example.com/image.jpg)
+ *
+ *   ```[https://example.com/image.jpg](https://example.com/image.jpg)```
+ *
+ *   "https://example.com/image.jpg"
+ *
+ *   ```https://example.com/image.jpg```
+ *
+ * The returned value is ONLY the destination URL.
+ * =========================================================
  */
 
 function unwrapMarkdown(
   value
 ) {
   let text =
-    value === null ||
-    value === undefined
-      ? ""
-      : String(
-          value
-        ).trim();
+    String(
+      value ?? ""
+    ).trim();
 
   if (!text) {
     return "";
   }
+
+  /*
+   * -------------------------------------------------------
+   * 1. Remove Markdown code fences.
+   *
+   * Glide can sometimes pass the entire Markdown value
+   * inside triple-backtick fencing.
+   *
+   * Example:
+   *
+   * ```[URL](URL)```
+   * -------------------------------------------------------
+   */
+
+  text =
+    text.replace(
+      /^```(?:[A-Za-z0-9_-]+)?\s*/i,
+      ""
+    );
+
+  text =
+    text.replace(
+      /\s*```$/i,
+      ""
+    );
+
+  text =
+    text.trim();
+
+  /*
+   * -------------------------------------------------------
+   * 2. Proven Glide Markdown handling.
+   *
+   * Glide commonly produces:
+   *
+   * [URL](URL)
+   *
+   * The destination URL is preferred.
+   * -------------------------------------------------------
+   */
 
   const markdownMatch =
     text.match(
       /^\[([^\]]+)\]\(([^)]+)\)$/
     );
 
-  if (markdownMatch) {
+  if (
+    markdownMatch
+  ) {
     return String(
       markdownMatch[2] ||
       markdownMatch[1] ||
       ""
     ).trim();
   }
+
+  /*
+   * -------------------------------------------------------
+   * 3. Occasionally Glide adds surrounding quotes.
+   * -------------------------------------------------------
+   */
 
   if (
     text.length >= 2 &&
@@ -1220,25 +1263,48 @@ function unwrapMarkdown(
       );
   }
 
-  return text.trim();
+  /*
+   * -------------------------------------------------------
+   * 4. Remove code fences again in case the quotes
+   *    surrounded the fence.
+   * -------------------------------------------------------
+   */
+
+  text =
+    text
+      .replace(
+        /^```(?:[A-Za-z0-9_-]+)?\s*/i,
+        ""
+      )
+      .replace(
+        /\s*```$/i,
+        ""
+      )
+      .trim();
+
+  return text;
 }
 
+
 /*
+ * ---------------------------------------------------------
  * Clean one URL-like value.
  *
- * This accepts:
- *
- * plain URL
- * markdown URL
- * quoted URL
- * text containing a URL
- *
- * and returns only the actual URL.
+ * This deliberately follows the Glide adapter's forgiving
+ * behavior rather than imposing stricter URL validation.
+ * ---------------------------------------------------------
  */
 
 function cleanMediaUrl(
   value
 ) {
+  if (
+    value === null ||
+    value === undefined
+  ) {
+    return "";
+  }
+
   let text =
     unwrapMarkdown(
       value
@@ -1249,35 +1315,31 @@ function cleanMediaUrl(
   }
 
   /*
-   * Glide can sometimes leave control/zero-width
-   * characters around the value.
+   * Glide can occasionally contain another layer of
+   * wrapping. Apply the same cleanup a second time.
    */
-  text =
-    text
-      .replace(
-        /[\u0000-\u001F\u007F\u200B-\u200D\uFEFF]/g,
-        ""
-      )
-      .trim();
-
-  /*
-   * A second unwrap is intentional.
-   *
-   * It protects against values that become markdown only
-   * after surrounding characters have been removed.
-   */
-  text =
+  const secondPass =
     unwrapMarkdown(
       text
     );
 
-  if (!text) {
-    return "";
+  if (
+    secondPass &&
+    secondPass !== text
+  ) {
+    text =
+      secondPass;
   }
 
+  text =
+    text.trim();
+
   /*
-   * If the entire value is a URL, return it directly.
+   * -------------------------------------------------------
+   * If the entire cleaned value is a URL, return it.
+   * -------------------------------------------------------
    */
+
   if (
     /^https?:\/\/[^\s<>"')]+$/i.test(
       text
@@ -1287,62 +1349,85 @@ function cleanMediaUrl(
   }
 
   /*
-   * Otherwise locate the first actual HTTP(S) URL.
+   * -------------------------------------------------------
+   * Forgiving fallback:
+   *
+   * Find a URL anywhere inside the remaining value.
+   *
+   * This is important for Glide values that contain
+   * additional formatting around the Markdown URL.
+   * -------------------------------------------------------
    */
+
   const urlMatch =
     text.match(
-      /https?:\/\/[^\s<>"')]+/i
+      /https?:\/\/[^\s<>"')`]+/i
     );
 
-  if (urlMatch) {
-    return urlMatch[0].trim();
+  if (
+    urlMatch
+  ) {
+    return urlMatch[0];
   }
 
   return "";
 }
-
 /*
- * This is the Worker equivalent of the proven
- * splitMediaValue() method from GlideContract.
+ * Clean a catalog media field.
  *
- * It supports:
+ * Handles:
  *
- * - arrays
- * - JSON arrays
- * - one markdown URL
- * - comma-separated markdown URLs
- * - comma-separated plain URLs
- * - one plain URL
+ *   1. Array values
+ *   2. JSON arrays
+ *   3. Comma-separated slideshow URLs
+ *   4. Comma-separated Markdown URLs
+ *   5. Single Markdown URL
+ *   6. Single plain URL
  */
-
-function splitCatalogMediaValue(
-  value
+function cleanCatalogMediaValue(
+  media,
+  type
 ) {
   if (
-    Array.isArray(value)
+    media === null ||
+    media === undefined
   ) {
-    return value
-      .flatMap(
-        item =>
-          splitCatalogMediaValue(
-            item
-          )
-      )
-      .filter(Boolean);
+    return "";
+  }
+
+  /*
+   * Already an actual JavaScript array.
+   */
+  if (
+    Array.isArray(media)
+  ) {
+    const cleaned =
+      media
+        .flatMap(
+          value =>
+            cleanCatalogMediaValue(
+              value,
+              type
+            )
+        )
+        .filter(Boolean);
+
+    return cleaned;
   }
 
   let text =
-    value === null ||
-    value === undefined
-      ? ""
-      : String(
-          value
-        ).trim();
+    String(
+      media
+    ).trim();
 
   if (!text) {
-    return [];
+    return "";
   }
 
+  /*
+   * Remove invisible/control characters without changing
+   * ordinary URL characters.
+   */
   text =
     text
       .replace(
@@ -1352,28 +1437,27 @@ function splitCatalogMediaValue(
       .trim();
 
   /*
-   * First try JSON arrays.
+   * JSON array.
    */
   if (
     text.startsWith("[") &&
     text.endsWith("]")
   ) {
     try {
-      const parsed =
+      const decoded =
         JSON.parse(
           text
         );
 
       if (
-        Array.isArray(
-          parsed
-        )
+        Array.isArray(decoded)
       ) {
-        return parsed
+        return decoded
           .flatMap(
-            item =>
-              splitCatalogMediaValue(
-                item
+            value =>
+              cleanCatalogMediaValue(
+                value,
+                type
               )
           )
           .filter(Boolean);
@@ -1381,111 +1465,58 @@ function splitCatalogMediaValue(
     } catch (_) {
       /*
        * Not JSON.
-       * Continue below.
+       * Continue to the Markdown/plain-text logic.
        */
     }
   }
 
   /*
-   * Match the adapter's established comma rule:
+   * Slideshow fields can arrive as a comma-separated
+   * collection of Markdown URLs.
    *
-   * split(/\s*,\s*(?=\[)/g)
-   *
-   * This is especially useful for Glide's grouped
-   * collection output where each URL may itself be
-   * represented as markdown.
+   * Split first, then apply the proven unwrapMarkdown()
+   * cleanup to each individual value.
    */
-  const parts =
-    text
-      .split(
-        /\s*,\s*(?=\[)/g
-      )
-      .map(
-        part =>
-          unwrapMarkdown(
-            part
-          )
-      )
-      .filter(Boolean);
-
   if (
-    parts.length === 1 &&
+    type === "slideshow" &&
     text.includes(",")
   ) {
-    return text
-      .split(",")
-      .map(
-        part =>
-          unwrapMarkdown(
-            part
-          )
-      )
-      .filter(Boolean);
-  }
-
-  /*
-   * If there was no comma, clean the one value.
-   */
-  if (
-    parts.length === 0
-  ) {
-    const cleaned =
-      cleanMediaUrl(
-        text
-      );
-
-    return cleaned
-      ? [cleaned]
-      : [];
-  }
-
-  /*
-   * Clean every resulting value again so that the final
-   * catalog contains actual URLs rather than markdown.
-   */
-  return parts
-    .map(
-      part =>
-        cleanMediaUrl(
-          part
+    const parts =
+      text
+        .split(/\s*,\s*(?=\[|https?:\/\/)/i)
+        .map(
+          part =>
+            cleanMediaUrl(
+              part
+            )
         )
-    )
-    .filter(Boolean);
+        .filter(Boolean);
+
+    if (
+      parts.length > 1
+    ) {
+      return parts;
+    }
+
+    if (
+      parts.length === 1
+    ) {
+      return parts[0];
+    }
+  }
+
+  /*
+   * Single Markdown URL or ordinary URL.
+   */
+  return cleanMediaUrl(
+    text
+  );
 }
 
 /*
- * Catalog media normalization.
- *
- * Slideshow media may legitimately contain several URLs,
- * while thumbnail and audio are handled as single URLs.
+ * Normalize catalog input using the proven Glide cleanup
+ * before it reaches normalizeShareItem().
  */
-
-function cleanCatalogMediaValue(
-  media,
-  type
-) {
-  const values =
-    splitCatalogMediaValue(
-      media
-    );
-
-  if (!values.length) {
-    return "";
-  }
-
-  if (
-    type === "slideshow"
-  ) {
-    return values;
-  }
-
-  return values[0];
-}
-
-/* =========================================================
-CATALOG PUBLISH ITEM NORMALIZATION
-========================================================= */
-
 function normalizeCatalogPublishItem(
   rawItem
 ) {
@@ -1503,15 +1534,6 @@ function normalizeCatalogPublishItem(
       .trim()
       .toLowerCase();
 
-  /*
-   * IMPORTANT:
-   *
-   * Catalog cleanup happens BEFORE normalizeShareItem().
-   *
-   * This means the catalog record stored in KV contains
-   * the cleaned URL rather than the original Glide
-   * markdown wrapper.
-   */
   const cleanedItem = {
     ...rawItem,
 
@@ -1538,19 +1560,17 @@ function normalizeCatalogPublishItem(
 }
 
 /* =========================================================
-CATALOG PREVIEW
+   STAGE 1 CATALOG PREVIEW
 ========================================================= */
 
 /*
- * Stage 1 diagnostic only.
+ * Stage 1 deliberately performs ZERO KV writes.
  *
- * preview:true performs the complete cleanup and
- * normalization process but DOES NOT write to KV.
- *
- * This lets us verify the cleaned object before using
- * any KV writes.
+ * It receives the Catalog Source snapshot, applies the
+ * exact Worker cleanup, and returns the cleaned result so
+ * we can verify the transformation before allowing
+ * publishing.
  */
-
 function buildCatalogPreview(
   contract
 ) {
@@ -1562,7 +1582,7 @@ function buildCatalogPreview(
 
   for (
     const rawItem of
-      contract
+    contract
   ) {
     const item =
       normalizeCatalogPublishItem(
@@ -1610,7 +1630,7 @@ function buildCatalogPreview(
 }
 
 /* =========================================================
-HTML ESCAPING
+   HTML ESCAPING
 ========================================================= */
 
 function escapeHtml(
@@ -1642,7 +1662,7 @@ function escapeHtml(
 }
 
 /* =========================================================
-OPEN GRAPH
+   OPEN GRAPH
 ========================================================= */
 
 function buildOgTags(
@@ -1701,7 +1721,7 @@ function buildOgTags(
 }
 
 /* =========================================================
-BOOTSTRAP
+   BOOTSTRAP
 ========================================================= */
 
 function injectContractBootstrap(
@@ -1726,7 +1746,6 @@ function injectContractBootstrap(
     ).trim();
 
   const script = `
-
 <script>
 (function () {
   "use strict";
@@ -1751,7 +1770,6 @@ function injectContractBootstrap(
 
 })();
 </script>
-
 `;
 
   const ogTags =
@@ -1832,7 +1850,7 @@ function injectContractBootstrap(
 }
 
 /* =========================================================
-SERVE INDEX.HTML
+   SERVE INDEX.HTML
 ========================================================= */
 
 async function getIndexHtml(
@@ -1967,7 +1985,7 @@ async function serveWithContract(
 }
 
 /* =========================================================
-SERVE DIRECT SHARE
+   SERVE DIRECT SHARE
 ========================================================= */
 
 async function serveDirectShare(
@@ -2031,7 +2049,7 @@ async function serveDirectShare(
 }
 
 /* =========================================================
-SERVE CATALOG SHARE
+   SERVE CATALOG SHARE
 ========================================================= */
 
 async function serveCatalogShare(
@@ -2086,7 +2104,7 @@ async function serveCatalogShare(
 }
 
 /* =========================================================
-OG IMAGE
+   OG IMAGE
 ========================================================= */
 
 async function serveOgImage(
@@ -2463,7 +2481,7 @@ async function serveOgImage(
 }
 
 /* =========================================================
-SHARE PRIME
+   SHARE PRIME
 ========================================================= */
 
 async function handleSharePrime(
@@ -2607,17 +2625,13 @@ async function handleSharePrime(
         record
       );
 
-      /*
-       * Bypass kvGet() cache for verification.
-       */
       const stored =
         await env.MEDIA_KV.get(
           key
         );
 
       if (
-        stored !==
-        record
+        stored !== record
       ) {
         throw new Error(
           "KV verification failed: stored value did not match the value written."
@@ -2682,7 +2696,7 @@ async function handleSharePrime(
   }
 
   /* =======================================================
-  LEGACY SR2 REGISTRATION
+     LEGACY SR2 REGISTRATION
   ======================================================= */
 
   const payload =
@@ -2728,8 +2742,7 @@ async function handleSharePrime(
       );
 
     if (
-      stored !==
-      payload
+      stored !== payload
     ) {
       throw new Error(
         "KV verification failed."
@@ -2781,7 +2794,7 @@ async function handleSharePrime(
 }
 
 /* =========================================================
-LEGACY ?k=<key>&contractz=<payload>
+   LEGACY ?k=<key>&contractz=<payload>
 ========================================================= */
 
 async function handleLegacyPrime(
@@ -2889,7 +2902,7 @@ async function handleLegacyPrime(
 }
 
 /* =========================================================
-SHARE SUBRESOURCE FALLBACK
+   SHARE SUBRESOURCE FALLBACK
 ========================================================= */
 
 async function serveShareSubresource(
@@ -2916,12 +2929,10 @@ async function serveShareSubresource(
   }
 
   const last =
-    parts[
-      parts.length - 1
-    ];
+    parts[parts.length - 1];
 
   if (
-    !/.[A-Za-z0-9]{2,6}$/.test(
+    !/\.[A-Za-z0-9]{2,6}$/.test(
       last
     )
   ) {
@@ -2936,9 +2947,9 @@ async function serveShareSubresource(
     const candidate =
       new URL(
         "/" +
-        parts
-          .slice(i)
-          .join("/"),
+          parts
+            .slice(i)
+            .join("/"),
         url
       );
 
@@ -2970,7 +2981,7 @@ async function serveShareSubresource(
 }
 
 /* =========================================================
-DIRECT SHARE ROUTER
+   DIRECT SHARE ROUTER
 ========================================================= */
 
 async function handleDirectShare(
@@ -2988,6 +2999,13 @@ async function handleDirectShare(
     return null;
   }
 
+  /*
+   * Catalog takes priority.
+   *
+   * This allows the canonical short URL to work from the
+   * Catalog Source without requiring ShareManager to write
+   * a share:v1 record first.
+   */
   const catalogResponse =
     await serveCatalogShare(
       request,
@@ -3007,7 +3025,7 @@ async function handleDirectShare(
 }
 
 /* =========================================================
-LEGACY /s/<16-character-key>
+   LEGACY /s/<16-character-key>
 ========================================================= */
 
 async function handleShortShare(
@@ -3127,7 +3145,7 @@ async function handleShortShare(
 }
 
 /* =========================================================
-TEMPORARY CATALOG PUBLISH TEST
+   TEMPORARY CATALOG PUBLISH TEST
 ========================================================= */
 
 function catalogTestCorsHeaders() {
@@ -3224,7 +3242,7 @@ async function handleCatalogPublishTest(
   }
 
   /* =======================================================
-  GET
+     GET
   ======================================================= */
 
   if (
@@ -3375,7 +3393,7 @@ async function handleCatalogPublishTest(
   }
 
   /* =======================================================
-  POST
+     POST
   ======================================================= */
 
   if (
@@ -3441,23 +3459,29 @@ async function handleCatalogPublishTest(
     );
   }
 
-  /*
-   * =======================================================
-   * STAGE 1 PREVIEW
-   *
-   * This performs cleanup and normalization but DOES NOT
-   * write anything to KV.
-   * =======================================================
-   */
+  /* =======================================================
+     STAGE 1 — PREVIEW ONLY
+  ======================================================= */
 
+  /*
+   * IMPORTANT:
+   *
+   * Preview must perform ZERO KV writes.
+   *
+   * This lets us verify the Glide cleanup independently
+   * before allowing the catalog publisher to modify KV.
+   */
   if (
     body?.preview === true
   ) {
+    const preview =
+      buildCatalogPreview(
+        contract
+      );
+
     return new Response(
       JSON.stringify(
-        buildCatalogPreview(
-          contract
-        )
+        preview
       ),
       {
         status:
@@ -3468,9 +3492,9 @@ async function handleCatalogPublishTest(
     );
   }
 
-  /* =========================================================
-  NORMAL TEST PUBLISH
-  ========================================================= */
+  /* =======================================================
+     ACTUAL CATALOG PUBLISH
+  ======================================================= */
 
   const publishedAt =
     new Date()
@@ -3488,13 +3512,13 @@ async function handleCatalogPublishTest(
   try {
     for (
       const rawItem of
-        contract
+      contract
     ) {
       /*
        * IMPORTANT:
        *
-       * Use the catalog-specific normalizer here.
-       * This is where the proven Glide cleanup is applied.
+       * Use the proven Glide cleanup BEFORE
+       * normalizeShareItem().
        */
       const item =
         normalizeCatalogPublishItem(
@@ -3670,7 +3694,7 @@ async function handleCatalogPublishTest(
 }
 
 /* =========================================================
-WORKER
+   WORKER
 ========================================================= */
 
 export default {
@@ -3916,4 +3940,3 @@ export default {
     );
   }
 };
-
