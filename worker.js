@@ -1298,48 +1298,67 @@ function cleanCatalogMediaValue(value, type) {
  * Normalize catalog input using the proven Glide cleanup
  * before it reaches normalizeShareItem().
  */
-function normalizeCatalogPublishItem(
-  rawItem
-) {
-  if (
-    !rawItem ||
-    typeof rawItem !== "object"
-  ) {
+function normalizeCatalogPublishItem(rawItem) {
+  if (!rawItem || typeof rawItem !== "object") {
     return null;
   }
 
-  const type =
-    String(
-      rawItem.type ?? ""
-    )
-      .trim()
-      .toLowerCase();
+  const type = normalizeSection(
+    rawItem.type ||
+    rawItem.section ||
+    ""
+  );
+
+  if (!type) {
+    return null;
+  }
+
+  const thumbnailValues = splitMediaValue(rawItem.thumbnail);
+  const mediaValues = splitMediaValue(rawItem.media);
+  const audioValues = splitMediaValue(rawItem.audio);
 
   const cleanedItem = {
-    ...rawItem,
+    id: cleanString(rawItem.id),
+    type,
+    title: cleanString(rawItem.title),
+    subtitle: cleanString(rawItem.subtitle),
 
-    thumbnail:
-      cleanMediaUrl(
-        rawItem.thumbnail
-      ),
+    thumbnail: thumbnailValues.length
+      ? thumbnailValues[0]
+      : "",
 
     media:
-      cleanCatalogMediaValue(
-        rawItem.media,
-        type
-      ),
+      type === "slideshow"
+        ? (
+            mediaValues.length === 1
+              ? mediaValues[0]
+              : mediaValues
+          )
+        : (
+            mediaValues.length
+              ? mediaValues[0]
+              : ""
+          ),
 
-    audio:
-      cleanMediaUrl(
-        rawItem.audio
-      )
+    audio: audioValues.length
+      ? audioValues[0]
+      : "",
+
+    author: cleanString(rawItem.author),
+    category: cleanString(rawItem.category),
+    date: cleanString(rawItem.date)
   };
 
-  return normalizeShareItem(
-    cleanedItem
-  );
-}
+  if (rawItem.dateAdd !== undefined) {
+    cleanedItem.dateAdd = cleanString(rawItem.dateAdd);
+  }
 
+  if (!cleanedItem.id) {
+    return null;
+  }
+
+  return cleanedItem;
+}
 /* =========================================================
    STAGE 1 CATALOG PREVIEW
 ========================================================= */
