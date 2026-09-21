@@ -3550,15 +3550,17 @@ async function handleCatalogPublishTest(
       sample
     };
 
-    const statusJson =
-      JSON.stringify(
-        statusRecord
-      );
-
-    await env.MEDIA_KV.put(
-      CATALOG_TEST_STATUS_KEY,
-      statusJson
+    if (storedCount > 0) {
+  const statusJson =
+    JSON.stringify(
+      statusRecord
     );
+
+  await env.MEDIA_KV.put(
+    CATALOG_TEST_STATUS_KEY,
+    statusJson
+  );
+}
 
     /*
      * Uncached verification.
