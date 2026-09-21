@@ -10,32 +10,16 @@
 
      /s/<section>/<id>
 
- The selected item is already encoded as a ONE-ITEM
- SR2 contract before it reaches this Worker.
+ The selected item is retrieved from the Worker catalog
+ by section + ID.
 
- Flow:
+ Share Mode is injected into the existing SkyMedia app.
 
-     ShareManager
-          ↓
-     POST /__sky_share_prime
-          ↓
-     Worker stores the one-item record by section + ID
-          ↓
-     Worker returns /s/<section>/<id>
-          ↓
-     Worker retrieves payload
-          ↓
-     window.SkyMediaContract
-     window.__SKY_SHARE_TARGET
-          ↓
-     existing GlideContract / Manifest
-          ↓
-     existing ShareManager
-          ↓
-     existing ShareViewer
+ Catalog Source publishing is currently being tested
+ separately. Stage 1 adds a NO-WRITE preview mode which
+ cleans incoming catalog URLs inside the Worker.
 
- The browser address bar NEVER receives the long contract.
-=========================================================
+ =========================================================
 */
 
 const CONTRACT_PREFIX = "sr2.";
@@ -45,7 +29,7 @@ const SKYMEDIA_BASE_URL =
   "https://mmicj.meditation-mornings-icj.workers.dev";
 
 /* =========================================================
-   Open Graph / Social Preview
+   OPEN GRAPH / SOCIAL PREVIEW
 ========================================================= */
 
 const OG_SITE_NAME =
@@ -73,6 +57,16 @@ const KV_CACHE_TTL =
   300;
 
 /* =========================================================
+   TEMPORARY CATALOG PUBLISH TEST
+========================================================= */
+
+const CATALOG_TEST_TOKEN =
+  "SMCAT-TEST-9f7b2d4c-20260918";
+
+const CATALOG_TEST_STATUS_KEY =
+  "catalog:test:last";
+
+/* =========================================================
    KV READ HELPER
 ========================================================= */
 
@@ -88,16 +82,6 @@ function kvGet(
     }
   );
 }
-
-/* =========================================================
-   TEMPORARY CATALOG PUBLISH TEST
-========================================================= */
-
-const CATALOG_TEST_TOKEN =
-  "SMCAT-TEST-9f7b2d4c-20260918";
-
-const CATALOG_TEST_STATUS_KEY =
-  "catalog:test:last";
 
 /* =========================================================
    FNV-1A
@@ -159,7 +143,83 @@ function makeKey(
 }
 
 /* =========================================================
-   DIRECT SHARE RECORDS
+   SECTION NORMALIZATION
+========================================================= */
+
+function normalizeSection(
+  section
+) {
+  const value =
+    String(
+      section || ""
+    )
+      .trim()
+      .toLowerCase();
+
+  if (
+    value === "book" ||
+    value === "books" ||
+    value === "reader" ||
+    value === "pdf" ||
+    value === "pdfs"
+  ) {
+    return "reader";
+  }
+
+  if (
+    value === "video" ||
+    value === "videos"
+  ) {
+    return "video";
+  }
+
+  if (
+    value === "slideshow" ||
+    value === "slideshows" ||
+    value === "slide" ||
+    value === "slides"
+  ) {
+    return "slideshow";
+  }
+
+  return value;
+}
+
+function sectionFromItem(
+  item
+) {
+  const type =
+    String(
+      item?.type || ""
+    )
+      .trim()
+      .toLowerCase();
+
+  if (
+    type === "book"
+  ) {
+    return "reader";
+  }
+
+  if (
+    type === "video"
+  ) {
+    return "video";
+  }
+
+  if (
+    type === "slideshow"
+  ) {
+    return "slideshow";
+  }
+
+  return normalizeSection(
+    type
+  );
+}
+
+/* =========================================================
+   DIRECT SHARE RECORD KEYS
 ========================================================= */
 
 function makeShareRecordKey(
@@ -167,10 +227,14 @@ function makeShareRecordKey(
   id
 ) {
   const normalizedSection =
-    normalizeSection(section);
+    normalizeSection(
+      section
+    );
 
   const normalizedId =
-    String(id || "").trim();
+    String(
+      id || ""
+    ).trim();
 
   return (
     SHARE_RECORD_PREFIX +
@@ -187,13 +251,18 @@ function makeCatalogRecordKey(
   id
 ) {
   const normalizedSection =
-    normalizeSection(section);
+    normalizeSection(
+      section
+    );
 
   const normalizedId =
-    String(id || "").trim();
+    String(
+      id || ""
+    ).trim();
 
   /*
    * IMPORTANT:
+   *
    * Keep the literal "\\0" here.
    *
    * Existing catalog records were written using this
@@ -397,15 +466,320 @@ function buildShareManifest(
   };
 }
 
+/* =========================================================
+   CLEAN MEDIA URL
+========================================================= */
+
+/*
+ * This function is intentionally tolerant.
+ *
+ * Catalog Source values may arrive from Glide wrapped as:
+ *
+ *   [https://example.com/file.jpg](https://example.com/file.jpg)
+ *
+ * or may contain hidden/control characters.
+ *
+ * We clean those here in the Worker rather than attempting
+ * to make Glide's JavaScript column perform the cleanup.
+ */
+
+function cleanMediaUrl(
+  value
+) {
+  if (
+    value === null ||
+    value === undefined
+  ) {
+    return "";
+  }
+
+  let text =
+    String(value)
+      .trim();
+
+  if (!text) {
+    return "";
+  }
+
+  /*
+   * Remove common invisible/control characters that can
+   * interfere with Markdown matching.
+   */
+  const cleanedControlText =
+    text
+      .replace(
+        /[\u0000-\u001F\u007F\u200B-\u200D\uFEFF]/g,
+        ""
+      )
+      .trim();
+
+  text =
+    cleanedControlText;
+
+  /*
+   * JSON-quoted string.
+   */
+  if (
+    text.length >= 2 &&
+    text.startsWith('"') &&
+    text.endsWith('"')
+  ) {
+    try {
+      const decoded =
+        JSON.parse(
+          text
+        );
+
+      if (
+        typeof decoded ===
+        "string"
+      ) {
+        text =
+          decoded
+            .replace(
+              /[\u0000-\u001F\u007F\u200B-\u200D\uFEFF]/g,
+              ""
+            )
+            .trim();
+      }
+    } catch (_) {
+      text =
+        text
+          .slice(1, -1)
+          .trim();
+    }
+  }
+
+  /*
+   * Standard Markdown link.
+   *
+   * The label is deliberately permissive.
+   */
+  const markdownMatch =
+    text.match(
+      /^\s*\[[\s\S]*?\]\(\s*(https?:\/\/[^)\s]+)\s*\)\s*$/i
+    );
+
+  if (
+    markdownMatch
+  ) {
+    return markdownMatch[1]
+      .trim();
+  }
+
+  /*
+   * Fallback:
+   *
+   * If the surrounding Markdown has been altered by
+   * Glide, extract the first HTTP/HTTPS URL directly.
+   */
+  const urlMatch =
+    text.match(
+      /https?:\/\/[^\s<>"')]+/i
+    );
+
+  if (
+    urlMatch
+  ) {
+    return urlMatch[0]
+      .trim();
+  }
+
+  return "";
+}
+
+/* =========================================================
+   CATALOG MEDIA CLEANUP
+========================================================= */
+
+function cleanCatalogMediaValue(
+  media,
+  type
+) {
+  if (
+    media === null ||
+    media === undefined
+  ) {
+    return "";
+  }
+
+  /*
+   * Already an array.
+   */
+  if (
+    Array.isArray(media)
+  ) {
+    const cleaned =
+      media
+        .map(
+          value =>
+            cleanMediaUrl(
+              value
+            )
+        )
+        .filter(Boolean);
+
+    return cleaned;
+  }
+
+  let text =
+    String(
+      media
+    ).trim();
+
+  if (!text) {
+    return "";
+  }
+
+  /*
+   * Remove invisible/control characters before parsing.
+   */
+  text =
+    text.replace(
+      /[\u0000-\u001F\u007F\u200B-\u200D\uFEFF]/g,
+      ""
+    ).trim();
+
+  /*
+   * JSON array supplied as text.
+   */
+  if (
+    text.startsWith("[") &&
+    text.endsWith("]")
+  ) {
+    try {
+      const decoded =
+        JSON.parse(
+          text
+        );
+
+      if (
+        Array.isArray(decoded)
+      ) {
+        return decoded
+          .map(
+            value =>
+              cleanMediaUrl(
+                value
+              )
+          )
+          .filter(Boolean);
+      }
+    } catch (_) {
+      /*
+       * Not a JSON array.
+       * Continue below.
+       */
+    }
+  }
+
+  /*
+   * Slideshow media can be a comma-separated collection.
+   *
+   * Google Storage URLs used by this project do not normally
+   * contain commas, so this is safe for the current data
+   * contract.
+   */
+  if (
+    type === "slideshow" &&
+    text.includes(",")
+  ) {
+    const parts =
+      text
+        .split(",")
+        .map(
+          part =>
+            cleanMediaUrl(
+              part
+            )
+        )
+        .filter(Boolean);
+
+    if (
+      parts.length > 1
+    ) {
+      return parts;
+    }
+
+    if (
+      parts.length === 1
+    ) {
+      return parts[0];
+    }
+  }
+
+  /*
+   * Single URL or single Markdown-wrapped URL.
+   */
+  return cleanMediaUrl(
+    text
+  );
+}
+
+/* =========================================================
+   CATALOG ITEM CLEANUP
+========================================================= */
+
+/*
+ * This is deliberately separate from normalizeShareItem().
+ *
+ * Existing Share Mode behavior therefore remains untouched.
+ *
+ * Only the catalog publishing path uses this cleanup.
+ */
+
+function normalizeCatalogPublishItem(
+  rawItem
+) {
+  if (
+    !rawItem ||
+    typeof rawItem !== "object"
+  ) {
+    return null;
+  }
+
+  const type =
+    String(
+      rawItem.type ?? ""
+    )
+      .trim()
+      .toLowerCase();
+
+  const cleanedItem = {
+    ...rawItem,
+
+    thumbnail:
+      cleanMediaUrl(
+        rawItem.thumbnail
+      ),
+
+    media:
+      cleanCatalogMediaValue(
+        rawItem.media,
+        type
+      ),
+
+    audio:
+      cleanMediaUrl(
+        rawItem.audio
+      )
+  };
+
+  return normalizeShareItem(
+    cleanedItem
+  );
+}
+
+/* =========================================================
+   DIRECT SHARE TARGET
+========================================================= */
+
 function getDirectShareTarget(
   url
 ) {
-  const prefix =
-    SHARE_PATH_PREFIX;
-
   if (
     !url.pathname.startsWith(
-      prefix
+      SHARE_PATH_PREFIX
     )
   ) {
     return null;
@@ -413,7 +787,9 @@ function getDirectShareTarget(
 
   const parts =
     url.pathname
-      .slice(prefix.length)
+      .slice(
+        SHARE_PATH_PREFIX.length
+      )
       .split("/")
       .filter(Boolean);
 
@@ -1077,151 +1453,6 @@ function getSharedItem(
   }
 
   return items[0];
-}
-
-/* =========================================================
-   TYPE → SHARE SECTION
-========================================================= */
-
-function normalizeSection(
-  section
-) {
-  const value =
-    String(
-      section || ""
-    )
-      .trim()
-      .toLowerCase();
-
-  if (
-    value === "book" ||
-    value === "books" ||
-    value === "reader" ||
-    value === "pdf" ||
-    value === "pdfs"
-  ) {
-    return "reader";
-  }
-
-  if (
-    value === "video" ||
-    value === "videos"
-  ) {
-    return "video";
-  }
-
-  if (
-    value === "slideshow" ||
-    value === "slideshows" ||
-    value === "slide" ||
-    value === "slides"
-  ) {
-    return "slideshow";
-  }
-
-  return value;
-}
-
-function sectionFromItem(
-  item
-) {
-  const type =
-    String(
-      item?.type || ""
-    )
-      .trim()
-      .toLowerCase();
-
-  if (
-    type === "book"
-  ) {
-    return "reader";
-  }
-
-  if (
-    type === "video"
-  ) {
-    return "video";
-  }
-
-  if (
-    type === "slideshow"
-  ) {
-    return "slideshow";
-  }
-
-  return normalizeSection(
-    type
-  );
-}
-
-/* =========================================================
-   CLEAN MEDIA URL
-========================================================= */
-
-function cleanMediaUrl(
-  value
-) {
-  if (
-    value === null ||
-    value === undefined
-  ) {
-    return "";
-  }
-
-  let text =
-    String(value)
-      .trim();
-
-  if (!text) {
-    return "";
-  }
-
-  if (
-    text.length >= 2 &&
-    text.startsWith('"') &&
-    text.endsWith('"')
-  ) {
-    try {
-      const decoded =
-        JSON.parse(
-          text
-        );
-
-      if (
-        typeof decoded ===
-        "string"
-      ) {
-        text =
-          decoded.trim();
-      }
-    } catch (_) {
-      text =
-        text
-          .slice(1, -1)
-          .trim();
-    }
-  }
-
-  const markdownMatch =
-    text.match(
-      /^\s*\[[^\]]+\]\((https?:\/\/[^)]+)\)\s*$/i
-    );
-
-  if (markdownMatch) {
-    return markdownMatch[1];
-  }
-
-  const urlMatch =
-    text.match(
-      /https?:\/\/[^\s<>"')]+/i
-    );
-
-  if (urlMatch) {
-    return urlMatch[0];
-  }
-
-  return "";
 }
 
 /* =========================================================
@@ -2214,24 +2445,12 @@ async function handleSharePrime(
         item
       });
 
-    /*
-     * IMPORTANT:
-     *
-     * This MUST be a PUT.
-     *
-     * The previous broken version accidentally contained
-     * env.MEDIA_KV.get(key) here, which did not create the
-     * share record at all.
-     */
     try {
       await env.MEDIA_KV.put(
         key,
         record
       );
 
-      /*
-       * Bypass kvGet() cache for verification.
-       */
       const stored =
         await env.MEDIA_KV.get(
           key
@@ -2637,12 +2856,9 @@ async function handleShortShare(
       request.url
     );
 
-  const prefix =
-    SHARE_PATH_PREFIX;
-
   if (
     !url.pathname.startsWith(
-      prefix
+      SHARE_PATH_PREFIX
     )
   ) {
     return null;
@@ -2651,7 +2867,7 @@ async function handleShortShare(
   const key =
     url.pathname
       .slice(
-        prefix.length
+        SHARE_PATH_PREFIX.length
       )
       .split("/")[0]
       .trim()
@@ -2792,6 +3008,78 @@ function catalogTestAuthorized(
     queryToken ===
       CATALOG_TEST_TOKEN
   );
+}
+
+/* =========================================================
+   CATALOG PREVIEW
+========================================================= */
+
+/*
+ * STAGE 1
+ *
+ * This function performs catalog cleanup and normalization
+ * WITHOUT writing anything to KV.
+ *
+ * It is intentionally isolated from the normal catalog
+ * publish path.
+ */
+
+function buildCatalogPreview(
+  contract
+) {
+  const cleanedItems =
+    [];
+
+  let skippedCount =
+    0;
+
+  for (
+    const rawItem of
+    contract
+  ) {
+    const item =
+      normalizeCatalogPublishItem(
+        rawItem
+      );
+
+    if (!item) {
+      skippedCount++;
+      continue;
+    }
+
+    const section =
+      sectionFromItem(
+        item
+      );
+
+    if (!section) {
+      skippedCount++;
+      continue;
+    }
+
+    cleanedItems.push(
+      item
+    );
+  }
+
+  return {
+    preview:
+      true,
+
+    kvWrites:
+      0,
+
+    contractItemCount:
+      contract.length,
+
+    cleanedItemCount:
+      cleanedItems.length,
+
+    skippedCount,
+
+    contract:
+      cleanedItems
+  };
 }
 
 async function handleCatalogPublishTest(
@@ -3059,6 +3347,67 @@ async function handleCatalogPublishTest(
     );
   }
 
+  /* =======================================================
+     STAGE 1 — NO-WRITE PREVIEW
+  ======================================================= */
+
+  if (
+    body?.preview === true
+  ) {
+    try {
+      const preview =
+        buildCatalogPreview(
+          contract
+        );
+
+      return new Response(
+        JSON.stringify(
+          preview,
+          null,
+          2
+        ),
+        {
+          status:
+            200,
+
+          headers
+        }
+      );
+    } catch (error) {
+      console.error(
+        "MMicjMedia catalog preview failed:",
+        error
+      );
+
+      return new Response(
+        JSON.stringify({
+          error:
+            "Catalog preview failed.",
+
+          detail:
+            error instanceof Error
+              ? error.message
+              : String(error)
+        }),
+        {
+          status:
+            500,
+
+          headers
+        }
+      );
+    }
+  }
+
+  /* =======================================================
+     EXISTING TEST PUBLISH
+     
+     NOTE:
+     This path writes KV.
+     
+     We are NOT using this path for Stage 1 testing.
+  ======================================================= */
+
   const publishedAt =
     new Date()
       .toISOString();
@@ -3077,8 +3426,12 @@ async function handleCatalogPublishTest(
       const rawItem of
       contract
     ) {
+      /*
+       * Catalog publishing now uses the Worker cleanup
+       * before normalization.
+       */
       const item =
-        normalizeShareItem(
+        normalizeCatalogPublishItem(
           rawItem
         );
 
