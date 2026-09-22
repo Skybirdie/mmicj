@@ -23,7 +23,7 @@
  Display behavior
  ----------------
  Every time the Front Page opens, the currently eligible
- special release is shown for 5 seconds, then disappears.
+ special release is shown for 10 seconds, then disappears.
 
  If several special releases are simultaneously within their
   seven-day windows, the newest release date is selected.
@@ -47,7 +47,7 @@
 window.SkyReleaseNotification = (function () {
 
     const SPECIAL_PREFIX = "mmstar-";
-    const DISPLAY_MS = 5000;
+    const DISPLAY_MS = 10000;
     const RELEASE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
     const GIFS = {
