@@ -2,7 +2,7 @@
   "version": "1.0",
   "content": [
     {
-      "id": "book-001",
+      "id": "mmstar-book-001",
       "type": "book",
       "title": "Roboto Specimen Book",
       "subtitle": "Sample Magazine",
@@ -11,7 +11,7 @@
       "audio": "",
       "author": "",
       "category": "Book Club",
-      "date": "202609020901"
+      "date": "202609220901"
     },
     {
       "id": "book-002",
