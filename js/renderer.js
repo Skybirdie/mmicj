@@ -374,7 +374,16 @@ renderer.open=async function(book,options={}){
 ) {
 
     SkyMediaLoading.start({
-        percent: 5
+        percent: 5,
+        onMessage: function (text) {
+            const loadingText =
+                document.getElementById("loadingText");
+
+            if (loadingText) {
+                loadingText.textContent =
+                    text || "Loading...";
+            }
+        }
     });
 }
 

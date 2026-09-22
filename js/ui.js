@@ -273,6 +273,29 @@ ui.clearError=function(){ clearProductionError(); };
 
 function connectReader(){
 
+/*
+ * Keep the Reader loading text synchronized with the shared
+ * SkyMedia loading sequence. The sequence advances on its own
+ * timer, so Reader progress events alone cannot update the visible
+ * message between progress calls.
+ */
+document.addEventListener(
+    "skymedia:loading-message",
+    (event)=>{
+
+        if(
+            !event ||
+            !event.detail ||
+            !dom.loadingText
+        ){
+            return;
+        }
+
+        dom.loadingText.textContent =
+            event.detail.text || "Loading...";
+    }
+);
+
 Reader.on(
 
 "progress",
