@@ -391,6 +391,18 @@ function clearExtraBookmarkFlags(){
 }
 
 function makeBookmarkFlag(bookmark,index){
+    /* A bookmark flag may only be created/reused while the Reader is open.
+     * Reader.close() can leave queued UI work behind for a few frames; do
+     * not let that stale work resurrect the landing-page flag.
+     */
+    if(
+        typeof Reader!=="undefined" &&
+        typeof Reader.isOpen==="function" &&
+        !Reader.isOpen()
+    ){
+        return null;
+    }
+
     let flag=index===0 ? dom.bookmarkFlag : null;
 
     if(!flag){
@@ -406,6 +418,7 @@ function makeBookmarkFlag(bookmark,index){
      * new book opens, so remove that barrier only when a bookmark is being
      * actively rendered for an open Reader document.
      */
+    flag.hidden=false;
     flag.style.removeProperty('display');
 
     /*
@@ -631,6 +644,7 @@ function hideBookmarkFlag(){
          * same #bookmarkFlag element after its active class was removed.
          * display:none makes the closed-reader state unconditional.
          */
+        flag.hidden=true;
         flag.style.setProperty('display','none','important');
     });
     clearExtraBookmarkFlags();
@@ -721,8 +735,17 @@ function refreshBookmarkState(){
     if(!bookmarked){ hideBookmarkFlag(); return; }
 
     clearExtraBookmarkFlags();
-    const items=visible.map((bookmark,index)=>({bookmark,flag:makeBookmarkFlag(bookmark,index)}));
+    const items=visible
+        .map((bookmark,index)=>({bookmark,flag:makeBookmarkFlag(bookmark,index)}))
+        .filter(item=>item.flag);
+
+    if(!items.length){
+        hideBookmarkFlag();
+        return;
+    }
+
     items.forEach(({flag,bookmark})=>{
+        flag.hidden=false;
         flag.dataset.bookmarkBook=String(pos.book.id||pos.book);
         flag.classList.remove('turning','active');
     });
