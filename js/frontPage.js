@@ -602,6 +602,7 @@ if (preservedCenterDoor) {
         getCategories,
         setCategories,
         collectItems,
-        resolveDoors
+        resolveDoors,
+        openItem
     };
 })();
