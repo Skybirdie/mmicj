@@ -635,6 +635,22 @@ function clearBookmarkOverlay(){
 -------------------------------------------------------*/
 
 function refreshBookmarkState(){
+    /*
+     * A bookmark flag belongs to an open Reader document only.
+     * During Reader.close(), StPageFlip/SRNavigation can still report
+     * the previous page briefly while the landing view is being restored.
+     * Do not allow a queued bookmark refresh to recreate the flag on the
+     * landing page after the book has closed.
+     */
+    if(
+        typeof Reader!=='undefined' &&
+        typeof Reader.isOpen==='function' &&
+        !Reader.isOpen()
+    ){
+        clearBookmarkOverlay();
+        return;
+    }
+
     if(!window.Bookmarks || typeof SRNavigation==='undefined' ||
        typeof SRNavigation.bookmark!=='function')return;
 
