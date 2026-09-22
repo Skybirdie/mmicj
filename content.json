@@ -2,7 +2,7 @@
   "version": "1.0",
   "content": [
     {
-      "id": "mmstar-book-001",
+      "id": "book-001",
       "type": "book",
       "title": "Roboto Specimen Book",
       "subtitle": "Sample Magazine",
@@ -11,7 +11,7 @@
       "audio": "",
       "author": "",
       "category": "Book Club",
-      "date": "202609220901"
+      "date": "202609020901"
     },
     {
       "id": "book-002",
@@ -200,7 +200,7 @@
       "date": "202608301000"
     },
     {
-      "id": "video-005",
+      "id": "mmstar-video-005",
       "type": "video",
       "title": "He sent His Son",
       "subtitle": "",
@@ -209,7 +209,7 @@
       "audio": "",
       "author": "naph",
       "category": "Meditation",
-      "date": "202609042200"
+      "date": "202609212200"
     },
     {
       "id": "book-005",
