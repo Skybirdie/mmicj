@@ -355,6 +355,7 @@ dom.progress.value=0;
 
 let bookmarkPositionFrame=null;
 let bookmarkPositionAttempts=0;
+let bookmarkStateEpoch=0;
 
 /*
  * Bookmark storage is always logical-page based.  Display mode is only a
@@ -442,6 +443,8 @@ function makeBookmarkFlag(bookmark,index){
 
 function positionBookmarkFlagsWhenReady(items,onReady){
 
+    const epoch=bookmarkStateEpoch;
+
     if(bookmarkPositionFrame){
         cancelAnimationFrame(bookmarkPositionFrame);
         bookmarkPositionFrame=null;
@@ -450,6 +453,16 @@ function positionBookmarkFlagsWhenReady(items,onReady){
     bookmarkPositionAttempts=0;
 
     const check=()=>{
+
+        if(
+            epoch!==bookmarkStateEpoch ||
+            (typeof Reader!=="undefined" &&
+             typeof Reader.isOpen==="function" &&
+             !Reader.isOpen())
+        ){
+            bookmarkPositionFrame=null;
+            return;
+        }
 
         bookmarkPositionAttempts++;
 
@@ -558,6 +571,8 @@ function positionBookmarkFlagsWhenReady(items,onReady){
 
 function scheduleBookmarkFlagReposition(){
 
+    const epoch=++bookmarkStateEpoch;
+
     /*
      * Hide the bookmark while StPageFlip settles the physical page.
      * The final refresh will calculate its position and reveal it once.
@@ -567,6 +582,15 @@ function scheduleBookmarkFlagReposition(){
     });
 
     const refresh=()=>{
+        if(
+            epoch!==bookmarkStateEpoch ||
+            (typeof Reader!=="undefined" &&
+             typeof Reader.isOpen==="function" &&
+             !Reader.isOpen())
+        ){
+            return;
+        }
+
         if(typeof refreshBookmarkState==="function"){
             refreshBookmarkState();
         }
@@ -599,6 +623,13 @@ function hideBookmarkFlag(){
 
 
 function clearBookmarkOverlay(){
+
+    bookmarkStateEpoch++;
+
+    if(bookmarkPositionFrame){
+        cancelAnimationFrame(bookmarkPositionFrame);
+        bookmarkPositionFrame=null;
+    }
 
     hideBookmarkFlag();
 

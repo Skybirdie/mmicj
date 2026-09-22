@@ -48,6 +48,9 @@ let initialized=false;
 let presentationToken=0;
 let openToken=0;
 
+/* Active PDF.js loading task. It is cancelled when a newer book replaces it. */
+let activeLoadingTask=null;
+
 const RENDER_WINDOW=6;
 
 renderer.events={
@@ -403,20 +406,22 @@ progress(
             useSystemFonts:true
         });
 
-        const resolvedPdf=await task.promise;
+        activeLoadingTask=task;
+
+        let resolvedPdf;
+        try{
+            resolvedPdf=await task.promise;
+        }finally{
+            if(activeLoadingTask===task){
+                activeLoadingTask=null;
+            }
+        }
 
         if(
     token!==openToken ||
     presentation!==presentationToken
 ){
-
-    if (
-        window.SkyMediaLoading
-    ) {
-
-        SkyMediaLoading.stop();
-    }
-
+    /* A newer open owns the loading overlay. Do not stop its sequence. */
     return;
 }
 
@@ -1063,6 +1068,17 @@ renderer.statistics=function(){
 renderer.close=function(){
     openToken++;
     presentationToken++;
+
+    if(activeLoadingTask){
+        try{
+            activeLoadingTask.destroy();
+        }catch(error){}
+        activeLoadingTask=null;
+    }
+
+    if(window.SkyMediaLoading){
+        SkyMediaLoading.stop();
+    }
 
     if(typeof Sky180FlipEngine!=="undefined"){
         Sky180FlipEngine.close();

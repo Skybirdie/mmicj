@@ -490,11 +490,12 @@ if(
 
 }
 
-    /* Never interrupt an active opening transaction with a second book.
-       The original transaction is allowed to finish; this is the primary
-       guard against the intermittent Continue/Read Again freeze. */
+    /* A different book selection supersedes an active opening transaction.
+       Renderer.open() cancels the previous PDF/PageFlip load using its
+       generation token, while the new transaction keeps the navigation lock.
+       This allows the user to change books while the first book is still loading. */
     if(openingPromise && openingBookId!==book.id){
-        return false;
+        openingSerial++;
     }
 
     /* If a different book is already fully open, close it before replacing it. */
