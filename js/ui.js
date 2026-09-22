@@ -401,6 +401,14 @@ function makeBookmarkFlag(bookmark,index){
     }
 
     /*
+     * clearBookmarkOverlay() uses display:none as a hard close barrier.
+     * A later refresh may legitimately reuse this same DOM node when a
+     * new book opens, so remove that barrier only when a bookmark is being
+     * actively rendered for an open Reader document.
+     */
+    flag.style.removeProperty('display');
+
+    /*
      * Use the custom PNG for the page overlay.
      * Fall back to the existing SVG if the PNG cannot load.
      */
@@ -616,6 +624,14 @@ function hideBookmarkFlag(){
         flag.dataset.bookmarkBook='';
         flag.dataset.bookmarkPage='';
         flag.dataset.bookmarkId='';
+
+        /*
+         * Do not rely only on opacity here. During Reader.close(), a
+         * queued render/animation callback can otherwise briefly reuse the
+         * same #bookmarkFlag element after its active class was removed.
+         * display:none makes the closed-reader state unconditional.
+         */
+        flag.style.setProperty('display','none','important');
     });
     clearExtraBookmarkFlags();
 }
