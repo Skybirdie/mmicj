@@ -2181,7 +2181,7 @@ html[data-theme="dark"] #readerPanel #toolbar .iconButton{
    the same mobile increase given to .video-library-org-button and
    .slideshow-org-button (video.css / slideshow.css). */
 @media (max-width:999px){
-  .libraryOrgButton{font-size:20px;}
+  .libraryOrgButton{font-size:22px;}
 }
 .libraryFilterIcon{font-size:18px;line-height:1;transform:rotate(180deg);}
 .libraryFilterActive{display:none;position:absolute;right:2px;top:2px;width:6px;height:6px;border-radius:50%;background:#d72626;box-shadow:0 0 0 1px var(--panel);}

@@ -209,7 +209,7 @@ transform:translateY(-2px)
    .video-library-org-button (video.css). Scoped to the sort button
    only, not the view/drawer-close buttons that share the base rule. */
 @media (max-width:999px){
-    .slideshow-org-button{font-size:23px;}
+    .slideshow-org-button{font-size:26px;}
 }
 .slideshow-org-button .icon,.slideshow-view-button .icon,.slideshow-library-drawer-close .icon{width:18px;height:18px;filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .55));}
 .slideshow-library-drawer-close{display:none}

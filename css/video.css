@@ -288,7 +288,7 @@ AppSwitcher marks the active section.
    same mobile increase given to .libraryOrgButton (reader) and
    .slideshow-org-button (slideshow.css). */
 @media (max-width:999px){
-    .video-library-org-button{font-size:24px;}
+    .video-library-org-button{font-size:27px;}
 }
 
 .video-library-org-button .icon{

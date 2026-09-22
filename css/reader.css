@@ -318,6 +318,15 @@ text-overflow:ellipsis;
 
 }
 
+/* Matches #pageIndicator:empty below - #statusMessage is empty at
+   startup (before any book has been opened or closed), but as a
+   still-present flex child of #statusBar > center it was still
+   pulling in one side of the row's gap, nudging "MMicj" (#readerTitle)
+   right of true center instead of it being the row's only item. */
+#statusMessage:empty{
+display:none;
+}
+
 #pageIndicator{
 font-size:13px;
 opacity:.82;
@@ -340,6 +349,10 @@ pointer-events:none;
 cursor:default;
 padding:0;
 min-width:0;
+}
+
+#pageIndicator:empty{
+display:none;
 }
 
 #pageIndicator.pageIndicatorActive:hover{
