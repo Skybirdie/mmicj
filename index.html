@@ -27,7 +27,7 @@
 <link rel="stylesheet" href="css/library.css">
 <link rel="stylesheet" href="css/video.css">
 <link rel="stylesheet" href="css/slideshow.css?v=1.1.0">
-<link rel="stylesheet" href="css/front-page.css?v=wave3">
+<link rel="stylesheet" href="css/front-page.css?v=release-notification-1">
 <link rel="stylesheet" href="css/share.css">
 
 <script>
@@ -163,6 +163,22 @@ body.sky-share-mode #workspacePrimaryLogo {
     <button id="frontMenuButton" type="button" aria-label="Open media navigation" aria-expanded="false">
         <svg class="icon" aria-hidden="true"><use href="#icon-menu"></use></svg>
     </button>
+
+    <!--
+         Special-release notification.
+         This is an in-page control only; it never invokes
+         browser/system notifications.
+    -->
+    <button id="frontReleaseNotification"
+            type="button"
+            aria-label="Open special release"
+            hidden>
+        <img id="frontReleaseNotificationImage"
+             src=""
+             alt=""
+             draggable="false">
+    </button>
+
     <nav id="frontMenuPanel" aria-label="Media section navigation">
         <button type="button" class="front-menu-switch" data-app-target="reader" aria-pressed="false">
             <svg class="icon" aria-hidden="true"><use href="#icon-open-book"></use></svg><span>Books</span>
@@ -656,6 +672,7 @@ stroke-linecap="round"/>
 <script src="js/slideshowUI.js"></script>
 <script src="js/frontMediaRenderer.js?v=4.2.1"></script>
 <script src="js/frontPage.js?v=4.3.1"></script>
+<script src="js/releaseNotification.js?v=1.0.0"></script>
 <script src="js/appSwitcher.js?v=1.1.0"></script>
 <script src="js/responsiveAppMenu.js"></script>
 
@@ -1586,5 +1603,24 @@ if (window.AppSwitcher) {
 </div>
 </section>
 
+
+<script>
+document.addEventListener("DOMContentLoaded", function(){
+    if (
+        window.ShareManager &&
+        typeof ShareManager.isShareMode === "function" &&
+        ShareManager.isShareMode()
+    ) {
+        return;
+    }
+
+    if (
+        window.SkyReleaseNotification &&
+        typeof SkyReleaseNotification.init === "function"
+    ) {
+        SkyReleaseNotification.init();
+    }
+});
+</script>
 </body>
 </html>
