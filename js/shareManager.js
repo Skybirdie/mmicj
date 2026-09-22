@@ -309,27 +309,24 @@ window.ShareManager = (function () {
     }
 
     /*
-     * IMPORTANT:
+     * The permanent URL is still the clean canonical route:
      *
-     * The Share button no longer sends anything to
-     * /__sky_share_prime and therefore performs NO KV write.
+     *     /s/<section>/<id>
      *
-     * The Worker receives the section and item ID directly
-     * in the permanent short URL.
+     * Before returning it, register the exact selected item in
+     * the Worker's direct-share KV record. This is important
+     * when an item has just been renamed: the new ID may not
+     * yet exist in the published catalog, but the share link
+     * must work immediately from the item that was actually
+     * selected.
+     *
+     * The KV record is keyed by section + ID, so the new ID is
+     * completely independent of the old ID.
      */
-    const baseUrl =
-        window.location.origin;
-
-    return (
-        baseUrl +
-        "/s/" +
-        encodeURIComponent(
-            normalizedSection
-        ) +
-        "/" +
-        encodeURIComponent(
-            normalizedId
-        )
+    return primeShare(
+        item,
+        normalizedSection,
+        normalizedId
     );
 }
 
