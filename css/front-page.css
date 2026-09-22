@@ -894,8 +894,8 @@ html[data-theme="dark"] #frontPage{
 
     z-index:118;
 
-    width:clamp(38px,4.2vw,50px);
-    height:clamp(38px,4.2vw,50px);
+    width:clamp(42px,5vw,54px);
+    height:clamp(42px,5vw,54px);
 
     display:grid;
     place-items:center;
