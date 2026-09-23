@@ -1308,6 +1308,15 @@ renderer.getRenderScale=function(){
     return renderScale;
 };
 
+/*
+ * Exposed so any other module that needs to hand a book/media PDF
+ * URL to pdfjsLib.getDocument() can route it through the same
+ * cross-origin-safe resolution this module uses internally,
+ * instead of re-deriving (or forgetting) the proxy rewrite. See
+ * the function definition above for why this exists.
+ */
+renderer.resolvePdfUrl=resolvePdfUrl;
+
 renderer.version="3.1.0";
 
 return renderer;

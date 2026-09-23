@@ -889,8 +889,18 @@ async function renderSlideshow(item,token){
                 throw new Error("PDF.js unavailable");
             }
 
+            /* Route through the same cross-origin-safe URL resolution
+               renderer.js uses for the book reader, so a large front-page
+               PDF (e.g. one with embedded video) streams instead of
+               fully downloading before this preview can appear. Falls
+               back to the raw URL if Renderer isn't available for some
+               reason, matching the previous behavior exactly. */
+            const resolvedUrl=window.Renderer && typeof Renderer.resolvePdfUrl==="function"
+                ?await Renderer.resolvePdfUrl(item.raw.pdfUrl)
+                :item.raw.pdfUrl;
+
             pdf=await pdfjsLib.getDocument({
-                url:item.raw.pdfUrl
+                url:resolvedUrl
             }).promise;
 
             if(token!==generation) return;
@@ -1229,7 +1239,14 @@ cleanupFn=()=>{
         try{
             if(!window.pdfjsLib)throw new Error("PDF.js unavailable");
             const url=item.raw.pdf||item.raw.media||item.raw.url||item.raw.PDF||""; if(!url)throw new Error("PDF URL missing");
-            pdf=await pdfjsLib.getDocument({url}).promise;
+
+            /* See the other pdfjsLib.getDocument() call above in this
+               file for why this matters. */
+            const resolvedUrl=window.Renderer && typeof Renderer.resolvePdfUrl==="function"
+                ?await Renderer.resolvePdfUrl(url)
+                :url;
+
+            pdf=await pdfjsLib.getDocument({url:resolvedUrl}).promise;
 
 if(token!==generation)return;
 
