@@ -948,6 +948,21 @@ async function renderMediaAnnotations(surface,page,viewport){
         return;
     }
 
+    /*
+     * Building the real play control can take a visible moment — PDF.js
+     * has to resolve information about the embedded attachment before it
+     * can render. We already know exactly where each control will sit
+     * (annotation.rect), so mark that spot right now instead of leaving
+     * the page looking incomplete until the real control appears. The
+     * marker is removed the instant real rendering finishes, success or
+     * failure — see the finally block below.
+     */
+    const placeholders=mediaAnnotations
+        .map(annotation=>createMediaAnnotationPlaceholder(annotation,viewport))
+        .filter(Boolean);
+
+    placeholders.forEach(placeholder=>layer.appendChild(placeholder));
+
     try{
         const EventBus=window.PDFEventBus;
         const eventBus=EventBus ? new EventBus() : null;
@@ -1152,7 +1167,52 @@ async function renderMediaAnnotations(surface,page,viewport){
         }
     }catch(error){
         console.error("[SkyReader] PDF media annotation rendering failed:",error,mediaAnnotations);
+    }finally{
+        placeholders.forEach(placeholder=>{
+            if(placeholder.parentNode) placeholder.parentNode.removeChild(placeholder);
+        });
     }
+}
+
+/*
+ * Builds a small, non-interactive marker at a media annotation's on-page
+ * position, using the same rect->viewport conversion PDF.js itself uses,
+ * so it lines up with where the real play control is about to appear.
+ */
+function createMediaAnnotationPlaceholder(annotation,viewport){
+    if(!annotation || !annotation.rect || !viewport ||
+       typeof viewport.convertToViewportRectangle!=="function" ||
+       !viewport.width || !viewport.height){
+        return null;
+    }
+
+    const [x1,y1,x2,y2]=viewport.convertToViewportRectangle(annotation.rect);
+    const left=Math.min(x1,x2);
+    const top=Math.min(y1,y2);
+    const width=Math.abs(x2-x1);
+    const height=Math.abs(y2-y1);
+
+    const placeholder=document.createElement("div");
+    placeholder.className="skyreaderMediaPlaceholder";
+    placeholder.setAttribute("aria-hidden","true");
+    placeholder.style.left=(left/viewport.width*100)+"%";
+    placeholder.style.top=(top/viewport.height*100)+"%";
+    placeholder.style.width=(width/viewport.width*100)+"%";
+    placeholder.style.height=(height/viewport.height*100)+"%";
+
+    const badge=document.createElement("span");
+    badge.className="skyreaderMediaPlaceholderBadge";
+
+    const spinner=document.createElement("span");
+    spinner.className="skyreaderMediaPlaceholderSpinner";
+    badge.appendChild(spinner);
+
+    const label=document.createElement("span");
+    label.textContent="Loading media…";
+    badge.appendChild(label);
+
+    placeholder.appendChild(badge);
+    return placeholder;
 }
 /*-------------------------------------------------------
  Page/cache cleanup
