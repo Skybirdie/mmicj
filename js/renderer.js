@@ -919,7 +919,10 @@ async function renderMediaAnnotations(surface,page,viewport){
     layer.innerHTML="";
     surface.annotationRenderer=null;
 
+    const annotationsStartedAt=performance.now();
     const annotations=await page.getAnnotations({intent:"display"});
+    const annotationsMs=Math.round(performance.now()-annotationsStartedAt);
+
     const mediaAnnotations=annotations.filter(annotation=>
         annotation && (
             annotation.subtype==="Screen" ||
@@ -930,6 +933,24 @@ async function renderMediaAnnotations(surface,page,viewport){
     );
 
     if(!mediaAnnotations.length) return;
+
+    /*
+     * The loading placeholder below can only appear AFTER this line —
+     * page.getAnnotations() has to resolve first before we even know a
+     * media annotation exists here. If getAnnotations() itself is the
+     * slow step (rather than the AnnotationLayer/play-control build that
+     * follows), the placeholder has nothing to precede and the page will
+     * still look blank for that stretch. This log makes that visible
+     * instead of leaving it to be re-discovered by guesswork.
+     */
+    if(annotationsMs>300){
+        console.warn(
+            "[Renderer] page.getAnnotations() took "+annotationsMs+"ms on page "+
+            (surface.element?.dataset?.page || "?")+" — this runs BEFORE the "+
+            "loading placeholder can appear, so a slow result here shows as a "+
+            "blank page with no indicator."
+        );
+    }
 
     console.info("[SkyReader] PDF media annotations:", mediaAnnotations);
 
@@ -958,8 +979,20 @@ async function renderMediaAnnotations(surface,page,viewport){
      * failure — see the finally block below.
      */
     const placeholders=mediaAnnotations
-        .map(annotation=>createMediaAnnotationPlaceholder(annotation,viewport))
+        .map(annotation=>{
+            try{
+                return createMediaAnnotationPlaceholder(annotation,viewport);
+            }catch(error){
+                console.warn("[SkyReader] Could not build media placeholder.",error,annotation);
+                return null;
+            }
+        })
         .filter(Boolean);
+
+    console.info(
+        "[SkyReader] Inserting "+placeholders.length+" of "+mediaAnnotations.length+
+        " media placeholder(s) on page "+(surface.element?.dataset?.page || "?")
+    );
 
     placeholders.forEach(placeholder=>layer.appendChild(placeholder));
 
