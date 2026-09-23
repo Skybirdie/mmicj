@@ -207,12 +207,56 @@ renderer.spread=function(){
  Page surfaces
 -------------------------------------------------------*/
 
-function createPageSurface(pageNumber){
+/*
+ * createPageSurface() used to build the FULL page DOM — canvas,
+ * 2d context, the media-annotation layer, and eight addEventListener
+ * calls — for every single page in the book, synchronously, before
+ * StPageFlip was even handed the page array. For a large book that is
+ * hundreds of canvases + contexts + listener attachments on the main
+ * thread before a single pixel is visible, which is the actual cause
+ * of the long blank wait on big items (see loadingSequence.js notes).
+ *
+ * StPageFlip's loadFromHTML() does need one real DOM node per page up
+ * front (it uses the array length/order to build its spread/page
+ * collection), but it does NOT need that node to already contain a
+ * canvas or listeners. So page creation is now split in two:
+ *
+ *   createPageShell()     - cheap. Runs for all N pages at open time.
+ *   hydratePageSurface()  - expensive. Runs once, lazily, only for a
+ *                            page that actually enters the render
+ *                            window (see getSurface()).
+ *
+ * The same DOM node is mutated in place (children appended to it
+ * later), so the reference StPageFlip already holds keeps working —
+ * nothing is swapped out from under it.
+ */
+function createPageShell(pageNumber){
     const surface=document.createElement("div");
     surface.className="sky180Page";
     surface.dataset.page=String(pageNumber);
     surface.dataset.density="soft";
     surface.setAttribute("aria-label","Page "+pageNumber);
+
+    pageSurfaces.set(pageNumber,{
+        element:surface,
+        canvas:null,
+        ctx:null,
+        annotationLayer:null,
+        annotationRenderer:null,
+        rendered:false,
+        rendering:false,
+        hydrated:false,
+        viewport:null
+    });
+
+    return surface;
+}
+
+function hydratePageSurface(pageNumber){
+    const item=pageSurfaces.get(pageNumber);
+    if(!item || item.hydrated) return item;
+
+    const surface=item.element;
 
     const canvas=document.createElement("canvas");
     canvas.className="pageCanvas";
@@ -265,18 +309,12 @@ function createPageSurface(pageNumber){
         document.dispatchEvent(new CustomEvent("skyreader:last-page-click"));
     },{passive:true});
 
-    pageSurfaces.set(pageNumber,{
-        element:surface,
-        canvas,
-        ctx,
-        annotationLayer,
-        annotationRenderer:null,
-        rendered:false,
-        rendering:false,
-        viewport:null
-    });
+    item.canvas=canvas;
+    item.ctx=ctx;
+    item.annotationLayer=annotationLayer;
+    item.hydrated=true;
 
-    return surface;
+    return item;
 }
 
 function createSyntheticPageSurface(position){
@@ -303,7 +341,7 @@ function createAllPageSurfaces(twoPageDocument=false){
 
     if(isSinglePageDevice()){
         for(let page=1;page<=pageCount;page++){
-            surfaces.push(createPageSurface(page));
+            surfaces.push(createPageShell(page));
         }
 
         /* StPageFlip is more reliable with at least two internal surfaces.
@@ -318,13 +356,13 @@ function createAllPageSurfaces(twoPageDocument=false){
            pair page 1 with the opening mask and page 2 with the closing mask,
            preventing the document from ever existing as a real 1–2 spread. */
         for(let page=1;page<=pageCount;page++){
-            surfaces.push(createPageSurface(page));
+            surfaces.push(createPageShell(page));
         }
     }else{
         surfaces.push(createSyntheticPageSurface("opening"));
 
         for(let page=1;page<=pageCount;page++){
-            surfaces.push(createPageSurface(page));
+            surfaces.push(createPageShell(page));
         }
 
         if(pageCount%2===0){
@@ -338,7 +376,15 @@ function createAllPageSurfaces(twoPageDocument=false){
 
 
 function getSurface(pageNumber){
-    return pageSurfaces.get(pageNumber)||null;
+    const item=pageSurfaces.get(pageNumber);
+    if(!item) return null;
+
+    /* Build the canvas/context/annotation-layer/listeners only now,
+       the first time this specific page is actually about to be
+       rendered — not for every page in the book at open time. */
+    if(!item.hydrated) hydratePageSurface(pageNumber);
+
+    return item;
 }
 
 /*-------------------------------------------------------
