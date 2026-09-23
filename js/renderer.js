@@ -919,7 +919,10 @@ async function renderMediaAnnotations(surface,page,viewport){
     layer.innerHTML="";
     surface.annotationRenderer=null;
 
+    const annotationsStartedAt=performance.now();
     const annotations=await page.getAnnotations({intent:"display"});
+    const annotationsMs=Math.round(performance.now()-annotationsStartedAt);
+
     const mediaAnnotations=annotations.filter(annotation=>
         annotation && (
             annotation.subtype==="Screen" ||
@@ -930,6 +933,24 @@ async function renderMediaAnnotations(surface,page,viewport){
     );
 
     if(!mediaAnnotations.length) return;
+
+    /*
+     * The loading placeholder below can only appear AFTER this line —
+     * page.getAnnotations() has to resolve first before we even know a
+     * media annotation exists here. If getAnnotations() itself is the
+     * slow step (rather than the AnnotationLayer/play-control build that
+     * follows), the placeholder has nothing to precede and the page will
+     * still look blank for that stretch. This log makes that visible
+     * instead of leaving it to be re-discovered by guesswork.
+     */
+    if(annotationsMs>300){
+        console.warn(
+            "[Renderer] page.getAnnotations() took "+annotationsMs+"ms on page "+
+            (surface.element?.dataset?.page || "?")+" — this runs BEFORE the "+
+            "loading placeholder can appear, so a slow result here shows as a "+
+            "blank page with no indicator."
+        );
+    }
 
     console.info("[SkyReader] PDF media annotations:", mediaAnnotations);
 
@@ -947,6 +968,33 @@ async function renderMediaAnnotations(surface,page,viewport){
         console.warn("[SkyReader] PDF.js AnnotationLayer unavailable.",mediaAnnotations);
         return;
     }
+
+    /*
+     * Building the real play control can take a visible moment — PDF.js
+     * has to resolve information about the embedded attachment before it
+     * can render. We already know exactly where each control will sit
+     * (annotation.rect), so mark that spot right now instead of leaving
+     * the page looking incomplete until the real control appears. The
+     * marker is removed the instant real rendering finishes, success or
+     * failure — see the finally block below.
+     */
+    const placeholders=mediaAnnotations
+        .map(annotation=>{
+            try{
+                return createMediaAnnotationPlaceholder(annotation,viewport);
+            }catch(error){
+                console.warn("[SkyReader] Could not build media placeholder.",error,annotation);
+                return null;
+            }
+        })
+        .filter(Boolean);
+
+    console.info(
+        "[SkyReader] Inserting "+placeholders.length+" of "+mediaAnnotations.length+
+        " media placeholder(s) on page "+(surface.element?.dataset?.page || "?")
+    );
+
+    placeholders.forEach(placeholder=>layer.appendChild(placeholder));
 
     try{
         const EventBus=window.PDFEventBus;
@@ -1152,7 +1200,69 @@ async function renderMediaAnnotations(surface,page,viewport){
         }
     }catch(error){
         console.error("[SkyReader] PDF media annotation rendering failed:",error,mediaAnnotations);
+    }finally{
+        placeholders.forEach(placeholder=>{
+            if(placeholder.parentNode) placeholder.parentNode.removeChild(placeholder);
+        });
     }
+}
+
+/*
+ * Builds a small, non-interactive marker at a media annotation's on-page
+ * position, so it lines up with where the real play control is about to
+ * appear.
+ *
+ * PDF.js v6 removed PageViewport.convertToViewportRectangle() — rectangles
+ * now have to be converted one corner at a time via
+ * convertToViewportPoint(). Older PDF.js builds only have the rectangle
+ * method. Both are supported here so this keeps working across versions.
+ */
+function createMediaAnnotationPlaceholder(annotation,viewport){
+    if(!annotation || !annotation.rect || !viewport ||
+       !viewport.width || !viewport.height){
+        return null;
+    }
+
+    const rect=annotation.rect;
+    let x1,y1,x2,y2;
+
+    if(typeof viewport.convertToViewportPoint==="function"){
+        [x1,y1]=viewport.convertToViewportPoint(rect[0],rect[1]);
+        [x2,y2]=viewport.convertToViewportPoint(rect[2],rect[3]);
+    }
+    else if(typeof viewport.convertToViewportRectangle==="function"){
+        [x1,y1,x2,y2]=viewport.convertToViewportRectangle(rect);
+    }
+    else{
+        return null;
+    }
+
+    const left=Math.min(x1,x2);
+    const top=Math.min(y1,y2);
+    const width=Math.abs(x2-x1);
+    const height=Math.abs(y2-y1);
+
+    const placeholder=document.createElement("div");
+    placeholder.className="skyreaderMediaPlaceholder";
+    placeholder.setAttribute("aria-hidden","true");
+    placeholder.style.left=(left/viewport.width*100)+"%";
+    placeholder.style.top=(top/viewport.height*100)+"%";
+    placeholder.style.width=(width/viewport.width*100)+"%";
+    placeholder.style.height=(height/viewport.height*100)+"%";
+
+    const badge=document.createElement("span");
+    badge.className="skyreaderMediaPlaceholderBadge";
+
+    const spinner=document.createElement("span");
+    spinner.className="skyreaderMediaPlaceholderSpinner";
+    badge.appendChild(spinner);
+
+    const label=document.createElement("span");
+    label.textContent="Loading media…";
+    badge.appendChild(label);
+
+    placeholder.appendChild(badge);
+    return placeholder;
 }
 /*-------------------------------------------------------
  Page/cache cleanup
@@ -1308,7 +1418,16 @@ renderer.getRenderScale=function(){
     return renderScale;
 };
 
-renderer.version="3.1.0";
+/*
+ * Exposed so any other module that needs to hand a book/media PDF
+ * URL to pdfjsLib.getDocument() can route it through the same
+ * cross-origin-safe resolution this module uses internally,
+ * instead of re-deriving (or forgetting) the proxy rewrite. See
+ * the function definition above for why this exists.
+ */
+renderer.resolvePdfUrl=resolvePdfUrl;
+
+renderer.version="3.2.6";
 
 return renderer;
 
