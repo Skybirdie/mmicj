@@ -104,12 +104,37 @@ function progress(percent,text){
     );
 }
 
+/* Must match PDF_PROXY_PATH in worker.js. */
+const PDF_PROXY_PATH="/__sky_pdf_proxy";
+
 async function resolvePdfUrl(value){
     const raw=String(value||"").trim();
     if(!raw) throw new Error("Book is missing a PDF URL.");
 
-    /* Absolute/data/blob URLs are already complete and must be preserved. */
-    if(/^(?:https?:|data:|blob:)/i.test(raw)) return raw;
+    /* Absolute/data/blob URLs are already complete and must be preserved —
+       EXCEPT that a cross-origin http(s) PDF (e.g. Glide's GCS bucket) is
+       routed through this app's own /__sky_pdf_proxy instead of being
+       fetched directly. A direct cross-origin fetch hides the response
+       headers PDF.js needs (Accept-Ranges/Content-Length) unless the
+       remote host's CORS policy explicitly exposes them, which is not
+       something this app controls for a third-party bucket. Without that
+       visibility PDF.js silently downloads the entire file instead of
+       streaming it — harmless for a small PDF, a multi-minute stall for
+       one bloated by embedded video/audio. Routing through the Worker
+       makes the browser's request same-origin, where none of that
+       header-visibility restriction applies. */
+    if(/^(?:https?:)/i.test(raw)){
+        try{
+            const parsed=new URL(raw);
+            if(parsed.origin!==window.location.origin){
+                return window.location.origin+PDF_PROXY_PATH+"?src="+encodeURIComponent(raw);
+            }
+        }catch(error){
+            /* Malformed — fall through and let PDF.js report the real error. */
+        }
+        return raw;
+    }
+    if(/^(?:data:|blob:)/i.test(raw)) return raw;
 
     const primary=new URL(raw,window.location.href).href;
 
