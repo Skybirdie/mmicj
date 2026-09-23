@@ -1209,17 +1209,34 @@ async function renderMediaAnnotations(surface,page,viewport){
 
 /*
  * Builds a small, non-interactive marker at a media annotation's on-page
- * position, using the same rect->viewport conversion PDF.js itself uses,
- * so it lines up with where the real play control is about to appear.
+ * position, so it lines up with where the real play control is about to
+ * appear.
+ *
+ * PDF.js v6 removed PageViewport.convertToViewportRectangle() — rectangles
+ * now have to be converted one corner at a time via
+ * convertToViewportPoint(). Older PDF.js builds only have the rectangle
+ * method. Both are supported here so this keeps working across versions.
  */
 function createMediaAnnotationPlaceholder(annotation,viewport){
     if(!annotation || !annotation.rect || !viewport ||
-       typeof viewport.convertToViewportRectangle!=="function" ||
        !viewport.width || !viewport.height){
         return null;
     }
 
-    const [x1,y1,x2,y2]=viewport.convertToViewportRectangle(annotation.rect);
+    const rect=annotation.rect;
+    let x1,y1,x2,y2;
+
+    if(typeof viewport.convertToViewportPoint==="function"){
+        [x1,y1]=viewport.convertToViewportPoint(rect[0],rect[1]);
+        [x2,y2]=viewport.convertToViewportPoint(rect[2],rect[3]);
+    }
+    else if(typeof viewport.convertToViewportRectangle==="function"){
+        [x1,y1,x2,y2]=viewport.convertToViewportRectangle(rect);
+    }
+    else{
+        return null;
+    }
+
     const left=Math.min(x1,x2);
     const top=Math.min(y1,y2);
     const width=Math.abs(x2-x1);
