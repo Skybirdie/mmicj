@@ -1427,7 +1427,7 @@ renderer.getRenderScale=function(){
  */
 renderer.resolvePdfUrl=resolvePdfUrl;
 
-renderer.version="3.2.6";
+renderer.version="3.1.0";
 
 return renderer;
 
