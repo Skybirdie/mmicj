@@ -828,7 +828,7 @@ function scheduleAnnotationWork(pageNumber,surface,page,viewport,token){
             if(token!==openToken) return;
 
             const mediaStart=performance.now();
-            await renderMediaAnnotations(surface,page,viewport);
+            await renderMediaAnnotations(surface,page,viewport,pageNumber);
             if(token!==openToken) return;
 
             const doneAt=performance.now();
@@ -864,16 +864,7 @@ async function renderLinks(surface,page,viewport){
         .querySelectorAll(".pdfLink")
         .forEach(link=>link.remove());
 
-    const annotationStart=performance.now();
     const annotations=await page.getAnnotations();
-    const annotationMs=Math.round(performance.now()-annotationStart);
-
-    if(annotationMs>250){
-        console.info(
-            "[VideoDiag] Page "+page.pageNumber+" getAnnotations (links path): "+
-            annotationMs+"ms; annotation count: "+annotations.length
-        );
-    }
 
     for(const annotation of annotations){
         if(annotation.subtype!=="Link") continue;
@@ -921,17 +912,14 @@ async function renderLinks(surface,page,viewport){
  Screen/RichMedia annotations. Existing Link annotations stay
  handled by SkyReader's current hyperlink layer.
 -------------------------------------------------------*/
-async function renderMediaAnnotations(surface,page,viewport){
+async function renderMediaAnnotations(surface,page,viewport,pageNumber){
     if(!surface || !surface.annotationLayer) return;
 
     const layer=surface.annotationLayer;
     layer.innerHTML="";
     surface.annotationRenderer=null;
 
-    const annotationStart=performance.now();
     const annotations=await page.getAnnotations({intent:"display"});
-    const annotationMs=Math.round(performance.now()-annotationStart);
-
     const mediaAnnotations=annotations.filter(annotation=>
         annotation && (
             annotation.subtype==="Screen" ||
@@ -942,12 +930,6 @@ async function renderMediaAnnotations(surface,page,viewport){
     );
 
     if(!mediaAnnotations.length) return;
-
-    console.info(
-        "[VideoDiag] Page "+page.pageNumber+" media detected — "+
-        "getAnnotations: "+annotationMs+"ms; "+
-        "media annotations: "+mediaAnnotations.length
-    );
 
     console.info("[SkyReader] PDF media annotations:", mediaAnnotations);
 
@@ -1000,8 +982,6 @@ async function renderMediaAnnotations(surface,page,viewport){
 
         surface.annotationRenderer=rendererLayer;
 
-        const mediaRenderStart=performance.now();
-
         await rendererLayer.render({
             viewport:pdfViewport,
             annotations:mediaAnnotations,
@@ -1012,13 +992,6 @@ async function renderMediaAnnotations(surface,page,viewport){
             enableScripting:false
         });
 
-        const mediaRenderMs=Math.round(performance.now()-mediaRenderStart);
-        console.info(
-            "[VideoDiag] Page "+page.pageNumber+" AnnotationLayer.render: "+
-            mediaRenderMs+"ms; getAnnotations: "+annotationMs+"ms; total media path: "+
-            Math.round(performance.now()-annotationStart)+"ms"
-        );
-
         const mediaContainer=layer.querySelector(".mediaAnnotation");
         const playButton=layer.querySelector(".mediaAnnotation .mediaPlayButton");
 
@@ -1027,6 +1000,32 @@ async function renderMediaAnnotations(surface,page,viewport){
             if(playButton){
                 playButton.title=playButton.title || "Play embedded video";
                 playButton.setAttribute("aria-label",playButton.getAttribute("aria-label") || "Play embedded video");
+            }
+
+            /*
+             * [VideoDiag] Embedded-video lifecycle timing.
+             *
+             * The annotation/canvas path above is not where the visible
+             * delay lives — PDF.js creates the actual <video> only after
+             * its play button is pressed, and everything between that
+             * press and the first visible frame happens outside the
+             * annotation layer entirely (attachment retrieval, Blob/src
+             * assignment, then the browser's own media pipeline).
+             *
+             * This block times exactly that path — press -> element
+             * created -> src assigned -> loadstart -> loadedmetadata ->
+             * loadeddata -> canplay — and logs one summary once the video
+             * is ready to play. It does not touch page rendering, the
+             * annotation scheduler, or worker.js.
+             */
+            let playPressedAt=null;
+            if(playButton){
+                playButton.addEventListener("pointerdown",()=>{
+                    if(playPressedAt===null) playPressedAt=performance.now();
+                },{capture:true,passive:true});
+                playButton.addEventListener("click",()=>{
+                    if(playPressedAt===null) playPressedAt=performance.now();
+                },{capture:true,passive:true});
             }
 
             /*
@@ -1044,6 +1043,64 @@ async function renderMediaAnnotations(surface,page,viewport){
                 video.controls=false;
                 video.setAttribute("playsinline","");
                 video.setAttribute("webkit-playsinline","");
+
+                /* --- [VideoDiag] instrumentation start --- */
+                (()=>{
+                    const t0=playPressedAt!==null ? playPressedAt : performance.now();
+                    const t0Label=playPressedAt!==null ? "" : " (no press captured — timing from element creation)";
+                    const elapsed=()=>Math.round(performance.now()-t0);
+                    const timings={"element created":elapsed()};
+
+                    const record=(label)=>{
+                        if(timings[label]!==undefined) return;
+                        timings[label]=elapsed();
+                    };
+
+                    const report=()=>{
+                        const lines=Object.keys(timings)
+                            .map(label=>"  "+label.padEnd(18)+String(timings[label])+"ms")
+                            .join("\n");
+                        console.info(
+                            "[VideoDiag] Page "+pageNumber+" embedded video"+t0Label+"\n"+lines
+                        );
+                    };
+
+                    /* currentSrc reflects whichever mechanism PDF.js used —
+                       a .src assignment, a src attribute, or a <source>
+                       child — so polling it catches "src assigned" without
+                       assuming which one PDF.js picked. */
+                    if(video.currentSrc){
+                        record("src assigned");
+                    }else{
+                        let rafId=null;
+                        const pollSrc=()=>{
+                            if(video.currentSrc){
+                                record("src assigned");
+                                return;
+                            }
+                            rafId=requestAnimationFrame(pollSrc);
+                        };
+                        rafId=requestAnimationFrame(pollSrc);
+                        video.addEventListener("loadstart",()=>{
+                            if(rafId!==null) cancelAnimationFrame(rafId);
+                        },{once:true});
+                    }
+
+                    video.addEventListener("loadstart",()=>record("loadstart"),{once:true});
+                    video.addEventListener("loadedmetadata",()=>record("loadedmetadata"),{once:true});
+                    video.addEventListener("loadeddata",()=>record("loadeddata"),{once:true});
+                    video.addEventListener("canplay",()=>{
+                        record("canplay");
+                        report();
+                    },{once:true});
+                    video.addEventListener("error",()=>{
+                        console.warn(
+                            "[VideoDiag] Page "+pageNumber+" embedded video errored before canplay",
+                            video.error
+                        );
+                    },{once:true});
+                })();
+                /* --- [VideoDiag] instrumentation end --- */
 
                 const controls=document.createElement("div");
                 controls.className="skyreaderMediaControls";
