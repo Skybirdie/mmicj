@@ -39,6 +39,38 @@ const OG_LOGO =
 const OG_IMAGE_PATH =
   "/__sky_og_image";
 
+/* =========================================================
+   PDF RANGE PROXY
+
+   Book PDFs are hosted on the Glide GCS bucket — a different
+   origin from this app. GCS supports HTTP range requests fine,
+   but a cross-origin fetch from the BROWSER can't see the
+   Accept-Ranges / Content-Length response headers needed to
+   confirm that support, unless the bucket's CORS policy
+   explicitly exposes them (it doesn't, and it isn't ours to
+   change). PDF.js reacts to that missing visibility by quietly
+   downloading the entire file instead of streaming it — fine
+   for a normal PDF, a multi-minute stall for one bloated by
+   embedded video/audio.
+
+   This route re-fetches the source PDF from the Worker instead
+   (server-to-server, not subject to browser CORS), forwarding
+   the incoming Range header both ways, and returns it to the
+   browser same-origin — where none of the header-visibility
+   restrictions above apply. PDF.js gets its 206 responses back
+   and streams the book normally again.
+========================================================= */
+
+const PDF_PROXY_PATH =
+  "/__sky_pdf_proxy";
+
+/* Only ever proxy to hosts we expect book PDFs to live on. This
+   is not an open relay for arbitrary URLs. */
+const PDF_PROXY_ALLOWED_HOSTS =
+  new Set([
+    "storage.googleapis.com"
+  ]);
+
 const SHARE_PATH_PREFIX =
   "/s/";
 
@@ -2337,6 +2369,158 @@ async function serveOgImage(
 }
 
 /* =========================================================
+   PDF RANGE PROXY (handler)
+========================================================= */
+
+async function handlePdfProxy(
+  request,
+  env
+) {
+  const url =
+    new URL(
+      request.url
+    );
+
+  const src =
+    url.searchParams.get(
+      "src"
+    );
+
+  if (!src) {
+    return new Response(
+      "Missing src parameter.",
+      { status: 400 }
+    );
+  }
+
+  let target;
+
+  try {
+    target =
+      new URL(
+        src
+      );
+  }
+  catch (error) {
+    return new Response(
+      "Invalid src URL.",
+      { status: 400 }
+    );
+  }
+
+  if (
+    target.protocol !== "https:" ||
+    !PDF_PROXY_ALLOWED_HOSTS.has(
+      target.hostname
+    )
+  ) {
+    return new Response(
+      "Source host is not allowed.",
+      { status: 403 }
+    );
+  }
+
+  /* Forward the browser's Range header (or its absence, for the
+     very first probing request PDF.js sometimes makes without
+     one) straight through to the source. */
+  const upstreamHeaders =
+    new Headers();
+
+  const range =
+    request.headers.get(
+      "Range"
+    );
+
+  if (range) {
+    upstreamHeaders.set(
+      "Range",
+      range
+    );
+  }
+
+  let upstreamResponse;
+
+  try {
+    upstreamResponse =
+      await fetch(
+        target.toString(),
+        {
+          headers:
+            upstreamHeaders,
+
+          /* Let Cloudflare's edge cache full-object bytes across
+             requests/readers once fetched, without buffering the
+             whole thing in Worker memory on this request. */
+          cf: {
+            cacheEverything: true,
+            cacheTtl: 86400
+          }
+        }
+      );
+  }
+  catch (error) {
+    return new Response(
+      "Upstream PDF fetch failed: " +
+        (error && error.message ? error.message : String(error)),
+      { status: 502 }
+    );
+  }
+
+  /* Mirror status (200 or 206) and only the headers PDF.js
+     actually needs. This response is same-origin as far as the
+     browser is concerned, so there is no CORS exposure list to
+     satisfy — every header set here is simply visible. */
+  const headers =
+    new Headers();
+
+  const passthroughHeaders =
+    [
+      "content-type",
+      "content-length",
+      "content-range",
+      "accept-ranges",
+      "cache-control",
+      "etag",
+      "last-modified"
+    ];
+
+  for (const name of passthroughHeaders) {
+    const value =
+      upstreamResponse.headers.get(
+        name
+      );
+
+    if (value) {
+      headers.set(
+        name,
+        value
+      );
+    }
+  }
+
+  /* GCS returns this on a 200, but be explicit regardless — it's
+     the exact signal PDF.js checks before it will attempt range
+     requests at all. */
+  if (!headers.has("accept-ranges")) {
+    headers.set(
+      "accept-ranges",
+      "bytes"
+    );
+  }
+
+  return new Response(
+    upstreamResponse.body,
+    {
+      status:
+        upstreamResponse.status,
+      statusText:
+        upstreamResponse.statusText,
+      headers
+    }
+  );
+}
+
+/* =========================================================
    SHARE PRIME
 ========================================================= */
 
@@ -3581,6 +3765,7 @@ if (storedCount > 0) {
     );
   }
 }
+
     if (
       sample.length > 0
     ) {
@@ -3658,6 +3843,20 @@ export default {
       OG_IMAGE_PATH
     ) {
       return serveOgImage(
+        request,
+        env
+      );
+    }
+
+    /* -----------------------------------------------------
+       PDF range proxy
+    ----------------------------------------------------- */
+
+    if (
+      url.pathname ===
+      PDF_PROXY_PATH
+    ) {
+      return handlePdfProxy(
         request,
         env
       );
