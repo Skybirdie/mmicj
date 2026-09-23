@@ -776,28 +776,9 @@ async function renderPage(pageNumber,visible=false,token=openToken){
         ctx.setTransform(1,0,0,1,0,0);
         ctx.clearRect(0,0,surface.canvas.width,surface.canvas.height);
 
-        /*
-         * annotationMode intentionally disabled here. Left at its pdf.js
-         * default, page.render() resolves and bakes EVERY annotation
-         * (including Screen/RichMedia video annotations) into the canvas
-         * as part of this same awaited call — on top of the fact that
-         * SkyReader already builds its own interactive link layer
-         * (renderLinks) and its own media/AnnotationLayer overlay
-         * (renderMediaAnnotations) a moment later. For a plain page that
-         * extra resolution is cheap and invisible. For a page carrying an
-         * embedded video, resolving the RichMedia/Screen annotation's
-         * Configurations/Instances/Assets tree is not cheap, and it was
-         * happening INSIDE the blocking paint path — which is exactly why
-         * those pages sat blank noticeably longer than ordinary pages.
-         * Disabling it here removes that duplicate work from first paint;
-         * SkyReader's own overlay (already backgrounded via
-         * scheduleAnnotationWork, see below) remains the only thing that
-         * ever draws links or media controls.
-         */
         await page.render({
             canvasContext:ctx,
-            viewport,
-            annotationMode:(window.pdfjsLib && pdfjsLib.AnnotationMode) ? pdfjsLib.AnnotationMode.DISABLE : 0
+            viewport
         }).promise;
 
         if(token!==openToken) return;
