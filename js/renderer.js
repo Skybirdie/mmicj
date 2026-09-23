@@ -51,15 +51,6 @@ let openToken=0;
 /* Active PDF.js loading task. It is cancelled when a newer book replaces it. */
 let activeLoadingTask=null;
 
-/*
- * Annotation work is deliberately serialized. This prevents several PDF.js
- * AnnotationLayer/media jobs from competing for the main thread at the same
- * time and lets the currently visible page jump to the front of the queue.
- */
-let annotationJobs=[];
-let annotationWorkerRunning=false;
-let annotationJobSequence=0;
-
 const RENDER_WINDOW=6;
 
 renderer.events={
@@ -276,7 +267,6 @@ function createPageShell(pageNumber){
         canvas:null,
         ctx:null,
         annotationLayer:null,
-        mediaPlaceholderLayer:null,
         annotationRenderer:null,
         rendered:false,
         rendering:false,
@@ -304,32 +294,9 @@ function hydratePageSurface(pageNumber){
 
     surface.appendChild(canvas);
 
-    /*
-     * Lightweight media placeholder layer.
-     *
-     * This sits underneath PDF.js's real AnnotationLayer so a page that
-     * contains embedded media never looks empty while PDF.js is doing the
-     * comparatively expensive media annotation construction. The placeholder
-     * is pointer-transparent and is removed/hidden as soon as the real media
-     * annotation has been rendered.
-     */
-    const mediaPlaceholderLayer=document.createElement("div");
-    mediaPlaceholderLayer.className="skyreaderMediaPlaceholderLayer";
-    mediaPlaceholderLayer.setAttribute("aria-hidden","true");
-    Object.assign(mediaPlaceholderLayer.style,{
-        position:"absolute",
-        inset:"0",
-        overflow:"hidden",
-        pointerEvents:"none",
-        zIndex:"4"
-    });
-
-    surface.appendChild(mediaPlaceholderLayer);
-
     /* PDF.js media annotation layer. StPageFlip carries this DOM layer with the page. */
     const annotationLayer=document.createElement("div");
     annotationLayer.className="annotationLayer skyreaderMediaAnnotationLayer";
-    annotationLayer.style.zIndex="5";
 
     /* Media annotations are interactive content, not page-turn targets.
        Stop their mouse/touch/pointer events from bubbling into StPageFlip
@@ -370,7 +337,6 @@ function hydratePageSurface(pageNumber){
     item.canvas=canvas;
     item.ctx=ctx;
     item.annotationLayer=annotationLayer;
-    item.mediaPlaceholderLayer=mediaPlaceholderLayer;
     item.hydrated=true;
 
     return item;
@@ -842,7 +808,7 @@ async function renderPage(pageNumber,visible=false,token=openToken){
          * without holding up first paint, the render-window scheduler, or
          * (most importantly) the initial "ready" reveal.
          */
-        scheduleAnnotationWork(pageNumber,surface,page,viewport,token,visible);
+        scheduleAnnotationWork(pageNumber,surface,page,viewport,token);
 
     }
     finally{
@@ -854,309 +820,94 @@ async function renderPage(pageNumber,visible=false,token=openToken){
  Deferred link/media-annotation wiring (see renderPage above)
 -------------------------------------------------------*/
 
-function scheduleAnnotationWork(pageNumber,surface,page,viewport,token,visible=false){
-    if(token!==openToken || !surface || !page) return;
-
-    /* Avoid duplicate jobs if a page is scheduled by more than one path. */
-    const existing=annotationJobs.find(job=>
-        job.pageNumber===pageNumber && job.token===token
-    );
-    if(existing){
-        if(visible) existing.visible=true;
-        return;
-    }
-
-    annotationJobs.push({
-        pageNumber,
-        surface,
-        page,
-        viewport,
-        token,
-        visible:Boolean(visible),
-        sequence:++annotationJobSequence
-    });
-
-    runNextAnnotationJob();
-}
-
-function annotationJobPriority(job){
-    if(job.visible) return -100000;
-    if(job.pageNumber===currentPage) return -90000;
-
-    /* Keep nearby pages ahead of distant background pages. */
-    return Math.abs(job.pageNumber-currentPage)*100+job.sequence;
-}
-
-function runNextAnnotationJob(){
-    if(annotationWorkerRunning) return;
-
-    const validJobs=annotationJobs.filter(job=>job.token===openToken);
-    annotationJobs=validJobs;
-
-    if(!annotationJobs.length) return;
-
-    annotationJobs.sort((a,b)=>annotationJobPriority(a)-annotationJobPriority(b));
-    const job=annotationJobs.shift();
-    annotationWorkerRunning=true;
-
+function scheduleAnnotationWork(pageNumber,surface,page,viewport,token){
     (async()=>{
+        const linksStart=performance.now();
         try{
-            await processAnnotationJob(job);
-        }catch(error){
-            if(job.token===openToken){
+            await renderLinks(surface,page,viewport);
+            if(token!==openToken) return;
+
+            const mediaStart=performance.now();
+            await renderMediaAnnotations(surface,page,viewport);
+            if(token!==openToken) return;
+
+            const doneAt=performance.now();
+            const linksMs=Math.round(mediaStart-linksStart);
+            const mediaMs=Math.round(doneAt-mediaStart);
+
+            /*
+             * Loud on purpose. If a page's annotation/media wiring is slow
+             * enough for a person to notice, this line says so and says
+             * which half (hyperlinks vs. embedded media) is responsible,
+             * instead of leaving it to be re-discovered by guesswork.
+             */
+            if(linksMs+mediaMs>750){
                 console.warn(
-                    "[Renderer] Annotation wiring failed for page",
-                    job.pageNumber,
-                    error
+                    "[Renderer] Page "+pageNumber+" annotation wiring was slow — "+
+                    "links: "+linksMs+"ms, media: "+mediaMs+"ms."
                 );
             }
-        }finally{
-            annotationWorkerRunning=false;
-            /* Yield one frame so the browser can paint the newly attached media. */
-            setTimeout(runNextAnnotationJob,0);
+        }catch(error){
+            if(token===openToken){
+                console.warn("[Renderer] Annotation wiring failed for page",pageNumber,error);
+            }
         }
     })();
-}
-
-async function processAnnotationJob(job){
-    const {
-        pageNumber,
-        surface,
-        page,
-        viewport,
-        token
-    }=job;
-
-    if(token!==openToken) return;
-
-    /*
-     * One getAnnotations() call per page is enough. The old implementation
-     * called it once for links and again for media, which duplicated one of
-     * the more expensive parts of annotation setup. We time this separately
-     * so the console can distinguish annotation-data retrieval from actual
-     * AnnotationLayer construction.
-     */
-    const annotationsStartedAt=performance.now();
-    const annotations=await page.getAnnotations({intent:"display"});
-    const getAnnotationsMs=Math.round(performance.now()-annotationsStartedAt);
-
-    if(token!==openToken) return;
-
-    const mediaAnnotations=annotations.filter(annotation=>
-        annotation && (
-            annotation.subtype==="Screen" ||
-            annotation.subtype==="RichMedia" ||
-            annotation.subtype==="Sound" ||
-            annotation.subtype==="Movie"
-        )
-    );
-
-    const linkAnnotations=annotations.filter(annotation=>
-        annotation && annotation.subtype==="Link"
-    );
-
-    if(getAnnotationsMs>250){
-        console.info(
-            "[Renderer] Page "+pageNumber+
-            " getAnnotations(): "+getAnnotationsMs+
-            "ms (media: "+mediaAnnotations.length+
-            ", links: "+linkAnnotations.length+")"
-        );
-    }
-
-    /*
-     * Media is intentionally first. As soon as the annotation rectangles are
-     * known, put a pointer-transparent placeholder on the page BEFORE asking
-     * PDF.js to construct the real media annotation. This is the important
-     * perceptual fix: the user sees that the page contains a video even while
-     * AnnotationLayer.render() is still working.
-     */
-    if(mediaAnnotations.length){
-        showMediaPlaceholders(
-            surface,
-            mediaAnnotations,
-            viewport,
-            pageNumber
-        );
-    }else{
-        clearMediaPlaceholders(surface);
-    }
-
-    if(token!==openToken) return;
-
-    let mediaMs=0;
-    if(mediaAnnotations.length){
-        const mediaStartedAt=performance.now();
-        await renderMediaAnnotations(
-            surface,
-            page,
-            viewport,
-            mediaAnnotations
-        );
-        mediaMs=Math.round(performance.now()-mediaStartedAt);
-
-        if(token!==openToken) return;
-    }
-
-    /* Links are deliberately lower priority than media. */
-    const linksStartedAt=performance.now();
-    await renderLinks(surface,page,viewport,linkAnnotations);
-    const linksMs=Math.round(performance.now()-linksStartedAt);
-
-    if(token!==openToken) return;
-
-    const totalMs=getAnnotationsMs+mediaMs+linksMs;
-
-    if(totalMs>750 || getAnnotationsMs>250 || mediaMs>500){
-        console.info(
-            "[Renderer] Page "+pageNumber+
-            " annotation timing — "+
-            "getAnnotations: "+getAnnotationsMs+"ms, "+
-            "AnnotationLayer/media: "+mediaMs+"ms, "+
-            "links: "+linksMs+"ms, "+
-            "total: "+totalMs+"ms."
-        );
-    }
-}
-
-/*-------------------------------------------------------
- Immediate embedded-media placeholders
--------------------------------------------------------*/
-
-function clearMediaPlaceholders(surface){
-    const layer=surface && surface.mediaPlaceholderLayer;
-    if(!layer) return;
-    layer.replaceChildren();
-    layer.style.display="none";
-}
-
-function showMediaPlaceholders(surface,mediaAnnotations,viewport,pageNumber){
-    const layer=surface && surface.mediaPlaceholderLayer;
-    if(!layer || !viewport) return;
-
-    layer.replaceChildren();
-    layer.style.display="block";
-
-    for(const annotation of mediaAnnotations){
-        if(!annotation || !Array.isArray(annotation.rect) || annotation.rect.length<4){
-            continue;
-        }
-
-        let rect;
-        try{
-            rect=typeof viewport.convertToViewportRectangle==="function"
-                ? viewport.convertToViewportRectangle(annotation.rect)
-                : annotation.rect;
-        }catch(error){
-            rect=annotation.rect;
-        }
-
-        const left=Math.min(Number(rect[0])||0,Number(rect[2])||0);
-        const top=Math.min(Number(rect[1])||0,Number(rect[3])||0);
-        const right=Math.max(Number(rect[0])||0,Number(rect[2])||0);
-        const bottom=Math.max(Number(rect[1])||0,Number(rect[3])||0);
-        const width=Math.max(1,right-left);
-        const height=Math.max(1,bottom-top);
-
-        const placeholder=document.createElement("div");
-        placeholder.className="skyreaderMediaPlaceholder";
-        placeholder.dataset.page=String(pageNumber);
-        placeholder.setAttribute("aria-hidden","true");
-
-        Object.assign(placeholder.style,{
-            position:"absolute",
-            left:left+"px",
-            top:top+"px",
-            width:width+"px",
-            height:height+"px",
-            boxSizing:"border-box",
-            display:"flex",
-            alignItems:"center",
-            justifyContent:"center",
-            overflow:"hidden",
-            pointerEvents:"none",
-            background:"rgba(20,20,20,0.08)",
-            border:"1px solid rgba(120,120,120,0.24)",
-            borderRadius:"2px",
-            color:"rgba(70,70,70,0.75)",
-            fontFamily:"system-ui,-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif",
-            fontSize:"12px",
-            lineHeight:"1.2",
-            textAlign:"center"
-        });
-
-        const content=document.createElement("div");
-        content.style.display="flex";
-        content.style.flexDirection="column";
-        content.style.alignItems="center";
-        content.style.justifyContent="center";
-        content.style.gap="5px";
-        content.style.maxWidth="90%";
-
-        const play=document.createElement("div");
-        play.textContent="▶";
-        Object.assign(play.style,{
-            width:"30px",
-            height:"30px",
-            borderRadius:"50%",
-            display:"flex",
-            alignItems:"center",
-            justifyContent:"center",
-            background:"rgba(0,0,0,0.55)",
-            color:"#fff",
-            fontSize:"13px",
-            paddingLeft:"2px",
-            boxSizing:"border-box"
-        });
-
-        const label=document.createElement("div");
-        label.textContent="Embedded video";
-        label.style.whiteSpace="nowrap";
-        label.style.overflow="hidden";
-        label.style.textOverflow="ellipsis";
-
-        content.append(play,label);
-        placeholder.appendChild(content);
-        layer.appendChild(placeholder);
-    }
 }
 
 /*-------------------------------------------------------
  Hyperlinks
 -------------------------------------------------------*/
 
-async function renderLinks(surface,page,viewport,annotations=[]){
+async function renderLinks(surface,page,viewport){
     surface.element
         .querySelectorAll(".pdfLink")
         .forEach(link=>link.remove());
 
+    const annotationStart=performance.now();
+    const annotations=await page.getAnnotations();
+    const annotationMs=Math.round(performance.now()-annotationStart);
+
+    if(annotationMs>250){
+        console.info(
+            "[VideoDiag] Page "+page.pageNumber+" getAnnotations (links path): "+
+            annotationMs+"ms; annotation count: "+annotations.length
+        );
+    }
+
     for(const annotation of annotations){
         if(annotation.subtype!=="Link") continue;
+
         const link=document.createElement("a");
         link.className="pdfLink";
+        link.style.position="absolute";
         link.style.left=(annotation.rect[0]/viewport.width*100)+"%";
         link.style.top=((viewport.height-annotation.rect[3])/viewport.height*100)+"%";
         link.style.width=((annotation.rect[2]-annotation.rect[0])/viewport.width*100)+"%";
         link.style.height=((annotation.rect[3]-annotation.rect[1])/viewport.height*100)+"%";
+        link.style.cursor="pointer";
+        link.style.background="transparent";
+        link.style.zIndex="20";
 
         if(annotation.url){
+            /* External PDF links open in a separate browser tab/window.
+               Keep the reader page intact while allowing the device/browser
+               to decide whether the new destination becomes a tab or window. */
             link.href=annotation.url;
             link.target="_blank";
             link.rel="noopener noreferrer";
         }
         else if(annotation.dest){
             link.href="#";
-            link.addEventListener("click",async event=>{
+            link.onclick=async event=>{
                 event.preventDefault();
-                try{
-                    const destination=await pdf.getDestination(annotation.dest);
-                    if(!destination || !destination[0]) return;
-                    const pageIndex=await pdf.getPageIndex(destination[0]);
-                    renderer.goTo(pageIndex+1);
-                }catch(error){
-                    console.warn("[Renderer] PDF internal link failed.",error);
-                }
-            });
+
+                const destination=await pdf.getDestination(annotation.dest);
+                if(!destination) return;
+
+                const pageIndex=await pdf.getPageIndex(destination[0]);
+                renderer.goTo(pageIndex+1);
+            };
         }
 
         surface.element.appendChild(link);
@@ -1170,19 +921,35 @@ async function renderLinks(surface,page,viewport,annotations=[]){
  Screen/RichMedia annotations. Existing Link annotations stay
  handled by SkyReader's current hyperlink layer.
 -------------------------------------------------------*/
-async function renderMediaAnnotations(surface,page,viewport,mediaAnnotations){
+async function renderMediaAnnotations(surface,page,viewport){
     if(!surface || !surface.annotationLayer) return;
 
     const layer=surface.annotationLayer;
     layer.innerHTML="";
     surface.annotationRenderer=null;
 
-    if(!mediaAnnotations || !mediaAnnotations.length){
-        clearMediaPlaceholders(surface);
-        return;
-    }
+    const annotationStart=performance.now();
+    const annotations=await page.getAnnotations({intent:"display"});
+    const annotationMs=Math.round(performance.now()-annotationStart);
 
-    console.info("[SkyReader] PDF media annotations:",mediaAnnotations);
+    const mediaAnnotations=annotations.filter(annotation=>
+        annotation && (
+            annotation.subtype==="Screen" ||
+            annotation.subtype==="RichMedia" ||
+            annotation.subtype==="Sound" ||
+            annotation.subtype==="Movie"
+        )
+    );
+
+    if(!mediaAnnotations.length) return;
+
+    console.info(
+        "[VideoDiag] Page "+page.pageNumber+" media detected — "+
+        "getAnnotations: "+annotationMs+"ms; "+
+        "media annotations: "+mediaAnnotations.length
+    );
+
+    console.info("[SkyReader] PDF media annotations:", mediaAnnotations);
 
     /*
        IMPORTANT:
@@ -1192,8 +959,7 @@ async function renderMediaAnnotations(surface,page,viewport,mediaAnnotations){
        through PDFLinkService.getAttachmentContent().
 
        Do not create a second diagnostic button here: PDF.js itself owns the
-       interactive media control. The placeholder underneath is only a
-       temporary visual signal while this method is running.
+       interactive media control.
     */
     if(!window.pdfjsLib || !pdfjsLib.AnnotationLayer){
         console.warn("[SkyReader] PDF.js AnnotationLayer unavailable.",mediaAnnotations);
@@ -1234,6 +1000,8 @@ async function renderMediaAnnotations(surface,page,viewport,mediaAnnotations){
 
         surface.annotationRenderer=rendererLayer;
 
+        const mediaRenderStart=performance.now();
+
         await rendererLayer.render({
             viewport:pdfViewport,
             annotations:mediaAnnotations,
@@ -1244,8 +1012,12 @@ async function renderMediaAnnotations(surface,page,viewport,mediaAnnotations){
             enableScripting:false
         });
 
-        /* The real PDF.js media surface is now present; remove the placeholder. */
-        clearMediaPlaceholders(surface);
+        const mediaRenderMs=Math.round(performance.now()-mediaRenderStart);
+        console.info(
+            "[VideoDiag] Page "+page.pageNumber+" AnnotationLayer.render: "+
+            mediaRenderMs+"ms; getAnnotations: "+annotationMs+"ms; total media path: "+
+            Math.round(performance.now()-annotationStart)+"ms"
+        );
 
         const mediaContainer=layer.querySelector(".mediaAnnotation");
         const playButton=layer.querySelector(".mediaAnnotation .mediaPlayButton");
@@ -1327,6 +1099,20 @@ async function renderMediaAnnotations(surface,page,viewport,mediaAnnotations){
                     mute.setAttribute("aria-label",mute.title);
                 };
 
+                /*
+                 * Only stopPropagation for touch/pointer start-end events —
+                 * calling preventDefault() on touchstart/touchend (or
+                 * pointerdown/pointerup for a touch-type pointer) tells the
+                 * browser to skip synthesizing the follow-up "click" event
+                 * for that tap. That's harmless on desktop (native mouse
+                 * clicks fire regardless of what happens on mousedown/up),
+                 * but on mobile it silently killed every button's click
+                 * handler below — which is why these controls worked on
+                 * desktop but not on touch devices. stopPropagation() alone
+                 * is enough to keep the tap from reaching the media
+                 * container's click-to-toggle handler or bubbling out to
+                 * the page-turn layer.
+                 */
                 const stopTurn=event=>{
                     event.preventDefault();
                     event.stopPropagation();
@@ -1392,7 +1178,6 @@ async function renderMediaAnnotations(surface,page,viewport,mediaAnnotations){
             console.warn("[SkyReader] PDF.js returned no mediaAnnotation element.",mediaAnnotations);
         }
     }catch(error){
-        /* Keep the placeholder visible if AnnotationLayer construction fails. */
         console.error("[SkyReader] PDF media annotation rendering failed:",error,mediaAnnotations);
     }
 }
@@ -1495,8 +1280,6 @@ renderer.close=function(){
     pageCache.clear();
     renderedPages.clear();
     renderingQueue.clear();
-    annotationJobs=[];
-    annotationWorkerRunning=false;
 
     currentBook=null;
     currentPage=1;
