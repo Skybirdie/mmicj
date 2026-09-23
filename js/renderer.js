@@ -454,6 +454,23 @@ progress(
 
         activeLoadingTask=task;
 
+        /*
+         * This fetch/parse phase is timed on purpose. getDocument() only
+         * needs the document's structure (xref/trailer), not the full byte
+         * content of every embedded object — PDF.js streams the rest on
+         * demand PROVIDED the server advertises byte-range support
+         * (Accept-Ranges + a real Content-Length, no Content-Encoding on
+         * the response). If that support is missing or broken for this
+         * asset, PDF.js silently falls back to downloading the ENTIRE file
+         * before this promise resolves — and a book with large embedded
+         * video/audio attachments can turn that into a multi-minute stall
+         * that has nothing to do with page count. If fetchMs below comes
+         * back large, check the .pdf request in the Network tab: a 206
+         * response with Accept-Ranges: bytes means streaming worked; a
+         * single 200 response sized to the whole file means it didn't.
+         */
+        const fetchStartedAt=performance.now();
+
         let resolvedPdf;
         try{
             resolvedPdf=await task.promise;
@@ -461,6 +478,16 @@ progress(
             if(activeLoadingTask===task){
                 activeLoadingTask=null;
             }
+        }
+
+        const fetchMs=Math.round(performance.now()-fetchStartedAt);
+        if(fetchMs>2000){
+            console.warn(
+                "[Renderer] PDF fetch/parse for \""+pdfUrl+"\" took "+fetchMs+"ms. "+
+                "If this book has large embedded media, check whether the server "+
+                "returned 206 Partial Content (range requests working) or a single "+
+                "200 response (full-file download, no streaming)."
+            );
         }
 
         if(
@@ -529,11 +556,23 @@ progress(
          */
         const initialPages=(singlePage || pageCount===1) ? [1] : [1,2];
 
+        const paintStartedAt=performance.now();
+
         await Promise.all(
             initialPages.map(pageNumber=>renderPage(pageNumber,true,token))
         );
 
         if(token!==openToken) return;
+
+        const paintMs=Math.round(performance.now()-paintStartedAt);
+        if(paintMs>1500){
+            console.warn(
+                "[Renderer] Painting the initial page(s) ("+initialPages.join(",")+
+                ") took "+paintMs+"ms. Note: since annotation/media wiring is now "+
+                "backgrounded (see scheduleAnnotationWork), this number reflects "+
+                "pdf.js's own page.render() cost, not link/video setup."
+            );
+        }
 
         if (
     window.SkyMediaLoading
@@ -722,18 +761,73 @@ async function renderPage(pageNumber,visible=false,token=openToken){
         surface.rendered=true;
         renderedPages.add(pageNumber);
 
-        await renderLinks(surface,page,viewport);
-        await renderMediaAnnotations(surface,page,viewport);
-
         if(pageNumber===currentPage){
             currentViewport=viewport;
             renderer.resize();
         }
 
+        /*
+         * Links and media annotations are wiring, not pixels — and for a
+         * page carrying an embedded video/audio attachment, wiring them up
+         * (page.getAnnotations() + PDF.js's AnnotationLayer/MediaAnnotation
+         * construction) can be disproportionately slow compared to painting
+         * the page image itself. That cost used to be awaited right here,
+         * inside renderPage(), which means it was awaited by every caller
+         * of renderPage() too — including renderer.open()'s
+         * Promise.all(initialPages.map(renderPage)) gate that the loading
+         * screen waits on before revealing the book at all.
+         *
+         * The page is "on screen" the moment its canvas is painted, above.
+         * Annotation/media wiring is intentionally NOT awaited here — it
+         * runs in the background and attaches whenever it finishes,
+         * without holding up first paint, the render-window scheduler, or
+         * (most importantly) the initial "ready" reveal.
+         */
+        scheduleAnnotationWork(pageNumber,surface,page,viewport,token);
+
     }
     finally{
         surface.rendering=false;
     }
+}
+
+/*-------------------------------------------------------
+ Deferred link/media-annotation wiring (see renderPage above)
+-------------------------------------------------------*/
+
+function scheduleAnnotationWork(pageNumber,surface,page,viewport,token){
+    (async()=>{
+        const linksStart=performance.now();
+        try{
+            await renderLinks(surface,page,viewport);
+            if(token!==openToken) return;
+
+            const mediaStart=performance.now();
+            await renderMediaAnnotations(surface,page,viewport);
+            if(token!==openToken) return;
+
+            const doneAt=performance.now();
+            const linksMs=Math.round(mediaStart-linksStart);
+            const mediaMs=Math.round(doneAt-mediaStart);
+
+            /*
+             * Loud on purpose. If a page's annotation/media wiring is slow
+             * enough for a person to notice, this line says so and says
+             * which half (hyperlinks vs. embedded media) is responsible,
+             * instead of leaving it to be re-discovered by guesswork.
+             */
+            if(linksMs+mediaMs>750){
+                console.warn(
+                    "[Renderer] Page "+pageNumber+" annotation wiring was slow — "+
+                    "links: "+linksMs+"ms, media: "+mediaMs+"ms."
+                );
+            }
+        }catch(error){
+            if(token===openToken){
+                console.warn("[Renderer] Annotation wiring failed for page",pageNumber,error);
+            }
+        }
+    })();
 }
 
 /*-------------------------------------------------------
