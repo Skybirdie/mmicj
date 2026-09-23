@@ -785,6 +785,31 @@ async function renderPage(pageNumber,visible=false,token=openToken){
 
         if(token!==openToken) return;
 
+        /*
+         * [PageDiag] getOperatorList() split.
+         *
+         * annotationMode:DISABLE made no difference to page 4's ~43-52s
+         * stall, which rules out the annotation appearance stream — the
+         * time is somewhere in the page's own content stream. render()
+         * doesn't expose a seam between "fetch/decode referenced
+         * resources (images, fonts) while building the operator list" and
+         * "execute that operator list into the canvas", so this calls
+         * getOperatorList() directly first, timed on its own, before
+         * render() does its (separate, internal) pass. This costs page 4
+         * extra total time for this diagnostic round only — the point is
+         * to see which side of that seam the ~43s actually falls on.
+         */
+        const pageDiagOpListStart=performance.now();
+        let pageDiagOpListMs=null;
+        try{
+            await page.getOperatorList();
+            pageDiagOpListMs=Math.round(performance.now()-pageDiagOpListStart);
+        }catch(err){
+            console.warn("[PageDiag] Page "+pageNumber+" getOperatorList() failed",err);
+        }
+
+        if(token!==openToken) return;
+
         const viewport=page.getViewport({scale:renderScale});
         surface.viewport=viewport;
 
@@ -796,6 +821,7 @@ async function renderPage(pageNumber,visible=false,token=openToken){
         ctx.setTransform(1,0,0,1,0,0);
         ctx.clearRect(0,0,surface.canvas.width,surface.canvas.height);
 
+        const pageDiagRenderStart=performance.now();
         await page.render({
             canvasContext:ctx,
             viewport,
@@ -826,9 +852,10 @@ async function renderPage(pageNumber,visible=false,token=openToken){
         const pageDiagRendered=performance.now();
         console.info(
             "[PageDiag] Page "+pageNumber+" canvas path\n"+
-            "  getPage (fetch/parse): "+Math.round(pageDiagGotPage-pageDiagStart)+"ms\n"+
-            "  page.render (canvas):  "+Math.round(pageDiagRendered-pageDiagGotPage)+"ms\n"+
-            "  total:                 "+Math.round(pageDiagRendered-pageDiagStart)+"ms"
+            "  getPage (fetch/parse):       "+Math.round(pageDiagGotPage-pageDiagStart)+"ms\n"+
+            "  getOperatorList (resources): "+(pageDiagOpListMs===null ? "failed" : pageDiagOpListMs+"ms")+"\n"+
+            "  page.render (canvas exec):   "+Math.round(pageDiagRendered-pageDiagRenderStart)+"ms\n"+
+            "  total:                       "+Math.round(pageDiagRendered-pageDiagStart)+"ms"
         );
 
         surface.rendered=true;
