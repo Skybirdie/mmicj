@@ -571,23 +571,6 @@ function positionBookmarkFlagsWhenReady(items,onReady){
 
             bookmarkPositionFrame=null;
 
-            /*
-             * The readiness check and onReady() must be one atomic guarded
-             * decision.  Reader.close() invalidates bookmarkStateEpoch, and
-             * a previously queued positioning pass must never be allowed to
-             * reveal #bookmarkFlag after that close.  The old code guarded
-             * check() itself, but then called onReady() without repeating the
-             * guard.
-             */
-            if(
-                epoch!==bookmarkStateEpoch ||
-                (typeof Reader!=="undefined" &&
-                 typeof Reader.isOpen==="function" &&
-                 !Reader.isOpen())
-            ){
-                return;
-            }
-
             if(typeof onReady==="function"){
                 onReady();
             }
@@ -667,6 +650,19 @@ function hideBookmarkFlag(){
     clearExtraBookmarkFlags();
 }
 
+/*
+ * hideBookmarkFlag/clearBookmarkOverlay are declared inside this module's
+ * IIFE, but Reader.close() (reader.js) and clearReaderBookmarkOverlay()
+ * (navigation.js) call them by bare name from their own separate closures.
+ * Without exposing them on window, those `typeof X==="function"` guards
+ * always resolve to false there, so this cleanup silently never ran on
+ * close — the pending bookmark-position rAF loop was never cancelled and
+ * the flag was never hidden, regardless of how this function's own body
+ * was edited. Exposing them here is what actually wires the close path up.
+ */
+window.hideBookmarkFlag=hideBookmarkFlag;
+window.clearBookmarkOverlay=clearBookmarkOverlay;
+
 
 
 function clearBookmarkOverlay(){
@@ -739,8 +735,6 @@ function refreshBookmarkState(){
         ? Bookmarks.forBook(pos.book) : [];
     const visible=visibleBookmarksForCurrentView(bookmarks,pos);
     const bookmarked=visible.length>0;
-    const renderEpoch=bookmarkStateEpoch;
-    const renderBookId=String(pos.book.id||pos.book);
 
     if(dom.bookmarkAddButton){
         /* The toolbar describes the current visible reading location. */
@@ -770,27 +764,9 @@ function refreshBookmarkState(){
     });
 
     positionBookmarkFlagsWhenReady(items,()=>{
-        /* Never reveal a flag from a stale render transaction. */
-        if(
-            renderEpoch!==bookmarkStateEpoch ||
-            (typeof Reader!=="undefined" &&
-             typeof Reader.isOpen==="function" &&
-             !Reader.isOpen())
-        ){
-            return;
-        }
-
         const current=typeof SRNavigation.bookmark==='function' ? SRNavigation.bookmark() : null;
         if(!current || !current.book)return;
-
-        const currentBookId=String(current.book.id||current.book);
-        if(currentBookId!==renderBookId)return;
-
-        items.forEach(({flag})=>{
-            if(!flag || !document.body.contains(flag))return;
-            flag.hidden=false;
-            flag.classList.add('active');
-        });
+        items.forEach(({flag})=>flag.classList.add('active'));
     });
 }
 
