@@ -1194,6 +1194,53 @@ font-style:italic;
 .sky180Page .skyreaderMediaAnnotationLayer .annotationLayer{position:absolute;inset:0;}
 .sky180Page .skyreaderMediaAnnotationLayer video.mediaContent,.sky180Page .skyreaderMediaAnnotationLayer audio.mediaContent{max-width:100%;max-height:100%;}
 
+/* Transient marker shown at a media annotation's position while PDF.js is
+   still building its play control (see renderMediaAnnotations in
+   renderer.js). Purely informational — pointer-events stay off so it can
+   never intercept a page-turn drag/tap, and it is removed the instant the
+   real control is ready. */
+.sky180Page .skyreaderMediaAnnotationLayer .skyreaderMediaPlaceholder{
+  position:absolute;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  pointer-events:none;
+}
+.sky180Page .skyreaderMediaAnnotationLayer .skyreaderMediaPlaceholder .skyreaderMediaPlaceholderBadge{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  padding:5px 10px 5px 7px;
+  border:1px solid color-mix(in srgb,var(--line) 75%,transparent);
+  border-radius:999px;
+  background:color-mix(in srgb,var(--panel,#000) 55%,transparent);
+  color:var(--text);
+  font-size:12px;
+  line-height:1;
+  white-space:nowrap;
+  box-shadow:0 6px 18px rgba(0,0,0,.16);
+  backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);
+  opacity:0;
+  animation:skyreaderMediaPlaceholderIn .2s ease .12s forwards;
+}
+.sky180Page .skyreaderMediaAnnotationLayer .skyreaderMediaPlaceholderSpinner{
+  width:12px;
+  height:12px;
+  min-width:12px;
+  border-radius:50%;
+  border:2px solid color-mix(in srgb,var(--text) 30%,transparent);
+  border-top-color:var(--text);
+  animation:skyreaderMediaPlaceholderSpin .8s linear infinite;
+}
+@keyframes skyreaderMediaPlaceholderSpin{
+  to{transform:rotate(360deg);}
+}
+@keyframes skyreaderMediaPlaceholderIn{
+  from{opacity:0;transform:translateY(2px);}
+  to{opacity:1;transform:translateY(0);}
+}
+
 
 /* PDF.js embedded media */
 .sky180Page .skyreaderMediaAnnotationLayer .mediaAnnotation{
