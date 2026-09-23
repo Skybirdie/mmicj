@@ -761,7 +761,27 @@ async function renderPage(pageNumber,visible=false,token=openToken){
             );
         }
 
+        /*
+         * [PageDiag] getPage() vs page.render() breakdown.
+         *
+         * The video's own load pipeline (see [VideoDiag]) only starts
+         * after the play button is pressed — so it cannot explain a page
+         * that is blank before the button is even visible. If a page is
+         * blank on arrival, the delay is somewhere in getting this page's
+         * canvas painted at all, and that splits into two very different
+         * causes:
+         *   - getPage(): pdf.js locating/fetching/parsing this page's
+         *     object (and, for a non-linearized PDF, potentially having to
+         *     pull in far more of the file than just this page — e.g. an
+         *     embedded video sitting between here and the xref table).
+         *   - page.render(): actually painting the content stream to the
+         *     canvas, once the page object is in hand.
+         * Logged unconditionally for now (this is a diagnostic build) so
+         * we can see page 4's numbers next to an ordinary page's.
+         */
+        const pageDiagStart=performance.now();
         const page=await getPage(pageNumber);
+        const pageDiagGotPage=performance.now();
 
         if(token!==openToken) return;
 
@@ -782,6 +802,14 @@ async function renderPage(pageNumber,visible=false,token=openToken){
         }).promise;
 
         if(token!==openToken) return;
+
+        const pageDiagRendered=performance.now();
+        console.info(
+            "[PageDiag] Page "+pageNumber+" canvas path\n"+
+            "  getPage (fetch/parse): "+Math.round(pageDiagGotPage-pageDiagStart)+"ms\n"+
+            "  page.render (canvas):  "+Math.round(pageDiagRendered-pageDiagGotPage)+"ms\n"+
+            "  total:                 "+Math.round(pageDiagRendered-pageDiagStart)+"ms"
+        );
 
         surface.rendered=true;
         renderedPages.add(pageNumber);
