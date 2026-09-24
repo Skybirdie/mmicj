@@ -269,6 +269,7 @@ function createPageShell(pageNumber){
         annotationLayer:null,
         annotationRenderer:null,
         videoLoadingOverlay:null,
+        mediaAnnotations:null,
         rendered:false,
         rendering:false,
         hydrated:false,
@@ -769,6 +770,23 @@ async function renderPage(pageNumber,visible=false,token=openToken){
         const viewport=page.getViewport({scale:renderScale});
         surface.viewport=viewport;
 
+        /*
+         * MEDIA PREFLIGHT — deliberately before page.render().
+         *
+         * We already know that getAnnotations() is only a few milliseconds
+         * on the affected pages. Use that fact to discover an embedded-media
+         * page before painting its canvas. The loader is therefore placed on
+         * the page surface while the PDF canvas/video area is still blank,
+         * instead of waiting for AnnotationLayer.render() to finish.
+         *
+         * This is intentionally NOT awaited by the reader's open/ready gate
+         * beyond this tiny annotation lookup. It does not retrieve the video,
+         * create a Blob URL, or wait for MediaAnnotationElement.
+         */
+        await preparePageVideoLoader(surface,page,pageNumber,token);
+
+        if(token!==openToken) return;
+
         surface.canvas.width=viewport.width;
         surface.canvas.height=viewport.height;
 
@@ -814,6 +832,48 @@ async function renderPage(pageNumber,visible=false,token=openToken){
     }
     finally{
         surface.rendering=false;
+    }
+}
+
+/*-------------------------------------------------------
+ Media preflight / page-local loader
+-------------------------------------------------------*/
+
+async function preparePageVideoLoader(surface,page,pageNumber,token){
+    if(!surface || !page || token!==openToken) return;
+
+    const startedAt=performance.now();
+
+    try{
+        const annotations=await page.getAnnotations({intent:"display"});
+
+        if(token!==openToken) return;
+
+        const mediaAnnotations=annotations.filter(annotation=>
+            annotation && (
+                annotation.subtype==="Screen" ||
+                annotation.subtype==="RichMedia" ||
+                annotation.subtype==="Sound" ||
+                annotation.subtype==="Movie"
+            )
+        );
+
+        surface.mediaAnnotations=mediaAnnotations;
+
+        if(mediaAnnotations.length){
+            showPageVideoLoader(surface,pageNumber);
+            console.info(
+                "[VideoLoader] Page "+pageNumber+
+                " loader CREATED before page.render() — media detected in "+
+                Math.round(performance.now()-startedAt)+"ms"
+            );
+        }else{
+            removePageVideoLoader(surface);
+        }
+    }catch(error){
+        surface.mediaAnnotations=null;
+        removePageVideoLoader(surface);
+        console.warn("[VideoLoader] Page "+pageNumber+" preflight failed:",error);
     }
 }
 
@@ -1064,10 +1124,9 @@ async function renderMediaAnnotations(surface,page,viewport){
     const layer=surface.annotationLayer;
     layer.innerHTML="";
     surface.annotationRenderer=null;
-    removePageVideoLoader(surface);
 
     const annotationStart=performance.now();
-    const annotations=await page.getAnnotations({intent:"display"});
+    const annotations=surface.mediaAnnotations || await page.getAnnotations({intent:"display"});
     const annotationMs=Math.round(performance.now()-annotationStart);
 
     const mediaAnnotations=annotations.filter(annotation=>
@@ -1084,6 +1143,10 @@ async function renderMediaAnnotations(surface,page,viewport){
         return;
     }
 
+    /* The loader should already exist from the preflight. Keep this call
+       idempotent in case annotation wiring was invoked independently. */
+    showPageVideoLoader(surface,page.pageNumber);
+
     console.info(
         "[VideoDiag] Page "+page.pageNumber+" media detected — "+
         "getAnnotations: "+annotationMs+"ms; "+
@@ -1091,14 +1154,6 @@ async function renderMediaAnnotations(surface,page,viewport){
     );
 
     console.info("[SkyReader] PDF media annotations:", mediaAnnotations);
-
-    /*
-     * Temporary page-local loading workaround. The overlay is deliberately
-     * attached to this PDF page surface, not to the global loading screen,
-     * front page, or standalone Video Viewer. It therefore affects only the
-     * page carrying the embedded media.
-     */
-    showPageVideoLoader(surface,page.pageNumber);
 
     if(!window.pdfjsLib || !pdfjsLib.AnnotationLayer){
         console.warn("[SkyReader] PDF.js AnnotationLayer unavailable.",mediaAnnotations);
