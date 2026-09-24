@@ -51,6 +51,17 @@ let openToken=0;
 /* Active PDF.js loading task. It is cancelled when a newer book replaces it. */
 let activeLoadingTask=null;
 
+/*
+ * Background embedded-video discovery. This is deliberately separate from
+ * page rendering: ordinary PDF painting keeps its existing fast path while
+ * PDF.js quietly fetches the annotation data for video pages ahead of time.
+ */
+const videoPages=new Set();
+const videoAnnotationCache=new Map();
+const videoPagePromises=new Map();
+let videoScanGeneration=0;
+let videoScanRunning=false;
+
 const RENDER_WINDOW=6;
 
 renderer.events={
@@ -64,6 +75,146 @@ renderer.events={
 function emit(name,...args){
     const fn=renderer.events[name];
     if(typeof fn==="function") fn(...args);
+}
+
+/*-------------------------------------------------------
+ Background embedded-video detection / preparation
+-------------------------------------------------------*/
+
+function isVideoAnnotation(annotation){
+    return Boolean(
+        annotation &&
+        (
+            annotation.subtype==="Screen" ||
+            annotation.subtype==="RichMedia" ||
+            annotation.subtype==="Movie"
+        )
+    );
+}
+
+function cacheVideoPage(pageNumber,page,annotations){
+    if(!Array.isArray(annotations)) return false;
+
+    const mediaAnnotations=annotations.filter(isVideoAnnotation);
+
+    if(!mediaAnnotations.length) return false;
+
+    videoPages.add(pageNumber);
+    videoAnnotationCache.set(pageNumber,{
+        page,
+        annotations,
+        mediaAnnotations,
+        preparedAt:performance.now()
+    });
+
+    console.info(
+        "[VideoPrep] page "+pageNumber+
+        " contains "+mediaAnnotations.length+
+        " embedded media annotation(s); annotation data ready"
+    );
+
+    return true;
+}
+
+async function prepareVideoPageData(pdfDocument,pageNumber,generation){
+    if(generation!==videoScanGeneration || pdfDocument!==pdf) return;
+
+    if(videoAnnotationCache.has(pageNumber)) return videoAnnotationCache.get(pageNumber);
+    if(videoPagePromises.has(pageNumber)) return videoPagePromises.get(pageNumber);
+
+    const promise=(async()=>{
+        const started=performance.now();
+        try{
+            /* Reuse the normal PDF page cache when available. */
+            const page=pageCache.has(pageNumber)
+                ? pageCache.get(pageNumber)
+                : await pdfDocument.getPage(pageNumber);
+
+            if(!pageCache.has(pageNumber)) pageCache.set(pageNumber,page);
+
+            const annotations=await page.getAnnotations({intent:"display"});
+
+            if(generation!==videoScanGeneration || pdfDocument!==pdf) return null;
+
+            const found=cacheVideoPage(pageNumber,page,annotations);
+
+            if(found){
+                console.info(
+                    "[VideoPrep] page "+pageNumber+
+                    " prepared in "+Math.round(performance.now()-started)+"ms"
+                );
+                return videoAnnotationCache.get(pageNumber);
+            }
+
+            return null;
+        }catch(error){
+            if(generation===videoScanGeneration && pdfDocument===pdf){
+                console.warn("[VideoPrep] scan failed for page "+pageNumber,error);
+            }
+            return null;
+        }finally{
+            videoPagePromises.delete(pageNumber);
+        }
+    })();
+
+    videoPagePromises.set(pageNumber,promise);
+    return promise;
+}
+
+async function scanPdfForVideoPages(pdfDocument,generation){
+    if(!pdfDocument || generation!==videoScanGeneration || videoScanRunning) return;
+
+    videoScanRunning=true;
+    const started=performance.now();
+    const BATCH_SIZE=4;
+
+    console.info(
+        "[VideoPrep] background scan started for "+pdfDocument.numPages+" pages"
+    );
+
+    try{
+        for(let start=1;start<=pdfDocument.numPages;start+=BATCH_SIZE){
+            if(generation!==videoScanGeneration || pdfDocument!==pdf) return;
+
+            const end=Math.min(start+BATCH_SIZE-1,pdfDocument.numPages);
+            const jobs=[];
+
+            for(let pageNumber=start;pageNumber<=end;pageNumber++){
+                jobs.push(prepareVideoPageData(pdfDocument,pageNumber,generation));
+            }
+
+            await Promise.all(jobs);
+
+            /* Yield so normal canvas/page-flip work keeps the main thread responsive. */
+            await new Promise(resolve=>requestAnimationFrame(resolve));
+        }
+    }finally{
+        if(generation===videoScanGeneration && pdfDocument===pdf){
+            videoScanRunning=false;
+            console.info(
+                "[VideoPrep] background scan complete in "+
+                Math.round(performance.now()-started)+"ms; video pages:",
+                [...videoPages].sort((a,b)=>a-b)
+            );
+        }else{
+            videoScanRunning=false;
+        }
+    }
+}
+
+function prepareNearbyVideoPages(center){
+    if(!pdf) return;
+
+    /* The full scan is already running, but this accelerates pages near the
+       user's current position if they have not reached the scan yet. */
+    for(let offset=-2;offset<=2;offset++){
+        const pageNumber=center+offset;
+        if(pageNumber<1 || pageNumber>pageCount) continue;
+
+        if(videoPages.has(pageNumber)) continue;
+
+        prepareVideoPageData(pdf,pageNumber,videoScanGeneration);
+    }
 }
 
 function progress(percent,text){
@@ -183,6 +334,7 @@ renderer.initialize=function(){
 
         Sky180FlipEngine.on("page",page=>{
             currentPage=page;
+            prepareNearbyVideoPages(page);
             renderer.ensureRenderWindow(page);
             emit("page",currentPage,pageCount);
         });
@@ -546,6 +698,19 @@ progress(
 
         const singlePage=isSinglePageDevice();
         const twoPageDocument=(!singlePage && pageCount===2);
+
+        /*
+         * Start embedded-video detection now, but deliberately do not await it.
+         * Normal page painting proceeds exactly as before while PDF.js obtains
+         * annotation data for future video pages in small background batches.
+         */
+        videoScanGeneration++;
+        videoPages.clear();
+        videoAnnotationCache.clear();
+        videoPagePromises.clear();
+        videoScanRunning=false;
+        scanPdfForVideoPages(pdf,videoScanGeneration);
+
 
     const requestedStart=Math.max(
             1,
@@ -919,9 +1084,24 @@ async function renderMediaAnnotations(surface,page,viewport){
     layer.innerHTML="";
     surface.annotationRenderer=null;
 
-    const annotationsStartedAt=performance.now();
-    const annotations=await page.getAnnotations({intent:"display"});
-    const annotationsMs=Math.round(performance.now()-annotationsStartedAt);
+    const pageNumber=Number(surface.element?.dataset?.page || 0);
+    const cachedVideo=videoAnnotationCache.get(pageNumber);
+
+    let annotations;
+    let annotationsMs=0;
+
+    if(cachedVideo && cachedVideo.page===page && Array.isArray(cachedVideo.annotations)){
+        /* The background scanner already paid the getAnnotations() cost. */
+        annotations=cachedVideo.annotations;
+        console.info(
+            "[VideoPrep] page "+pageNumber+
+            " using pre-fetched annotation data"
+        );
+    }else{
+        const annotationsStartedAt=performance.now();
+        annotations=await page.getAnnotations({intent:"display"});
+        annotationsMs=Math.round(performance.now()-annotationsStartedAt);
+    }
 
     const mediaAnnotations=annotations.filter(annotation=>
         annotation && (
@@ -1298,6 +1478,8 @@ renderer.goTo=async function(page){
     /* Prepare the target page before asking the engine to move. */
     const token=openToken;
 
+    prepareNearbyVideoPages(page);
+
     await renderPage(page,true,token);
 
     if(token!==openToken || !pdf) return false;
@@ -1322,6 +1504,18 @@ renderer.refresh=function(){
     scheduleWindow(currentPage,openToken);
 };
 
+renderer.videoPages=function(){
+    return [...videoPages].sort((a,b)=>a-b);
+};
+
+renderer.videoPreparation=function(){
+    return [...videoAnnotationCache.entries()].map(([pageNumber,data])=>({
+        pageNumber,
+        annotationCount:data.mediaAnnotations?.length || 0,
+        prepared:true
+    }));
+};
+
 renderer.statistics=function(){
     return {
         book:currentBook,
@@ -1343,6 +1537,11 @@ renderer.statistics=function(){
 renderer.close=function(){
     openToken++;
     presentationToken++;
+    videoScanGeneration++;
+    videoPages.clear();
+    videoAnnotationCache.clear();
+    videoPagePromises.clear();
+    videoScanRunning=false;
 
     if(activeLoadingTask){
         try{
@@ -1427,7 +1626,7 @@ renderer.getRenderScale=function(){
  */
 renderer.resolvePdfUrl=resolvePdfUrl;
 
-renderer.version="3.2.6";
+renderer.version="3.3.0-video-prep";
 
 return renderer;
 
