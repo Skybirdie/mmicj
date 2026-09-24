@@ -47,7 +47,6 @@ let initialized=false;
 /* Monotonic presentation token used to reject stale asynchronous opens. */
 let presentationToken=0;
 let openToken=0;
-let opNameByCode=null; /* [PageDiag] lazy reverse-lookup cache for pdfjsLib.OPS */
 
 /* Active PDF.js loading task. It is cancelled when a newer book replaces it. */
 let activeLoadingTask=null;
@@ -762,226 +761,7 @@ async function renderPage(pageNumber,visible=false,token=openToken){
             );
         }
 
-        /*
-         * [PageDiag] getPage() vs page.render() breakdown.
-         *
-         * The video's own load pipeline (see [VideoDiag]) only starts
-         * after the play button is pressed — so it cannot explain a page
-         * that is blank before the button is even visible. If a page is
-         * blank on arrival, the delay is somewhere in getting this page's
-         * canvas painted at all, and that splits into two very different
-         * causes:
-         *   - getPage(): pdf.js locating/fetching/parsing this page's
-         *     object (and, for a non-linearized PDF, potentially having to
-         *     pull in far more of the file than just this page — e.g. an
-         *     embedded video sitting between here and the xref table).
-         *   - page.render(): actually painting the content stream to the
-         *     canvas, once the page object is in hand.
-         * Logged unconditionally for now (this is a diagnostic build) so
-         * we can see page 4's numbers next to an ordinary page's.
-         */
-        const pageDiagStart=performance.now();
         const page=await getPage(pageNumber);
-        const pageDiagGotPage=performance.now();
-
-        if(token!==openToken) return;
-
-        /*
-         * [PageDiag] getOperatorList() split.
-         *
-         * annotationMode:DISABLE made no difference to page 4's ~43-52s
-         * stall, which rules out the annotation appearance stream — the
-         * time is somewhere in the page's own content stream. render()
-         * doesn't expose a seam between "fetch/decode referenced
-         * resources (images, fonts) while building the operator list" and
-         * "execute that operator list into the canvas", so this calls
-         * getOperatorList() directly first, timed on its own, before
-         * render() does its (separate, internal) pass. This costs page 4
-         * extra total time for this diagnostic round only — the point is
-         * to see which side of that seam the ~43s actually falls on.
-         */
-        /*
-         * [PageDiag] Isolate annotation OBJECT construction from operator-
-         * list building. annotationMode:DISABLE removed the annotation's
-         * ops from the output but not the delay, which means the cost
-         * isn't in emitting paint ops for the annotation — it's upstream,
-         * in pdf.js building an Annotation instance for every /Annots
-         * entry (via getAnnotations(), which getOperatorList() also calls
-         * internally and then caches on the page). For a Screen/RichMedia
-         * annotation, that construction can mean resolving/decompressing
-         * its referenced embedded-file stream just to build the data
-         * model — independent of whether anything from it ever gets
-         * painted. Calling getAnnotations() ourselves first, timed alone,
-         * tests that directly: if this is where the time goes, the
-         * getOperatorList() call right after should come back fast,
-         * since parsed annotations are cached per page.
-         */
-        const pageDiagAnnotStart=performance.now();
-        let pageDiagAnnotMs=null;
-        try{
-            await page.getAnnotations();
-            pageDiagAnnotMs=Math.round(performance.now()-pageDiagAnnotStart);
-        }catch(err){
-            console.warn("[PageDiag] Page "+pageNumber+" getAnnotations() failed",err);
-        }
-
-        const pageDiagOpListStart=performance.now();
-        let pageDiagOpListMs=null;
-        try{
-            /*
-             * [PageDiag] Direct test: does asking getOperatorList() itself
-             * (not just render(), which apparently didn't fully suppress
-             * this) to skip annotations remove the beginAnnotation/
-             * endAnnotation pair — and the time that goes with it? Page 4
-             * is the only page in the whole book with either op.
-             */
-            const pageDiagAnnotationMode=(window.pdfjsLib && pdfjsLib.AnnotationMode) ? pdfjsLib.AnnotationMode.DISABLE : 0;
-            const pageDiagOpList=await page.getOperatorList({annotationMode:pageDiagAnnotationMode});
-            pageDiagOpListMs=Math.round(performance.now()-pageDiagOpListStart);
-
-            /*
-             * [PageDiag] Which resource is getOperatorList() actually
-             * waiting on? Scan the resolved operator list for any
-             * image-painting ops, then pull each referenced image straight
-             * out of pdf.js's own page.objs cache — by the time
-             * getOperatorList() has resolved, an image it painted must
-             * already be resolved there. This gives real pixel dimensions
-             * and raw size instead of guessing from load time alone.
-             */
-            if(pdfjsLib.OPS){
-                const imageOpCodes=new Set(
-                    [
-                        pdfjsLib.OPS.paintImageXObject,
-                        pdfjsLib.OPS.paintJpegXObject,
-                        pdfjsLib.OPS.paintImageMaskXObject
-                    ].filter(code=>code!==undefined)
-                );
-                const inlineImageOpCodes=new Set(
-                    [
-                        pdfjsLib.OPS.paintInlineImageXObject,
-                        pdfjsLib.OPS.paintInlineImageXObjectGroup
-                    ].filter(code=>code!==undefined)
-                );
-                const seen=new Set();
-                const fontIds=new Set();
-                let inlineImageCount=0;
-                const opCounts=new Map();
-
-                for(let i=0;i<pageDiagOpList.fnArray.length;i++){
-                    const fn=pageDiagOpList.fnArray[i];
-                    opCounts.set(fn,(opCounts.get(fn)||0)+1);
-                    const args=pageDiagOpList.argsArray[i];
-
-                    if(imageOpCodes.has(fn)){
-                        const objId=args && args[0];
-                        if(typeof objId==="string" && !seen.has(objId)){
-                            seen.add(objId);
-                            let detail="(object not resolved in page.objs)";
-                            try{
-                                if(page.objs.has(objId)){
-                                    const obj=page.objs.get(objId);
-                                    if(obj){
-                                        const parts=[];
-                                        if(obj.width && obj.height) parts.push(obj.width+"x"+obj.height+"px");
-                                        if(obj.kind!==undefined) parts.push("kind="+obj.kind);
-                                        const raw=obj.data && (obj.data.length || obj.data.byteLength);
-                                        if(raw) parts.push("~"+Math.round(raw/1024)+"KB raw pixel data");
-                                        if(obj.bitmap) parts.push("(ImageBitmap)");
-                                        detail=parts.join(", ") || "(resolved, no size info)";
-                                    }
-                                }
-                            }catch(readErr){
-                                detail="(error reading page.objs: "+readErr.message+")";
-                            }
-                            console.info("[PageDiag] Page "+pageNumber+" XObject image "+objId+" — "+detail);
-                        }
-                    }else if(inlineImageOpCodes.has(fn)){
-                        /* Inline images carry their data directly in args,
-                           not via a page.objs lookup, so a large one is
-                           otherwise invisible to a page.objs scan. */
-                        const images=Array.isArray(args) && Array.isArray(args[0]) ? args[0] : [args && args[0]];
-                        for(const img of images){
-                            if(!img) continue;
-                            inlineImageCount++;
-                            const parts=[];
-                            if(img.width && img.height) parts.push(img.width+"x"+img.height+"px");
-                            if(img.kind!==undefined) parts.push("kind="+img.kind);
-                            const raw=img.data && (img.data.length || img.data.byteLength);
-                            if(raw) parts.push("~"+Math.round(raw/1024)+"KB raw pixel data");
-                            console.info("[PageDiag] Page "+pageNumber+" inline image — "+(parts.join(", ")||"(no size info)"));
-                        }
-                    }else if(fn===pdfjsLib.OPS.setFont && args && typeof args[0]==="string"){
-                        fontIds.add(args[0]);
-                    }
-                }
-
-                if(inlineImageCount>1){
-                    console.info("[PageDiag] Page "+pageNumber+" total inline images: "+inlineImageCount);
-                }
-
-                /*
-                 * Fonts get resolved on commonObjs, and — unlike images —
-                 * the evaluator often needs a font's widths/metrics loaded
-                 * before it can finish emitting the text operators that use
-                 * it, making a large or malformed embedded font a
-                 * plausible synchronous stall inside getOperatorList()
-                 * itself.
-                 */
-                for(const fontId of fontIds){
-                    let detail="(not resolved on commonObjs)";
-                    try{
-                        if(page.commonObjs.has(fontId)){
-                            const font=page.commonObjs.get(fontId);
-                            if(font){
-                                const parts=[];
-                                if(font.name) parts.push("name="+font.name);
-                                if(font.loadedName) parts.push("loadedName="+font.loadedName);
-                                if(font.numGlyphs!==undefined) parts.push("numGlyphs="+font.numGlyphs);
-                                detail=parts.join(", ")||"(resolved, no detail)";
-                            }
-                        }
-                    }catch(readErr){
-                        detail="(error reading commonObjs: "+readErr.message+")";
-                    }
-                    console.info("[PageDiag] Page "+pageNumber+" font "+fontId+" — "+detail);
-                }
-
-                /*
-                 * Full op breakdown by name, not just a count of distinct
-                 * codes. Images, inline images and fonts are all cleared
-                 * on page 4 — if the stall is a shading/pattern fill or a
-                 * transparency-group setGState (the classic worker-CPU-
-                 * bound ops that never touch page.objs/commonObjs at all),
-                 * this is what will surface it, by simply not appearing on
-                 * any of the other pages' breakdowns.
-                 */
-                if(!opNameByCode){
-                    opNameByCode={};
-                    for(const key in pdfjsLib.OPS){
-                        opNameByCode[pdfjsLib.OPS[key]]=key;
-                    }
-                }
-                const breakdown=Array.from(opCounts.entries())
-                    .map(([code,count])=>(opNameByCode[code]||("code"+code))+"="+count)
-                    .join(", ");
-                console.info(
-                    "[PageDiag] Page "+pageNumber+" op count: "+pageDiagOpList.fnArray.length+
-                    ", distinct op codes: "+opCounts.size+"\n"+
-                    "  breakdown: "+breakdown
-                );
-                const stillHasAnnotationOps=
-                    pdfjsLib.OPS.beginAnnotation!==undefined &&
-                    opCounts.has(pdfjsLib.OPS.beginAnnotation);
-                console.info(
-                    "[PageDiag] Page "+pageNumber+" getOperatorList called with annotationMode:DISABLE — "+
-                    (stillHasAnnotationOps
-                        ? "beginAnnotation/endAnnotation STILL present (DISABLE did not suppress it)"
-                        : "no annotation ops present")
-                );
-            }
-        }catch(err){
-            console.warn("[PageDiag] Page "+pageNumber+" getOperatorList() failed",err);
-        }
 
         if(token!==openToken) return;
 
@@ -996,43 +776,12 @@ async function renderPage(pageNumber,visible=false,token=openToken){
         ctx.setTransform(1,0,0,1,0,0);
         ctx.clearRect(0,0,surface.canvas.width,surface.canvas.height);
 
-        const pageDiagRenderStart=performance.now();
         await page.render({
             canvasContext:ctx,
-            viewport,
-            /*
-             * [PageDiag] Candidate fix, testing directly:
-             *
-             * pdf.js's page.render() defaults annotationMode to
-             * AnnotationMode.ENABLE, meaning it paints annotation
-             * appearance streams onto the canvas itself, *in addition to*
-             * this app's own AnnotationLayer overlay (renderMediaAnnotations,
-             * below) which is what actually produces the play button. The
-             * canvas-level annotation paint is therefore redundant here.
-             *
-             * Page 4's Screen/RichMedia annotation is the one annotation
-             * in this whole book that references embedded media, and it's
-             * the one page where page.render() (not getPage(), not the
-             * video element's own load) stalled for ~52s. Disabling
-             * annotation painting at the canvas level costs nothing
-             * visually (the AnnotationLayer still draws the play button)
-             * and directly tests whether the annotation's appearance
-             * stream is what page.render() was stuck on.
-             */
-            annotationMode:(window.pdfjsLib && pdfjsLib.AnnotationMode) ? pdfjsLib.AnnotationMode.DISABLE : 0
+            viewport
         }).promise;
 
         if(token!==openToken) return;
-
-        const pageDiagRendered=performance.now();
-        console.info(
-            "[PageDiag] Page "+pageNumber+" canvas path\n"+
-            "  getPage (fetch/parse):       "+Math.round(pageDiagGotPage-pageDiagStart)+"ms\n"+
-            "  getAnnotations (objects):    "+(pageDiagAnnotMs===null ? "failed" : pageDiagAnnotMs+"ms")+"\n"+
-            "  getOperatorList (resources): "+(pageDiagOpListMs===null ? "failed" : pageDiagOpListMs+"ms")+"\n"+
-            "  page.render (canvas exec):   "+Math.round(pageDiagRendered-pageDiagRenderStart)+"ms\n"+
-            "  total:                       "+Math.round(pageDiagRendered-pageDiagStart)+"ms"
-        );
 
         surface.rendered=true;
         renderedPages.add(pageNumber);
@@ -1079,7 +828,7 @@ function scheduleAnnotationWork(pageNumber,surface,page,viewport,token){
             if(token!==openToken) return;
 
             const mediaStart=performance.now();
-            await renderMediaAnnotations(surface,page,viewport,pageNumber);
+            await renderMediaAnnotations(surface,page,viewport);
             if(token!==openToken) return;
 
             const doneAt=performance.now();
@@ -1163,14 +912,17 @@ async function renderLinks(surface,page,viewport){
  Screen/RichMedia annotations. Existing Link annotations stay
  handled by SkyReader's current hyperlink layer.
 -------------------------------------------------------*/
-async function renderMediaAnnotations(surface,page,viewport,pageNumber){
+async function renderMediaAnnotations(surface,page,viewport){
     if(!surface || !surface.annotationLayer) return;
 
     const layer=surface.annotationLayer;
     layer.innerHTML="";
     surface.annotationRenderer=null;
 
+    const annotationsStartedAt=performance.now();
     const annotations=await page.getAnnotations({intent:"display"});
+    const annotationsMs=Math.round(performance.now()-annotationsStartedAt);
+
     const mediaAnnotations=annotations.filter(annotation=>
         annotation && (
             annotation.subtype==="Screen" ||
@@ -1181,6 +933,24 @@ async function renderMediaAnnotations(surface,page,viewport,pageNumber){
     );
 
     if(!mediaAnnotations.length) return;
+
+    /*
+     * The loading placeholder below can only appear AFTER this line —
+     * page.getAnnotations() has to resolve first before we even know a
+     * media annotation exists here. If getAnnotations() itself is the
+     * slow step (rather than the AnnotationLayer/play-control build that
+     * follows), the placeholder has nothing to precede and the page will
+     * still look blank for that stretch. This log makes that visible
+     * instead of leaving it to be re-discovered by guesswork.
+     */
+    if(annotationsMs>300){
+        console.warn(
+            "[Renderer] page.getAnnotations() took "+annotationsMs+"ms on page "+
+            (surface.element?.dataset?.page || "?")+" — this runs BEFORE the "+
+            "loading placeholder can appear, so a slow result here shows as a "+
+            "blank page with no indicator."
+        );
+    }
 
     console.info("[SkyReader] PDF media annotations:", mediaAnnotations);
 
@@ -1198,6 +968,33 @@ async function renderMediaAnnotations(surface,page,viewport,pageNumber){
         console.warn("[SkyReader] PDF.js AnnotationLayer unavailable.",mediaAnnotations);
         return;
     }
+
+    /*
+     * Building the real play control can take a visible moment — PDF.js
+     * has to resolve information about the embedded attachment before it
+     * can render. We already know exactly where each control will sit
+     * (annotation.rect), so mark that spot right now instead of leaving
+     * the page looking incomplete until the real control appears. The
+     * marker is removed the instant real rendering finishes, success or
+     * failure — see the finally block below.
+     */
+    const placeholders=mediaAnnotations
+        .map(annotation=>{
+            try{
+                return createMediaAnnotationPlaceholder(annotation,viewport);
+            }catch(error){
+                console.warn("[SkyReader] Could not build media placeholder.",error,annotation);
+                return null;
+            }
+        })
+        .filter(Boolean);
+
+    console.info(
+        "[SkyReader] Inserting "+placeholders.length+" of "+mediaAnnotations.length+
+        " media placeholder(s) on page "+(surface.element?.dataset?.page || "?")
+    );
+
+    placeholders.forEach(placeholder=>layer.appendChild(placeholder));
 
     try{
         const EventBus=window.PDFEventBus;
@@ -1254,32 +1051,6 @@ async function renderMediaAnnotations(surface,page,viewport,pageNumber){
             }
 
             /*
-             * [VideoDiag] Embedded-video lifecycle timing.
-             *
-             * The annotation/canvas path above is not where the visible
-             * delay lives — PDF.js creates the actual <video> only after
-             * its play button is pressed, and everything between that
-             * press and the first visible frame happens outside the
-             * annotation layer entirely (attachment retrieval, Blob/src
-             * assignment, then the browser's own media pipeline).
-             *
-             * This block times exactly that path — press -> element
-             * created -> src assigned -> loadstart -> loadedmetadata ->
-             * loadeddata -> canplay — and logs one summary once the video
-             * is ready to play. It does not touch page rendering, the
-             * annotation scheduler, or worker.js.
-             */
-            let playPressedAt=null;
-            if(playButton){
-                playButton.addEventListener("pointerdown",()=>{
-                    if(playPressedAt===null) playPressedAt=performance.now();
-                },{capture:true,passive:true});
-                playButton.addEventListener("click",()=>{
-                    if(playPressedAt===null) playPressedAt=performance.now();
-                },{capture:true,passive:true});
-            }
-
-            /*
              * Keep playback controls inside the SkyReader viewer instead of
              * relying on browser-native video menus, which can open outside
              * the viewer/under browser chrome at small viewport sizes.
@@ -1294,64 +1065,6 @@ async function renderMediaAnnotations(surface,page,viewport,pageNumber){
                 video.controls=false;
                 video.setAttribute("playsinline","");
                 video.setAttribute("webkit-playsinline","");
-
-                /* --- [VideoDiag] instrumentation start --- */
-                (()=>{
-                    const t0=playPressedAt!==null ? playPressedAt : performance.now();
-                    const t0Label=playPressedAt!==null ? "" : " (no press captured — timing from element creation)";
-                    const elapsed=()=>Math.round(performance.now()-t0);
-                    const timings={"element created":elapsed()};
-
-                    const record=(label)=>{
-                        if(timings[label]!==undefined) return;
-                        timings[label]=elapsed();
-                    };
-
-                    const report=()=>{
-                        const lines=Object.keys(timings)
-                            .map(label=>"  "+label.padEnd(18)+String(timings[label])+"ms")
-                            .join("\n");
-                        console.info(
-                            "[VideoDiag] Page "+pageNumber+" embedded video"+t0Label+"\n"+lines
-                        );
-                    };
-
-                    /* currentSrc reflects whichever mechanism PDF.js used —
-                       a .src assignment, a src attribute, or a <source>
-                       child — so polling it catches "src assigned" without
-                       assuming which one PDF.js picked. */
-                    if(video.currentSrc){
-                        record("src assigned");
-                    }else{
-                        let rafId=null;
-                        const pollSrc=()=>{
-                            if(video.currentSrc){
-                                record("src assigned");
-                                return;
-                            }
-                            rafId=requestAnimationFrame(pollSrc);
-                        };
-                        rafId=requestAnimationFrame(pollSrc);
-                        video.addEventListener("loadstart",()=>{
-                            if(rafId!==null) cancelAnimationFrame(rafId);
-                        },{once:true});
-                    }
-
-                    video.addEventListener("loadstart",()=>record("loadstart"),{once:true});
-                    video.addEventListener("loadedmetadata",()=>record("loadedmetadata"),{once:true});
-                    video.addEventListener("loadeddata",()=>record("loadeddata"),{once:true});
-                    video.addEventListener("canplay",()=>{
-                        record("canplay");
-                        report();
-                    },{once:true});
-                    video.addEventListener("error",()=>{
-                        console.warn(
-                            "[VideoDiag] Page "+pageNumber+" embedded video errored before canplay",
-                            video.error
-                        );
-                    },{once:true});
-                })();
-                /* --- [VideoDiag] instrumentation end --- */
 
                 const controls=document.createElement("div");
                 controls.className="skyreaderMediaControls";
@@ -1487,7 +1200,69 @@ async function renderMediaAnnotations(surface,page,viewport,pageNumber){
         }
     }catch(error){
         console.error("[SkyReader] PDF media annotation rendering failed:",error,mediaAnnotations);
+    }finally{
+        placeholders.forEach(placeholder=>{
+            if(placeholder.parentNode) placeholder.parentNode.removeChild(placeholder);
+        });
     }
+}
+
+/*
+ * Builds a small, non-interactive marker at a media annotation's on-page
+ * position, so it lines up with where the real play control is about to
+ * appear.
+ *
+ * PDF.js v6 removed PageViewport.convertToViewportRectangle() — rectangles
+ * now have to be converted one corner at a time via
+ * convertToViewportPoint(). Older PDF.js builds only have the rectangle
+ * method. Both are supported here so this keeps working across versions.
+ */
+function createMediaAnnotationPlaceholder(annotation,viewport){
+    if(!annotation || !annotation.rect || !viewport ||
+       !viewport.width || !viewport.height){
+        return null;
+    }
+
+    const rect=annotation.rect;
+    let x1,y1,x2,y2;
+
+    if(typeof viewport.convertToViewportPoint==="function"){
+        [x1,y1]=viewport.convertToViewportPoint(rect[0],rect[1]);
+        [x2,y2]=viewport.convertToViewportPoint(rect[2],rect[3]);
+    }
+    else if(typeof viewport.convertToViewportRectangle==="function"){
+        [x1,y1,x2,y2]=viewport.convertToViewportRectangle(rect);
+    }
+    else{
+        return null;
+    }
+
+    const left=Math.min(x1,x2);
+    const top=Math.min(y1,y2);
+    const width=Math.abs(x2-x1);
+    const height=Math.abs(y2-y1);
+
+    const placeholder=document.createElement("div");
+    placeholder.className="skyreaderMediaPlaceholder";
+    placeholder.setAttribute("aria-hidden","true");
+    placeholder.style.left=(left/viewport.width*100)+"%";
+    placeholder.style.top=(top/viewport.height*100)+"%";
+    placeholder.style.width=(width/viewport.width*100)+"%";
+    placeholder.style.height=(height/viewport.height*100)+"%";
+
+    const badge=document.createElement("span");
+    badge.className="skyreaderMediaPlaceholderBadge";
+
+    const spinner=document.createElement("span");
+    spinner.className="skyreaderMediaPlaceholderSpinner";
+    badge.appendChild(spinner);
+
+    const label=document.createElement("span");
+    label.textContent="Loading media…";
+    badge.appendChild(label);
+
+    placeholder.appendChild(badge);
+    return placeholder;
 }
 /*-------------------------------------------------------
  Page/cache cleanup
@@ -1643,7 +1418,16 @@ renderer.getRenderScale=function(){
     return renderScale;
 };
 
-renderer.version="3.1.0";
+/*
+ * Exposed so any other module that needs to hand a book/media PDF
+ * URL to pdfjsLib.getDocument() can route it through the same
+ * cross-origin-safe resolution this module uses internally,
+ * instead of re-deriving (or forgetting) the proxy rewrite. See
+ * the function definition above for why this exists.
+ */
+renderer.resolvePdfUrl=resolvePdfUrl;
+
+renderer.version="3.2.6";
 
 return renderer;
 
