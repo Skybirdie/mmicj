@@ -47,6 +47,7 @@ let initialized=false;
 /* Monotonic presentation token used to reject stale asynchronous opens. */
 let presentationToken=0;
 let openToken=0;
+let opNameByCode=null; /* [PageDiag] lazy reverse-lookup cache for pdfjsLib.OPS */
 
 /* Active PDF.js loading task. It is cancelled when a newer book replaces it. */
 let activeLoadingTask=null;
@@ -912,12 +913,28 @@ async function renderPage(pageNumber,visible=false,token=openToken){
                     console.info("[PageDiag] Page "+pageNumber+" font "+fontId+" — "+detail);
                 }
 
-                /* Rough shape of the content stream, in case the stall is
-                   really just sheer operator volume rather than any single
-                   resource. */
+                /*
+                 * Full op breakdown by name, not just a count of distinct
+                 * codes. Images, inline images and fonts are all cleared
+                 * on page 4 — if the stall is a shading/pattern fill or a
+                 * transparency-group setGState (the classic worker-CPU-
+                 * bound ops that never touch page.objs/commonObjs at all),
+                 * this is what will surface it, by simply not appearing on
+                 * any of the other pages' breakdowns.
+                 */
+                if(!opNameByCode){
+                    opNameByCode={};
+                    for(const key in pdfjsLib.OPS){
+                        opNameByCode[pdfjsLib.OPS[key]]=key;
+                    }
+                }
+                const breakdown=Array.from(opCounts.entries())
+                    .map(([code,count])=>(opNameByCode[code]||("code"+code))+"="+count)
+                    .join(", ");
                 console.info(
                     "[PageDiag] Page "+pageNumber+" op count: "+pageDiagOpList.fnArray.length+
-                    ", distinct op codes: "+opCounts.size
+                    ", distinct op codes: "+opCounts.size+"\n"+
+                    "  breakdown: "+breakdown
                 );
             }
         }catch(err){
