@@ -822,92 +822,34 @@ async function renderPage(pageNumber,visible=false,token=openToken){
 
 function scheduleAnnotationWork(pageNumber,surface,page,viewport,token){
     (async()=>{
-        const startedAt=performance.now();
-
+        const linksStart=performance.now();
         try{
+            await renderLinks(surface,page,viewport);
+            if(token!==openToken) return;
+
+            const mediaStart=performance.now();
+            await renderMediaAnnotations(surface,page,viewport);
+            if(token!==openToken) return;
+
+            const doneAt=performance.now();
+            const linksMs=Math.round(mediaStart-linksStart);
+            const mediaMs=Math.round(doneAt-mediaStart);
+
             /*
-             * IMPORTANT DIAGNOSTIC CHANGE:
-             * Retrieve the PDF annotation model exactly ONCE.
-             *
-             * The previous version called getAnnotations() once in
-             * renderLinks() and then again in renderMediaAnnotations().
-             * If getAnnotations() is the 100-second operation on a media
-             * page, that duplicated the expensive work.
-             *
-             * We now time one call and give the resulting annotation array
-             * to both consumers. This lets us determine whether the delay
-             * is in annotation retrieval or in PDF.js's media rendering.
+             * Loud on purpose. If a page's annotation/media wiring is slow
+             * enough for a person to notice, this line says so and says
+             * which half (hyperlinks vs. embedded media) is responsible,
+             * instead of leaving it to be re-discovered by guesswork.
              */
-            const annotationStart=performance.now();
-
-            const annotations=await page.getAnnotations({
-                intent:"display"
-            });
-
-            const annotationMs=Math.round(
-                performance.now()-annotationStart
-            );
-
-            if(token!==openToken) return;
-
-            const linkAnnotations=annotations.filter(annotation=>
-                annotation && annotation.subtype==="Link"
-            );
-
-            const mediaAnnotations=annotations.filter(annotation=>
-                annotation && (
-                    annotation.subtype==="Screen" ||
-                    annotation.subtype==="RichMedia" ||
-                    annotation.subtype==="Sound" ||
-                    annotation.subtype==="Movie"
-                )
-            );
-
-            console.info(
-                "[VideoDiag] Page "+pageNumber+
-                " getAnnotations: "+annotationMs+"ms | "+
-                "total annotations: "+annotations.length+" | "+
-                "links: "+linkAnnotations.length+" | "+
-                "media: "+mediaAnnotations.length
-            );
-
-            await renderLinks(
-                surface,
-                linkAnnotations,
-                viewport
-            );
-
-            if(token!==openToken) return;
-
-            await renderMediaAnnotations(
-                surface,
-                page,
-                viewport,
-                mediaAnnotations,
-                pageNumber
-            );
-
-            if(token!==openToken) return;
-
-            const totalMs=Math.round(
-                performance.now()-startedAt
-            );
-
-            if(totalMs>750){
+            if(linksMs+mediaMs>750){
                 console.warn(
-                    "[VideoDiag] Page "+pageNumber+
-                    " total annotation work: "+totalMs+"ms | "+
-                    "getAnnotations: "+annotationMs+"ms"
+                    "[Renderer] Page "+pageNumber+" annotation wiring was slow — "+
+                    "links: "+linksMs+"ms, media: "+mediaMs+"ms."
                 );
             }
-
         }catch(error){
             if(token===openToken){
-                console.warn(
-                    "[Renderer] Annotation wiring failed for page",
-                    pageNumber,
-                    error
-                );
+                console.warn("[Renderer] Annotation wiring failed for page",pageNumber,error);
             }
         }
     })();
@@ -917,10 +859,21 @@ function scheduleAnnotationWork(pageNumber,surface,page,viewport,token){
  Hyperlinks
 -------------------------------------------------------*/
 
-async function renderLinks(surface,annotations,viewport){
+async function renderLinks(surface,page,viewport){
     surface.element
         .querySelectorAll(".pdfLink")
         .forEach(link=>link.remove());
+
+    const annotationStart=performance.now();
+    const annotations=await page.getAnnotations();
+    const annotationMs=Math.round(performance.now()-annotationStart);
+
+    if(annotationMs>250){
+        console.info(
+            "[VideoDiag] Page "+page.pageNumber+" getAnnotations (links path): "+
+            annotationMs+"ms; annotation count: "+annotations.length
+        );
+    }
 
     for(const annotation of annotations){
         if(annotation.subtype!=="Link") continue;
@@ -937,6 +890,9 @@ async function renderLinks(surface,annotations,viewport){
         link.style.zIndex="20";
 
         if(annotation.url){
+            /* External PDF links open in a separate browser tab/window.
+               Keep the reader page intact while allowing the device/browser
+               to decide whether the new destination becomes a tab or window. */
             link.href=annotation.url;
             link.target="_blank";
             link.rel="noopener noreferrer";
@@ -965,26 +921,46 @@ async function renderLinks(surface,annotations,viewport){
  Screen/RichMedia annotations. Existing Link annotations stay
  handled by SkyReader's current hyperlink layer.
 -------------------------------------------------------*/
-async function renderMediaAnnotations(
-    surface,
-    page,
-    viewport,
-    mediaAnnotations,
-    pageNumber
-){
+async function renderMediaAnnotations(surface,page,viewport){
     if(!surface || !surface.annotationLayer) return;
 
     const layer=surface.annotationLayer;
     layer.innerHTML="";
     surface.annotationRenderer=null;
 
+    const annotationStart=performance.now();
+    const annotations=await page.getAnnotations({intent:"display"});
+    const annotationMs=Math.round(performance.now()-annotationStart);
+
+    const mediaAnnotations=annotations.filter(annotation=>
+        annotation && (
+            annotation.subtype==="Screen" ||
+            annotation.subtype==="RichMedia" ||
+            annotation.subtype==="Sound" ||
+            annotation.subtype==="Movie"
+        )
+    );
+
     if(!mediaAnnotations.length) return;
 
     console.info(
-        "[VideoDiag] Page "+pageNumber+
-        " media annotations ready: "+mediaAnnotations.length
+        "[VideoDiag] Page "+page.pageNumber+" media detected — "+
+        "getAnnotations: "+annotationMs+"ms; "+
+        "media annotations: "+mediaAnnotations.length
     );
 
+    console.info("[SkyReader] PDF media annotations:", mediaAnnotations);
+
+    /*
+       IMPORTANT:
+       Embedded Screen/RichMedia playback was added to PDF.js after the
+       5.4.x line. The current PDF.js MediaAnnotationElement creates the
+       actual play button and, on click, retrieves the embedded attachment
+       through PDFLinkService.getAttachmentContent().
+
+       Do not create a second diagnostic button here: PDF.js itself owns the
+       interactive media control.
+    */
     if(!window.pdfjsLib || !pdfjsLib.AnnotationLayer){
         console.warn("[SkyReader] PDF.js AnnotationLayer unavailable.",mediaAnnotations);
         return;
@@ -1038,8 +1014,9 @@ async function renderMediaAnnotations(
 
         const mediaRenderMs=Math.round(performance.now()-mediaRenderStart);
         console.info(
-            "[VideoDiag] Page "+pageNumber+
-            " AnnotationLayer.render: "+mediaRenderMs+"ms"
+            "[VideoDiag] Page "+page.pageNumber+" AnnotationLayer.render: "+
+            mediaRenderMs+"ms; getAnnotations: "+annotationMs+"ms; total media path: "+
+            Math.round(performance.now()-annotationStart)+"ms"
         );
 
         const mediaContainer=layer.querySelector(".mediaAnnotation");
@@ -1059,9 +1036,68 @@ async function renderMediaAnnotations(
              * PDF.js creates the actual <video> only after its play button is
              * pressed, so watch the media annotation for that element.
              */
+            const mediaRenderedAt=performance.now();
+            console.info(
+                "[VideoDiag] Page "+page.pageNumber+" media container ready at "+
+                Math.round(mediaRenderedAt)+"ms"
+            );
+
             const installMediaControls=()=>{
                 const video=mediaContainer.querySelector("video.mediaContent");
-                if(!video || video.dataset.skyreaderControlsInstalled==="1") return;
+                if(!video) return;
+
+                if(video.dataset.skyreaderVideoDiagInstalled!=="1"){
+                    video.dataset.skyreaderVideoDiagInstalled="1";
+
+                    const detectedAt=performance.now();
+                    const elapsed=Math.round(detectedAt-mediaRenderedAt);
+                    console.info(
+                        "[VideoDiag] Page "+page.pageNumber+" <video> detected after "+
+                        elapsed+"ms; readyState="+video.readyState+
+                        "; networkState="+video.networkState+
+                        "; src="+(video.currentSrc||video.src||"(none)")
+                    );
+
+                    const logEvent=(name)=>{
+                        const now=performance.now();
+                        console.info(
+                            "[VideoDiag] Page "+page.pageNumber+" video "+name+
+                            " +"+Math.round(now-detectedAt)+"ms; readyState="+
+                            video.readyState+"; networkState="+video.networkState+
+                            "; currentSrc="+(video.currentSrc||video.src||"(none)")+
+                            (Number.isFinite(video.duration) ? "; duration="+video.duration : "")
+                        );
+                    };
+
+                    [
+                        "loadedmetadata",
+                        "loadeddata",
+                        "canplay",
+                        "canplaythrough",
+                        "playing",
+                        "error",
+                        "stalled",
+                        "waiting",
+                        "progress"
+                    ].forEach(type=>{
+                        video.addEventListener(type,()=>logEvent(type));
+                    });
+
+                    [1000,5000,15000,30000,60000,90000].forEach(delay=>{
+                        setTimeout(()=>{
+                            if(video.readyState<1){
+                                console.info(
+                                    "[VideoDiag] Page "+page.pageNumber+
+                                    " video status at "+delay+"ms: readyState="+
+                                    video.readyState+"; networkState="+video.networkState+
+                                    "; currentSrc="+(video.currentSrc||video.src||"(none)")
+                                );
+                            }
+                        },delay);
+                    });
+                }
+
+                if(video.dataset.skyreaderControlsInstalled==="1") return;
 
                 video.dataset.skyreaderControlsInstalled="1";
                 video.controls=false;
