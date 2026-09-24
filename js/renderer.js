@@ -800,6 +800,31 @@ async function renderPage(pageNumber,visible=false,token=openToken){
          * extra total time for this diagnostic round only — the point is
          * to see which side of that seam the ~43s actually falls on.
          */
+        /*
+         * [PageDiag] Isolate annotation OBJECT construction from operator-
+         * list building. annotationMode:DISABLE removed the annotation's
+         * ops from the output but not the delay, which means the cost
+         * isn't in emitting paint ops for the annotation — it's upstream,
+         * in pdf.js building an Annotation instance for every /Annots
+         * entry (via getAnnotations(), which getOperatorList() also calls
+         * internally and then caches on the page). For a Screen/RichMedia
+         * annotation, that construction can mean resolving/decompressing
+         * its referenced embedded-file stream just to build the data
+         * model — independent of whether anything from it ever gets
+         * painted. Calling getAnnotations() ourselves first, timed alone,
+         * tests that directly: if this is where the time goes, the
+         * getOperatorList() call right after should come back fast,
+         * since parsed annotations are cached per page.
+         */
+        const pageDiagAnnotStart=performance.now();
+        let pageDiagAnnotMs=null;
+        try{
+            await page.getAnnotations();
+            pageDiagAnnotMs=Math.round(performance.now()-pageDiagAnnotStart);
+        }catch(err){
+            console.warn("[PageDiag] Page "+pageNumber+" getAnnotations() failed",err);
+        }
+
         const pageDiagOpListStart=performance.now();
         let pageDiagOpListMs=null;
         try{
@@ -1003,6 +1028,7 @@ async function renderPage(pageNumber,visible=false,token=openToken){
         console.info(
             "[PageDiag] Page "+pageNumber+" canvas path\n"+
             "  getPage (fetch/parse):       "+Math.round(pageDiagGotPage-pageDiagStart)+"ms\n"+
+            "  getAnnotations (objects):    "+(pageDiagAnnotMs===null ? "failed" : pageDiagAnnotMs+"ms")+"\n"+
             "  getOperatorList (resources): "+(pageDiagOpListMs===null ? "failed" : pageDiagOpListMs+"ms")+"\n"+
             "  page.render (canvas exec):   "+Math.round(pageDiagRendered-pageDiagRenderStart)+"ms\n"+
             "  total:                       "+Math.round(pageDiagRendered-pageDiagStart)+"ms"
