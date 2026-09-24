@@ -803,7 +803,15 @@ async function renderPage(pageNumber,visible=false,token=openToken){
         const pageDiagOpListStart=performance.now();
         let pageDiagOpListMs=null;
         try{
-            const pageDiagOpList=await page.getOperatorList();
+            /*
+             * [PageDiag] Direct test: does asking getOperatorList() itself
+             * (not just render(), which apparently didn't fully suppress
+             * this) to skip annotations remove the beginAnnotation/
+             * endAnnotation pair — and the time that goes with it? Page 4
+             * is the only page in the whole book with either op.
+             */
+            const pageDiagAnnotationMode=(window.pdfjsLib && pdfjsLib.AnnotationMode) ? pdfjsLib.AnnotationMode.DISABLE : 0;
+            const pageDiagOpList=await page.getOperatorList({annotationMode:pageDiagAnnotationMode});
             pageDiagOpListMs=Math.round(performance.now()-pageDiagOpListStart);
 
             /*
@@ -935,6 +943,15 @@ async function renderPage(pageNumber,visible=false,token=openToken){
                     "[PageDiag] Page "+pageNumber+" op count: "+pageDiagOpList.fnArray.length+
                     ", distinct op codes: "+opCounts.size+"\n"+
                     "  breakdown: "+breakdown
+                );
+                const stillHasAnnotationOps=
+                    pdfjsLib.OPS.beginAnnotation!==undefined &&
+                    opCounts.has(pdfjsLib.OPS.beginAnnotation);
+                console.info(
+                    "[PageDiag] Page "+pageNumber+" getOperatorList called with annotationMode:DISABLE — "+
+                    (stillHasAnnotationOps
+                        ? "beginAnnotation/endAnnotation STILL present (DISABLE did not suppress it)"
+                        : "no annotation ops present")
                 );
             }
         }catch(err){
