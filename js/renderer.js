@@ -822,33 +822,103 @@ async function renderPage(pageNumber,visible=false,token=openToken){
                         pdfjsLib.OPS.paintImageMaskXObject
                     ].filter(code=>code!==undefined)
                 );
+                const inlineImageOpCodes=new Set(
+                    [
+                        pdfjsLib.OPS.paintInlineImageXObject,
+                        pdfjsLib.OPS.paintInlineImageXObjectGroup
+                    ].filter(code=>code!==undefined)
+                );
                 const seen=new Set();
-                for(let i=0;i<pageDiagOpList.fnArray.length;i++){
-                    if(!imageOpCodes.has(pageDiagOpList.fnArray[i])) continue;
-                    const args=pageDiagOpList.argsArray[i];
-                    const objId=args && args[0];
-                    if(typeof objId!=="string" || seen.has(objId)) continue;
-                    seen.add(objId);
+                const fontIds=new Set();
+                let inlineImageCount=0;
+                const opCounts=new Map();
 
-                    let detail="(object not resolved in page.objs)";
+                for(let i=0;i<pageDiagOpList.fnArray.length;i++){
+                    const fn=pageDiagOpList.fnArray[i];
+                    opCounts.set(fn,(opCounts.get(fn)||0)+1);
+                    const args=pageDiagOpList.argsArray[i];
+
+                    if(imageOpCodes.has(fn)){
+                        const objId=args && args[0];
+                        if(typeof objId==="string" && !seen.has(objId)){
+                            seen.add(objId);
+                            let detail="(object not resolved in page.objs)";
+                            try{
+                                if(page.objs.has(objId)){
+                                    const obj=page.objs.get(objId);
+                                    if(obj){
+                                        const parts=[];
+                                        if(obj.width && obj.height) parts.push(obj.width+"x"+obj.height+"px");
+                                        if(obj.kind!==undefined) parts.push("kind="+obj.kind);
+                                        const raw=obj.data && (obj.data.length || obj.data.byteLength);
+                                        if(raw) parts.push("~"+Math.round(raw/1024)+"KB raw pixel data");
+                                        if(obj.bitmap) parts.push("(ImageBitmap)");
+                                        detail=parts.join(", ") || "(resolved, no size info)";
+                                    }
+                                }
+                            }catch(readErr){
+                                detail="(error reading page.objs: "+readErr.message+")";
+                            }
+                            console.info("[PageDiag] Page "+pageNumber+" XObject image "+objId+" — "+detail);
+                        }
+                    }else if(inlineImageOpCodes.has(fn)){
+                        /* Inline images carry their data directly in args,
+                           not via a page.objs lookup, so a large one is
+                           otherwise invisible to a page.objs scan. */
+                        const images=Array.isArray(args) && Array.isArray(args[0]) ? args[0] : [args && args[0]];
+                        for(const img of images){
+                            if(!img) continue;
+                            inlineImageCount++;
+                            const parts=[];
+                            if(img.width && img.height) parts.push(img.width+"x"+img.height+"px");
+                            if(img.kind!==undefined) parts.push("kind="+img.kind);
+                            const raw=img.data && (img.data.length || img.data.byteLength);
+                            if(raw) parts.push("~"+Math.round(raw/1024)+"KB raw pixel data");
+                            console.info("[PageDiag] Page "+pageNumber+" inline image — "+(parts.join(", ")||"(no size info)"));
+                        }
+                    }else if(fn===pdfjsLib.OPS.setFont && args && typeof args[0]==="string"){
+                        fontIds.add(args[0]);
+                    }
+                }
+
+                if(inlineImageCount>1){
+                    console.info("[PageDiag] Page "+pageNumber+" total inline images: "+inlineImageCount);
+                }
+
+                /*
+                 * Fonts get resolved on commonObjs, and — unlike images —
+                 * the evaluator often needs a font's widths/metrics loaded
+                 * before it can finish emitting the text operators that use
+                 * it, making a large or malformed embedded font a
+                 * plausible synchronous stall inside getOperatorList()
+                 * itself.
+                 */
+                for(const fontId of fontIds){
+                    let detail="(not resolved on commonObjs)";
                     try{
-                        if(page.objs.has(objId)){
-                            const obj=page.objs.get(objId);
-                            if(obj){
+                        if(page.commonObjs.has(fontId)){
+                            const font=page.commonObjs.get(fontId);
+                            if(font){
                                 const parts=[];
-                                if(obj.width && obj.height) parts.push(obj.width+"x"+obj.height+"px");
-                                if(obj.kind!==undefined) parts.push("kind="+obj.kind);
-                                const raw=obj.data && (obj.data.length || obj.data.byteLength);
-                                if(raw) parts.push("~"+Math.round(raw/1024)+"KB raw pixel data");
-                                if(obj.bitmap) parts.push("(ImageBitmap)");
-                                detail=parts.join(", ") || "(resolved, no size info)";
+                                if(font.name) parts.push("name="+font.name);
+                                if(font.loadedName) parts.push("loadedName="+font.loadedName);
+                                if(font.numGlyphs!==undefined) parts.push("numGlyphs="+font.numGlyphs);
+                                detail=parts.join(", ")||"(resolved, no detail)";
                             }
                         }
                     }catch(readErr){
-                        detail="(error reading page.objs: "+readErr.message+")";
+                        detail="(error reading commonObjs: "+readErr.message+")";
                     }
-                    console.info("[PageDiag] Page "+pageNumber+" image resource "+objId+" — "+detail);
+                    console.info("[PageDiag] Page "+pageNumber+" font "+fontId+" — "+detail);
                 }
+
+                /* Rough shape of the content stream, in case the stall is
+                   really just sheer operator volume rather than any single
+                   resource. */
+                console.info(
+                    "[PageDiag] Page "+pageNumber+" op count: "+pageDiagOpList.fnArray.length+
+                    ", distinct op codes: "+opCounts.size
+                );
             }
         }catch(err){
             console.warn("[PageDiag] Page "+pageNumber+" getOperatorList() failed",err);
