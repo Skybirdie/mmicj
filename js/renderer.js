@@ -802,8 +802,54 @@ async function renderPage(pageNumber,visible=false,token=openToken){
         const pageDiagOpListStart=performance.now();
         let pageDiagOpListMs=null;
         try{
-            await page.getOperatorList();
+            const pageDiagOpList=await page.getOperatorList();
             pageDiagOpListMs=Math.round(performance.now()-pageDiagOpListStart);
+
+            /*
+             * [PageDiag] Which resource is getOperatorList() actually
+             * waiting on? Scan the resolved operator list for any
+             * image-painting ops, then pull each referenced image straight
+             * out of pdf.js's own page.objs cache — by the time
+             * getOperatorList() has resolved, an image it painted must
+             * already be resolved there. This gives real pixel dimensions
+             * and raw size instead of guessing from load time alone.
+             */
+            if(pdfjsLib.OPS){
+                const imageOpCodes=new Set(
+                    [
+                        pdfjsLib.OPS.paintImageXObject,
+                        pdfjsLib.OPS.paintJpegXObject,
+                        pdfjsLib.OPS.paintImageMaskXObject
+                    ].filter(code=>code!==undefined)
+                );
+                const seen=new Set();
+                for(let i=0;i<pageDiagOpList.fnArray.length;i++){
+                    if(!imageOpCodes.has(pageDiagOpList.fnArray[i])) continue;
+                    const args=pageDiagOpList.argsArray[i];
+                    const objId=args && args[0];
+                    if(typeof objId!=="string" || seen.has(objId)) continue;
+                    seen.add(objId);
+
+                    let detail="(object not resolved in page.objs)";
+                    try{
+                        if(page.objs.has(objId)){
+                            const obj=page.objs.get(objId);
+                            if(obj){
+                                const parts=[];
+                                if(obj.width && obj.height) parts.push(obj.width+"x"+obj.height+"px");
+                                if(obj.kind!==undefined) parts.push("kind="+obj.kind);
+                                const raw=obj.data && (obj.data.length || obj.data.byteLength);
+                                if(raw) parts.push("~"+Math.round(raw/1024)+"KB raw pixel data");
+                                if(obj.bitmap) parts.push("(ImageBitmap)");
+                                detail=parts.join(", ") || "(resolved, no size info)";
+                            }
+                        }
+                    }catch(readErr){
+                        detail="(error reading page.objs: "+readErr.message+")";
+                    }
+                    console.info("[PageDiag] Page "+pageNumber+" image resource "+objId+" — "+detail);
+                }
+            }
         }catch(err){
             console.warn("[PageDiag] Page "+pageNumber+" getOperatorList() failed",err);
         }
