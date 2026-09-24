@@ -51,17 +51,6 @@ let openToken=0;
 /* Active PDF.js loading task. It is cancelled when a newer book replaces it. */
 let activeLoadingTask=null;
 
-/*
- * Background embedded-video discovery. This is deliberately separate from
- * page rendering: ordinary PDF painting keeps its existing fast path while
- * PDF.js quietly fetches the annotation data for video pages ahead of time.
- */
-const videoPages=new Set();
-const videoAnnotationCache=new Map();
-const videoPagePromises=new Map();
-let videoScanGeneration=0;
-let videoScanRunning=false;
-
 const RENDER_WINDOW=6;
 
 renderer.events={
@@ -75,146 +64,6 @@ renderer.events={
 function emit(name,...args){
     const fn=renderer.events[name];
     if(typeof fn==="function") fn(...args);
-}
-
-/*-------------------------------------------------------
- Background embedded-video detection / preparation
--------------------------------------------------------*/
-
-function isVideoAnnotation(annotation){
-    return Boolean(
-        annotation &&
-        (
-            annotation.subtype==="Screen" ||
-            annotation.subtype==="RichMedia" ||
-            annotation.subtype==="Movie"
-        )
-    );
-}
-
-function cacheVideoPage(pageNumber,page,annotations){
-    if(!Array.isArray(annotations)) return false;
-
-    const mediaAnnotations=annotations.filter(isVideoAnnotation);
-
-    if(!mediaAnnotations.length) return false;
-
-    videoPages.add(pageNumber);
-    videoAnnotationCache.set(pageNumber,{
-        page,
-        annotations,
-        mediaAnnotations,
-        preparedAt:performance.now()
-    });
-
-    console.info(
-        "[VideoPrep] page "+pageNumber+
-        " contains "+mediaAnnotations.length+
-        " embedded media annotation(s); annotation data ready"
-    );
-
-    return true;
-}
-
-async function prepareVideoPageData(pdfDocument,pageNumber,generation){
-    if(generation!==videoScanGeneration || pdfDocument!==pdf) return;
-
-    if(videoAnnotationCache.has(pageNumber)) return videoAnnotationCache.get(pageNumber);
-    if(videoPagePromises.has(pageNumber)) return videoPagePromises.get(pageNumber);
-
-    const promise=(async()=>{
-        const started=performance.now();
-        try{
-            /* Reuse the normal PDF page cache when available. */
-            const page=pageCache.has(pageNumber)
-                ? pageCache.get(pageNumber)
-                : await pdfDocument.getPage(pageNumber);
-
-            if(!pageCache.has(pageNumber)) pageCache.set(pageNumber,page);
-
-            const annotations=await page.getAnnotations({intent:"display"});
-
-            if(generation!==videoScanGeneration || pdfDocument!==pdf) return null;
-
-            const found=cacheVideoPage(pageNumber,page,annotations);
-
-            if(found){
-                console.info(
-                    "[VideoPrep] page "+pageNumber+
-                    " prepared in "+Math.round(performance.now()-started)+"ms"
-                );
-                return videoAnnotationCache.get(pageNumber);
-            }
-
-            return null;
-        }catch(error){
-            if(generation===videoScanGeneration && pdfDocument===pdf){
-                console.warn("[VideoPrep] scan failed for page "+pageNumber,error);
-            }
-            return null;
-        }finally{
-            videoPagePromises.delete(pageNumber);
-        }
-    })();
-
-    videoPagePromises.set(pageNumber,promise);
-    return promise;
-}
-
-async function scanPdfForVideoPages(pdfDocument,generation){
-    if(!pdfDocument || generation!==videoScanGeneration || videoScanRunning) return;
-
-    videoScanRunning=true;
-    const started=performance.now();
-    const BATCH_SIZE=4;
-
-    console.info(
-        "[VideoPrep] background scan started for "+pdfDocument.numPages+" pages"
-    );
-
-    try{
-        for(let start=1;start<=pdfDocument.numPages;start+=BATCH_SIZE){
-            if(generation!==videoScanGeneration || pdfDocument!==pdf) return;
-
-            const end=Math.min(start+BATCH_SIZE-1,pdfDocument.numPages);
-            const jobs=[];
-
-            for(let pageNumber=start;pageNumber<=end;pageNumber++){
-                jobs.push(prepareVideoPageData(pdfDocument,pageNumber,generation));
-            }
-
-            await Promise.all(jobs);
-
-            /* Yield so normal canvas/page-flip work keeps the main thread responsive. */
-            await new Promise(resolve=>requestAnimationFrame(resolve));
-        }
-    }finally{
-        if(generation===videoScanGeneration && pdfDocument===pdf){
-            videoScanRunning=false;
-            console.info(
-                "[VideoPrep] background scan complete in "+
-                Math.round(performance.now()-started)+"ms; video pages:",
-                [...videoPages].sort((a,b)=>a-b)
-            );
-        }else{
-            videoScanRunning=false;
-        }
-    }
-}
-
-function prepareNearbyVideoPages(center){
-    if(!pdf) return;
-
-    /* The full scan is already running, but this accelerates pages near the
-       user's current position if they have not reached the scan yet. */
-    for(let offset=-2;offset<=2;offset++){
-        const pageNumber=center+offset;
-        if(pageNumber<1 || pageNumber>pageCount) continue;
-
-        if(videoPages.has(pageNumber)) continue;
-
-        prepareVideoPageData(pdf,pageNumber,videoScanGeneration);
-    }
 }
 
 function progress(percent,text){
@@ -334,7 +183,6 @@ renderer.initialize=function(){
 
         Sky180FlipEngine.on("page",page=>{
             currentPage=page;
-            prepareNearbyVideoPages(page);
             renderer.ensureRenderWindow(page);
             emit("page",currentPage,pageCount);
         });
@@ -699,19 +547,6 @@ progress(
         const singlePage=isSinglePageDevice();
         const twoPageDocument=(!singlePage && pageCount===2);
 
-        /*
-         * Start embedded-video detection now, but deliberately do not await it.
-         * Normal page painting proceeds exactly as before while PDF.js obtains
-         * annotation data for future video pages in small background batches.
-         */
-        videoScanGeneration++;
-        videoPages.clear();
-        videoAnnotationCache.clear();
-        videoPagePromises.clear();
-        videoScanRunning=false;
-        scanPdfForVideoPages(pdf,videoScanGeneration);
-
-
     const requestedStart=Math.max(
             1,
             Math.min(pageCount,Number(options.startPage)||1)
@@ -987,34 +822,92 @@ async function renderPage(pageNumber,visible=false,token=openToken){
 
 function scheduleAnnotationWork(pageNumber,surface,page,viewport,token){
     (async()=>{
-        const linksStart=performance.now();
+        const startedAt=performance.now();
+
         try{
-            await renderLinks(surface,page,viewport);
-            if(token!==openToken) return;
-
-            const mediaStart=performance.now();
-            await renderMediaAnnotations(surface,page,viewport);
-            if(token!==openToken) return;
-
-            const doneAt=performance.now();
-            const linksMs=Math.round(mediaStart-linksStart);
-            const mediaMs=Math.round(doneAt-mediaStart);
-
             /*
-             * Loud on purpose. If a page's annotation/media wiring is slow
-             * enough for a person to notice, this line says so and says
-             * which half (hyperlinks vs. embedded media) is responsible,
-             * instead of leaving it to be re-discovered by guesswork.
+             * IMPORTANT DIAGNOSTIC CHANGE:
+             * Retrieve the PDF annotation model exactly ONCE.
+             *
+             * The previous version called getAnnotations() once in
+             * renderLinks() and then again in renderMediaAnnotations().
+             * If getAnnotations() is the 100-second operation on a media
+             * page, that duplicated the expensive work.
+             *
+             * We now time one call and give the resulting annotation array
+             * to both consumers. This lets us determine whether the delay
+             * is in annotation retrieval or in PDF.js's media rendering.
              */
-            if(linksMs+mediaMs>750){
+            const annotationStart=performance.now();
+
+            const annotations=await page.getAnnotations({
+                intent:"display"
+            });
+
+            const annotationMs=Math.round(
+                performance.now()-annotationStart
+            );
+
+            if(token!==openToken) return;
+
+            const linkAnnotations=annotations.filter(annotation=>
+                annotation && annotation.subtype==="Link"
+            );
+
+            const mediaAnnotations=annotations.filter(annotation=>
+                annotation && (
+                    annotation.subtype==="Screen" ||
+                    annotation.subtype==="RichMedia" ||
+                    annotation.subtype==="Sound" ||
+                    annotation.subtype==="Movie"
+                )
+            );
+
+            console.info(
+                "[VideoDiag] Page "+pageNumber+
+                " getAnnotations: "+annotationMs+"ms | "+
+                "total annotations: "+annotations.length+" | "+
+                "links: "+linkAnnotations.length+" | "+
+                "media: "+mediaAnnotations.length
+            );
+
+            await renderLinks(
+                surface,
+                linkAnnotations,
+                viewport
+            );
+
+            if(token!==openToken) return;
+
+            await renderMediaAnnotations(
+                surface,
+                page,
+                viewport,
+                mediaAnnotations,
+                pageNumber
+            );
+
+            if(token!==openToken) return;
+
+            const totalMs=Math.round(
+                performance.now()-startedAt
+            );
+
+            if(totalMs>750){
                 console.warn(
-                    "[Renderer] Page "+pageNumber+" annotation wiring was slow — "+
-                    "links: "+linksMs+"ms, media: "+mediaMs+"ms."
+                    "[VideoDiag] Page "+pageNumber+
+                    " total annotation work: "+totalMs+"ms | "+
+                    "getAnnotations: "+annotationMs+"ms"
                 );
             }
+
         }catch(error){
             if(token===openToken){
-                console.warn("[Renderer] Annotation wiring failed for page",pageNumber,error);
+                console.warn(
+                    "[Renderer] Annotation wiring failed for page",
+                    pageNumber,
+                    error
+                );
             }
         }
     })();
@@ -1024,12 +917,10 @@ function scheduleAnnotationWork(pageNumber,surface,page,viewport,token){
  Hyperlinks
 -------------------------------------------------------*/
 
-async function renderLinks(surface,page,viewport){
+async function renderLinks(surface,annotations,viewport){
     surface.element
         .querySelectorAll(".pdfLink")
         .forEach(link=>link.remove());
-
-    const annotations=await page.getAnnotations();
 
     for(const annotation of annotations){
         if(annotation.subtype!=="Link") continue;
@@ -1046,9 +937,6 @@ async function renderLinks(surface,page,viewport){
         link.style.zIndex="20";
 
         if(annotation.url){
-            /* External PDF links open in a separate browser tab/window.
-               Keep the reader page intact while allowing the device/browser
-               to decide whether the new destination becomes a tab or window. */
             link.href=annotation.url;
             link.target="_blank";
             link.rel="noopener noreferrer";
@@ -1077,104 +965,30 @@ async function renderLinks(surface,page,viewport){
  Screen/RichMedia annotations. Existing Link annotations stay
  handled by SkyReader's current hyperlink layer.
 -------------------------------------------------------*/
-async function renderMediaAnnotations(surface,page,viewport){
+async function renderMediaAnnotations(
+    surface,
+    page,
+    viewport,
+    mediaAnnotations,
+    pageNumber
+){
     if(!surface || !surface.annotationLayer) return;
 
     const layer=surface.annotationLayer;
     layer.innerHTML="";
     surface.annotationRenderer=null;
 
-    const pageNumber=Number(surface.element?.dataset?.page || 0);
-    const cachedVideo=videoAnnotationCache.get(pageNumber);
-
-    let annotations;
-    let annotationsMs=0;
-
-    if(cachedVideo && cachedVideo.page===page && Array.isArray(cachedVideo.annotations)){
-        /* The background scanner already paid the getAnnotations() cost. */
-        annotations=cachedVideo.annotations;
-        console.info(
-            "[VideoPrep] page "+pageNumber+
-            " using pre-fetched annotation data"
-        );
-    }else{
-        const annotationsStartedAt=performance.now();
-        annotations=await page.getAnnotations({intent:"display"});
-        annotationsMs=Math.round(performance.now()-annotationsStartedAt);
-    }
-
-    const mediaAnnotations=annotations.filter(annotation=>
-        annotation && (
-            annotation.subtype==="Screen" ||
-            annotation.subtype==="RichMedia" ||
-            annotation.subtype==="Sound" ||
-            annotation.subtype==="Movie"
-        )
-    );
-
     if(!mediaAnnotations.length) return;
 
-    /*
-     * The loading placeholder below can only appear AFTER this line —
-     * page.getAnnotations() has to resolve first before we even know a
-     * media annotation exists here. If getAnnotations() itself is the
-     * slow step (rather than the AnnotationLayer/play-control build that
-     * follows), the placeholder has nothing to precede and the page will
-     * still look blank for that stretch. This log makes that visible
-     * instead of leaving it to be re-discovered by guesswork.
-     */
-    if(annotationsMs>300){
-        console.warn(
-            "[Renderer] page.getAnnotations() took "+annotationsMs+"ms on page "+
-            (surface.element?.dataset?.page || "?")+" — this runs BEFORE the "+
-            "loading placeholder can appear, so a slow result here shows as a "+
-            "blank page with no indicator."
-        );
-    }
+    console.info(
+        "[VideoDiag] Page "+pageNumber+
+        " media annotations ready: "+mediaAnnotations.length
+    );
 
-    console.info("[SkyReader] PDF media annotations:", mediaAnnotations);
-
-    /*
-       IMPORTANT:
-       Embedded Screen/RichMedia playback was added to PDF.js after the
-       5.4.x line. The current PDF.js MediaAnnotationElement creates the
-       actual play button and, on click, retrieves the embedded attachment
-       through PDFLinkService.getAttachmentContent().
-
-       Do not create a second diagnostic button here: PDF.js itself owns the
-       interactive media control.
-    */
     if(!window.pdfjsLib || !pdfjsLib.AnnotationLayer){
         console.warn("[SkyReader] PDF.js AnnotationLayer unavailable.",mediaAnnotations);
         return;
     }
-
-    /*
-     * Building the real play control can take a visible moment — PDF.js
-     * has to resolve information about the embedded attachment before it
-     * can render. We already know exactly where each control will sit
-     * (annotation.rect), so mark that spot right now instead of leaving
-     * the page looking incomplete until the real control appears. The
-     * marker is removed the instant real rendering finishes, success or
-     * failure — see the finally block below.
-     */
-    const placeholders=mediaAnnotations
-        .map(annotation=>{
-            try{
-                return createMediaAnnotationPlaceholder(annotation,viewport);
-            }catch(error){
-                console.warn("[SkyReader] Could not build media placeholder.",error,annotation);
-                return null;
-            }
-        })
-        .filter(Boolean);
-
-    console.info(
-        "[SkyReader] Inserting "+placeholders.length+" of "+mediaAnnotations.length+
-        " media placeholder(s) on page "+(surface.element?.dataset?.page || "?")
-    );
-
-    placeholders.forEach(placeholder=>layer.appendChild(placeholder));
 
     try{
         const EventBus=window.PDFEventBus;
@@ -1210,6 +1024,8 @@ async function renderMediaAnnotations(surface,page,viewport){
 
         surface.annotationRenderer=rendererLayer;
 
+        const mediaRenderStart=performance.now();
+
         await rendererLayer.render({
             viewport:pdfViewport,
             annotations:mediaAnnotations,
@@ -1219,6 +1035,12 @@ async function renderMediaAnnotations(surface,page,viewport){
             renderForms:false,
             enableScripting:false
         });
+
+        const mediaRenderMs=Math.round(performance.now()-mediaRenderStart);
+        console.info(
+            "[VideoDiag] Page "+pageNumber+
+            " AnnotationLayer.render: "+mediaRenderMs+"ms"
+        );
 
         const mediaContainer=layer.querySelector(".mediaAnnotation");
         const playButton=layer.querySelector(".mediaAnnotation .mediaPlayButton");
@@ -1380,69 +1202,7 @@ async function renderMediaAnnotations(surface,page,viewport){
         }
     }catch(error){
         console.error("[SkyReader] PDF media annotation rendering failed:",error,mediaAnnotations);
-    }finally{
-        placeholders.forEach(placeholder=>{
-            if(placeholder.parentNode) placeholder.parentNode.removeChild(placeholder);
-        });
     }
-}
-
-/*
- * Builds a small, non-interactive marker at a media annotation's on-page
- * position, so it lines up with where the real play control is about to
- * appear.
- *
- * PDF.js v6 removed PageViewport.convertToViewportRectangle() — rectangles
- * now have to be converted one corner at a time via
- * convertToViewportPoint(). Older PDF.js builds only have the rectangle
- * method. Both are supported here so this keeps working across versions.
- */
-function createMediaAnnotationPlaceholder(annotation,viewport){
-    if(!annotation || !annotation.rect || !viewport ||
-       !viewport.width || !viewport.height){
-        return null;
-    }
-
-    const rect=annotation.rect;
-    let x1,y1,x2,y2;
-
-    if(typeof viewport.convertToViewportPoint==="function"){
-        [x1,y1]=viewport.convertToViewportPoint(rect[0],rect[1]);
-        [x2,y2]=viewport.convertToViewportPoint(rect[2],rect[3]);
-    }
-    else if(typeof viewport.convertToViewportRectangle==="function"){
-        [x1,y1,x2,y2]=viewport.convertToViewportRectangle(rect);
-    }
-    else{
-        return null;
-    }
-
-    const left=Math.min(x1,x2);
-    const top=Math.min(y1,y2);
-    const width=Math.abs(x2-x1);
-    const height=Math.abs(y2-y1);
-
-    const placeholder=document.createElement("div");
-    placeholder.className="skyreaderMediaPlaceholder";
-    placeholder.setAttribute("aria-hidden","true");
-    placeholder.style.left=(left/viewport.width*100)+"%";
-    placeholder.style.top=(top/viewport.height*100)+"%";
-    placeholder.style.width=(width/viewport.width*100)+"%";
-    placeholder.style.height=(height/viewport.height*100)+"%";
-
-    const badge=document.createElement("span");
-    badge.className="skyreaderMediaPlaceholderBadge";
-
-    const spinner=document.createElement("span");
-    spinner.className="skyreaderMediaPlaceholderSpinner";
-    badge.appendChild(spinner);
-
-    const label=document.createElement("span");
-    label.textContent="Loading media…";
-    badge.appendChild(label);
-
-    placeholder.appendChild(badge);
-    return placeholder;
 }
 /*-------------------------------------------------------
  Page/cache cleanup
@@ -1478,8 +1238,6 @@ renderer.goTo=async function(page){
     /* Prepare the target page before asking the engine to move. */
     const token=openToken;
 
-    prepareNearbyVideoPages(page);
-
     await renderPage(page,true,token);
 
     if(token!==openToken || !pdf) return false;
@@ -1504,18 +1262,6 @@ renderer.refresh=function(){
     scheduleWindow(currentPage,openToken);
 };
 
-renderer.videoPages=function(){
-    return [...videoPages].sort((a,b)=>a-b);
-};
-
-renderer.videoPreparation=function(){
-    return [...videoAnnotationCache.entries()].map(([pageNumber,data])=>({
-        pageNumber,
-        annotationCount:data.mediaAnnotations?.length || 0,
-        prepared:true
-    }));
-};
-
 renderer.statistics=function(){
     return {
         book:currentBook,
@@ -1537,11 +1283,6 @@ renderer.statistics=function(){
 renderer.close=function(){
     openToken++;
     presentationToken++;
-    videoScanGeneration++;
-    videoPages.clear();
-    videoAnnotationCache.clear();
-    videoPagePromises.clear();
-    videoScanRunning=false;
 
     if(activeLoadingTask){
         try{
@@ -1617,16 +1358,7 @@ renderer.getRenderScale=function(){
     return renderScale;
 };
 
-/*
- * Exposed so any other module that needs to hand a book/media PDF
- * URL to pdfjsLib.getDocument() can route it through the same
- * cross-origin-safe resolution this module uses internally,
- * instead of re-deriving (or forgetting) the proxy rewrite. See
- * the function definition above for why this exists.
- */
-renderer.resolvePdfUrl=resolvePdfUrl;
-
-renderer.version="3.3.0-video-prep";
+renderer.version="3.1.0";
 
 return renderer;
 
