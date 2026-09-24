@@ -780,16 +780,91 @@ async function renderPage(pageNumber,visible=false,token=openToken){
         ctx.clearRect(0,0,surface.canvas.width,surface.canvas.height);
 
         const paintStartedAt=performance.now();
+
+        /*
+         * RENDER-INTERNAL DIAGNOSTIC
+         *
+         * Do not call getOperatorList() ourselves. That would duplicate the
+         * expensive work we are trying to measure. Instead, temporarily wrap
+         * the page instance method so that the exact getOperatorList() call
+         * made by PDF.js during page.render() is timed.
+         *
+         * This lets us separate:
+         *   1. PDF parsing/operator-list acquisition, from
+         *   2. canvas graphics execution/image decoding.
+         */
+        const originalGetOperatorList=page.getOperatorList;
+        let operatorListCallCount=0;
+        if(typeof originalGetOperatorList==="function"){
+            page.getOperatorList=async function(...args){
+                const callNumber=++operatorListCallCount;
+                const operatorStartedAt=performance.now();
+                console.info(
+                    "[VideoDiag] Page "+pageNumber+
+                    " getOperatorList START #"+callNumber+
+                    " — render has been waiting "+
+                    Math.round(operatorStartedAt-paintStartedAt)+"ms"
+                );
+
+                try{
+                    const result=await originalGetOperatorList.apply(this,args);
+                    console.info(
+                        "[VideoDiag] Page "+pageNumber+
+                        " getOperatorList END #"+callNumber+
+                        " — "+Math.round(performance.now()-operatorStartedAt)+
+                        "ms; fnArray="+(result && result.fnArray ? result.fnArray.length : "?")+
+                        "; args="+(result && result.argsArray ? result.argsArray.length : "?")
+                    );
+                    return result;
+                }catch(error){
+                    console.warn(
+                        "[VideoDiag] Page "+pageNumber+
+                        " getOperatorList ERROR #"+callNumber+
+                        " after "+Math.round(performance.now()-operatorStartedAt)+"ms",
+                        error
+                    );
+                    throw error;
+                }
+            };
+        }
+
         console.info(
             "[VideoDiag] Page "+pageNumber+
             " page.render START — page acquisition: "+pageGetMs+"ms; "+
             "surface="+describeSurface(surface)
         );
 
-        await page.render({
-            canvasContext:ctx,
-            viewport
-        }).promise;
+        try{
+            const renderTask=page.render({
+                canvasContext:ctx,
+                viewport
+            });
+
+            /* PDF.js may yield repeatedly while executing the operator list.
+             * Count those continuations so a long render can be distinguished
+             * from a long operator-list fetch. */
+            if(renderTask && "onContinue" in renderTask){
+                let continueCount=0;
+                renderTask.onContinue=continueCallback=>{
+                    continueCount++;
+                    if(continueCount===1 || continueCount%25===0){
+                        console.info(
+                            "[VideoDiag] Page "+pageNumber+
+                            " render onContinue #"+continueCount+
+                            " — "+Math.round(performance.now()-paintStartedAt)+"ms"
+                        );
+                    }
+                    continueCallback();
+                };
+            }
+
+            await renderTask.promise;
+        }finally{
+            /* Restore PDF.js's original method before any later reuse. */
+            if(typeof originalGetOperatorList==="function"){
+                page.getOperatorList=originalGetOperatorList;
+            }
+        }
 
         const paintMs=Math.round(performance.now()-paintStartedAt);
         if(token!==openToken) return;
