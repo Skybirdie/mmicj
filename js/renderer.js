@@ -3,7 +3,7 @@
 /*
 =========================================================
  SkyReader Renderer
- Version 3.0
+ Version 3.2.7
 
  PDF.js rendering engine + page-surface manager.
 
@@ -183,7 +183,6 @@ renderer.initialize=function(){
 
         Sky180FlipEngine.on("page",page=>{
             currentPage=page;
-            syncVideoLoadingHolderForCurrentPage(page);
             renderer.ensureRenderWindow(page);
             emit("page",currentPage,pageCount);
         });
@@ -753,11 +752,6 @@ async function renderPage(pageNumber,visible=false,token=openToken){
     if(!surface || surface.rendered || surface.rendering) return;
 
     surface.rendering=true;
-    const renderStartedAt=performance.now();
-
-    if(visible && Number(pageNumber)===Number(currentPage)){
-        showVideoHolderForSlowPage(pageNumber,token);
-    }
 
     try{
         if(visible){
@@ -767,9 +761,7 @@ async function renderPage(pageNumber,visible=false,token=openToken){
             );
         }
 
-        const pageGetStartedAt=performance.now();
         const page=await getPage(pageNumber);
-        const pageGetMs=Math.round(performance.now()-pageGetStartedAt);
 
         if(token!==openToken) return;
 
@@ -784,129 +776,39 @@ async function renderPage(pageNumber,visible=false,token=openToken){
         ctx.setTransform(1,0,0,1,0,0);
         ctx.clearRect(0,0,surface.canvas.width,surface.canvas.height);
 
-        const paintStartedAt=performance.now();
+        await page.render({
+            canvasContext:ctx,
+            viewport
+        }).promise;
 
-        /*
-         * RENDER-INTERNAL DIAGNOSTIC
-         *
-         * Do not call getOperatorList() ourselves. That would duplicate the
-         * expensive work we are trying to measure. Instead, temporarily wrap
-         * the page instance method so that the exact getOperatorList() call
-         * made by PDF.js during page.render() is timed.
-         *
-         * This lets us separate:
-         *   1. PDF parsing/operator-list acquisition, from
-         *   2. canvas graphics execution/image decoding.
-         */
-        const originalGetOperatorList=page.getOperatorList;
-        let operatorListCallCount=0;
-        if(typeof originalGetOperatorList==="function"){
-            page.getOperatorList=async function(...args){
-                const callNumber=++operatorListCallCount;
-                const operatorStartedAt=performance.now();
-                console.info(
-                    "[VideoDiag] Page "+pageNumber+
-                    " getOperatorList START #"+callNumber+
-                    " — render has been waiting "+
-                    Math.round(operatorStartedAt-paintStartedAt)+"ms"
-                );
-
-                try{
-                    const result=await originalGetOperatorList.apply(this,args);
-                    console.info(
-                        "[VideoDiag] Page "+pageNumber+
-                        " getOperatorList END #"+callNumber+
-                        " — "+Math.round(performance.now()-operatorStartedAt)+
-                        "ms; fnArray="+(result && result.fnArray ? result.fnArray.length : "?")+
-                        "; args="+(result && result.argsArray ? result.argsArray.length : "?")
-                    );
-                    return result;
-                }catch(error){
-                    console.warn(
-                        "[VideoDiag] Page "+pageNumber+
-                        " getOperatorList ERROR #"+callNumber+
-                        " after "+Math.round(performance.now()-operatorStartedAt)+"ms",
-                        error
-                    );
-                    throw error;
-                }
-            };
-        }
-
-        console.info(
-            "[VideoDiag] Page "+pageNumber+
-            " page.render START — page acquisition: "+pageGetMs+"ms; "+
-            "surface="+describeSurface(surface)
-        );
-
-        try{
-            const renderTask=page.render({
-                canvasContext:ctx,
-                viewport
-            });
-
-            /* PDF.js may yield repeatedly while executing the operator list.
-             * Count those continuations so a long render can be distinguished
-             * from a long operator-list fetch. */
-            if(renderTask && "onContinue" in renderTask){
-                let continueCount=0;
-                renderTask.onContinue=continueCallback=>{
-                    continueCount++;
-                    if(continueCount===1 || continueCount%25===0){
-                        console.info(
-                            "[VideoDiag] Page "+pageNumber+
-                            " render onContinue #"+continueCount+
-                            " — "+Math.round(performance.now()-paintStartedAt)+"ms"
-                        );
-                    }
-                    continueCallback();
-                };
-            }
-
-            await renderTask.promise;
-        }finally{
-            /* Restore PDF.js's original method before any later reuse. */
-            if(typeof originalGetOperatorList==="function"){
-                page.getOperatorList=originalGetOperatorList;
-            }
-        }
-
-        const paintMs=Math.round(performance.now()-paintStartedAt);
         if(token!==openToken) return;
 
         surface.rendered=true;
         renderedPages.add(pageNumber);
 
-        console.info(
-            "[VideoDiag] Page "+pageNumber+
-            " page.render END — paint: "+paintMs+"ms; total renderPage: "+
-            Math.round(performance.now()-renderStartedAt)+"ms; "+
-            describeSurface(surface)
-        );
-
-        diagnosePageSurfaceVisibility(surface,pageNumber,"after page.render");
-
         if(pageNumber===currentPage){
             currentViewport=viewport;
             renderer.resize();
-            diagnosePageSurfaceVisibility(surface,pageNumber,"after renderer.resize");
         }
 
         /*
-         * Annotation/media wiring is deliberately background work. It is NOT
-         * awaited here, so PDF.js media preparation cannot hold up first paint
-         * or the reader's initial ready gate.
+         * Links and media annotations are wiring, not pixels — and for a
+         * page carrying an embedded video/audio attachment, wiring them up
+         * (page.getAnnotations() + PDF.js's AnnotationLayer/MediaAnnotation
+         * construction) can be disproportionately slow compared to painting
+         * the page image itself. That cost used to be awaited right here,
+         * inside renderPage(), which means it was awaited by every caller
+         * of renderPage() too — including renderer.open()'s
+         * Promise.all(initialPages.map(renderPage)) gate that the loading
+         * screen waits on before revealing the book at all.
+         *
+         * The page is "on screen" the moment its canvas is painted, above.
+         * Annotation/media wiring is intentionally NOT awaited here — it
+         * runs in the background and attaches whenever it finishes,
+         * without holding up first paint, the render-window scheduler, or
+         * (most importantly) the initial "ready" reveal.
          */
-        if(visible && Number(pageNumber)===Number(currentPage) &&
-           Math.round(performance.now()-renderStartedAt)<VIDEO_HOLDER_DELAY_MS){
-            cancelVideoHolderAfterFastRender(pageNumber);
-        }
-
         scheduleAnnotationWork(pageNumber,surface,page,viewport,token);
-
-        requestAnimationFrame(()=>{
-            diagnosePageSurfaceVisibility(surface,pageNumber,"next animation frame");
-        });
 
     }
     finally{
@@ -915,64 +817,8 @@ async function renderPage(pageNumber,visible=false,token=openToken){
 }
 
 /*-------------------------------------------------------
- Page presentation diagnostics
--------------------------------------------------------*/
-
-function describeSurface(surface){
-    if(!surface || !surface.element) return "surface=missing";
-
-    const el=surface.element;
-    const rect=el.getBoundingClientRect();
-    const style=getComputedStyle(el);
-
-    return "surfaceRect="+
-        Math.round(rect.width)+"x"+Math.round(rect.height)+
-        "@"+Math.round(rect.left)+","+Math.round(rect.top)+
-        "; display="+style.display+
-        "; visibility="+style.visibility+
-        "; opacity="+style.opacity+
-        "; connected="+el.isConnected+
-        "; hidden="+el.hidden+
-        "; class="+el.className;
-}
-
-function diagnosePageSurfaceVisibility(surface,pageNumber,stage){
-    if(!surface || !surface.element) return;
-
-    const el=surface.element;
-    const chain=[];
-    let node=el;
-    let depth=0;
-
-    while(node && depth<7){
-        const style=getComputedStyle(node);
-        const rect=node.getBoundingClientRect();
-        chain.push(
-            (node.tagName||"?")+"."+
-            (typeof node.className==="string" ? node.className : "")+
-            "["+Math.round(rect.width)+"x"+Math.round(rect.height)+
-            ",display="+style.display+
-            ",visibility="+style.visibility+
-            ",opacity="+style.opacity+
-            ",position="+style.position+
-            ",transform="+(style.transform!=="none"?"yes":"none")+
-            ",z="+style.zIndex+"]"
-        );
-        node=node.parentElement;
-        depth++;
-    }
-
-    console.info(
-        "[VideoDiag] Page "+pageNumber+
-        " surface visibility — "+stage+": "+describeSurface(surface)+
-        "; chain=",chain
-    );
-}
-
-/*-------------------------------------------------------
  Deferred link/media-annotation wiring (see renderPage above)
 -------------------------------------------------------*/
-
 
 function scheduleAnnotationWork(pageNumber,surface,page,viewport,token){
     (async()=>{
@@ -1075,253 +921,6 @@ async function renderLinks(surface,page,viewport){
  Screen/RichMedia annotations. Existing Link annotations stay
  handled by SkyReader's current hyperlink layer.
 -------------------------------------------------------*/
-/*-------------------------------------------------------
- Temporary user-facing video/page loading holder
-
- This holder is deliberately attached to the Sky180FlipHost rather than the
- individual PDF page surface. StPageFlip can leave a page surface at
- display:none while page.render() is still running. If the holder lived on
- that surface, it would be hidden for the exact period we are trying to cover.
-
- The holder is shown only for a visible/current page, after a short grace
- period. Fast ordinary pages therefore never flash a loader. A slow page gets
- a visible message even while page.render() is still blocked. Once media is
- discovered, the message changes to the video-specific wording. If the page
- has no media, the holder is removed. Once the actual video reaches usable
- data, the holder is removed completely.
--------------------------------------------------------*/
-
-const PDF_VIDEO_LOADING_GIF="assets/pdf-vid-loading.gif";
-const VIDEO_HOLDER_DELAY_MS=750;
-
-let activeVideoHolder=null;
-
-function getVideoHolderHost(){
-    return document.getElementById("sky180FlipHost") || pageContainer || viewer;
-}
-
-function removeVideoLoadingHolder(pageNumber=null){
-    if(!activeVideoHolder) return;
-
-    if(pageNumber!==null &&
-       Number(activeVideoHolder.dataset.page)!==Number(pageNumber)) return;
-
-    if(activeVideoHolder._skyreaderTimer){
-        clearTimeout(activeVideoHolder._skyreaderTimer);
-        activeVideoHolder._skyreaderTimer=null;
-    }
-
-    if(activeVideoHolder.parentNode){
-        activeVideoHolder.parentNode.removeChild(activeVideoHolder);
-    }
-
-    activeVideoHolder=null;
-}
-
-function setVideoHolderMessage(text){
-    if(!activeVideoHolder) return;
-    const message=activeVideoHolder.querySelector(".skyreaderVideoLoadingMessage");
-    if(message) message.textContent=text;
-}
-
-function createVideoLoadingHolder(pageNumber,token){
-    if(!visiblePageNeedsVideoHolder(pageNumber)) return;
-
-    removeVideoLoadingHolder();
-
-    const host=getVideoHolderHost();
-    if(!host) return;
-
-    const holder=document.createElement("div");
-    holder.className="skyreaderVideoLoadingHolder";
-    holder.dataset.page=String(pageNumber);
-    holder.dataset.token=String(token);
-    holder.setAttribute("aria-live","polite");
-    holder.setAttribute("aria-label","Loading page");
-
-    Object.assign(holder.style,{
-        position:"absolute",
-        inset:"0",
-        display:"flex",
-        alignItems:"center",
-        justifyContent:"center",
-        flexDirection:"column",
-        gap:"10px",
-        zIndex:"10000",
-        pointerEvents:"none",
-        background:"rgba(255,255,255,0.88)",
-        boxSizing:"border-box",
-        padding:"24px"
-    });
-
-    const gif=document.createElement("img");
-    gif.src=PDF_VIDEO_LOADING_GIF;
-    gif.alt="";
-    gif.width=72;
-    gif.height=72;
-    gif.style.width="72px";
-    gif.style.height="72px";
-    gif.style.objectFit="contain";
-
-    const message=document.createElement("div");
-    message.className="skyreaderVideoLoadingMessage";
-    message.textContent="Loading page…";
-    Object.assign(message.style,{
-        fontSize:"16px",
-        lineHeight:"1.35",
-        textAlign:"center",
-        fontWeight:"500"
-    });
-
-    const detail=document.createElement("div");
-    detail.className="skyreaderVideoLoadingDetail";
-    detail.textContent="";
-    Object.assign(detail.style,{
-        maxWidth:"320px",
-        fontSize:"13px",
-        lineHeight:"1.4",
-        textAlign:"center",
-        opacity:"0.75"
-    });
-
-    holder.appendChild(gif);
-    holder.appendChild(message);
-    holder.appendChild(detail);
-    host.appendChild(holder);
-    activeVideoHolder=holder;
-
-    /* Do not make ordinary pages flash the holder unless rendering is
-       genuinely slow. The timer is cancelled when renderPage finishes. */
-    holder._skyreaderTimer=setTimeout(()=>{
-        if(activeVideoHolder!==holder) return;
-        if(Number(holder.dataset.token)!==Number(openToken)) return;
-        holder.style.opacity="1";
-    },VIDEO_HOLDER_DELAY_MS);
-
-    return holder;
-}
-
-function visiblePageNeedsVideoHolder(pageNumber){
-    return Number(pageNumber)===Number(currentPage);
-}
-
-function showVideoHolderForSlowPage(pageNumber,token){
-    const holder=createVideoLoadingHolder(pageNumber,token);
-    if(!holder) return;
-
-    holder.style.opacity="0";
-    holder.style.transition="opacity 120ms ease";
-
-    /* The holder itself is created immediately. It is simply transparent
-       for the first 750ms so fast ordinary pages do not flash. */
-    requestAnimationFrame(()=>{
-        if(activeVideoHolder!==holder) return;
-        if(Number(holder.dataset.token)!==Number(openToken)) return;
-        if(holder._skyreaderTimer){
-            /* Timer remains responsible for the actual delayed reveal. */
-        }
-    });
-}
-
-function revealVideoLoadingHolderForMedia(pageNumber){
-    if(!activeVideoHolder ||
-       Number(activeVideoHolder.dataset.page)!==Number(pageNumber)) return;
-
-    if(activeVideoHolder._skyreaderTimer){
-        clearTimeout(activeVideoHolder._skyreaderTimer);
-        activeVideoHolder._skyreaderTimer=null;
-    }
-
-    setVideoHolderMessage("Preparing video…");
-    const detail=activeVideoHolder.querySelector(".skyreaderVideoLoadingDetail");
-    if(detail) detail.textContent="This page contains embedded video and may take a moment to load.";
-    activeVideoHolder.style.opacity="1";
-}
-
-function cancelVideoHolderAfterFastRender(pageNumber){
-    if(!activeVideoHolder ||
-       Number(activeVideoHolder.dataset.page)!==Number(pageNumber)) return;
-
-    /* If the page painted quickly and annotation work has not yet told us
-       whether media exists, leave the holder hidden and let the media path
-       reveal it only if a video is actually found. */
-    activeVideoHolder.style.opacity="0";
-}
-
-function syncVideoLoadingHolderForCurrentPage(pageNumber){
-    if(Number(pageNumber)!==Number(currentPage)) return;
-
-    const surface=pageSurfaces.get(Number(pageNumber));
-    if(!surface || !surface.annotationLayer) return;
-
-    const mediaContainer=surface.annotationLayer.querySelector(".mediaAnnotation");
-    if(!mediaContainer) return;
-
-    const video=mediaContainer.querySelector("video.mediaContent");
-    if(video && video.readyState>=2){
-        removeVideoLoadingHolder(pageNumber);
-        return;
-    }
-
-    showVideoHolderForSlowPage(pageNumber,openToken);
-    revealVideoLoadingHolderForMedia(pageNumber);
-}
-
-function instrumentActualMediaAnnotationDom(surface,pageNumber,mediaContainer){
-    if(!mediaContainer || mediaContainer.dataset.skyreaderMediaInstrumented==="1") return;
-
-    mediaContainer.dataset.skyreaderMediaInstrumented="1";
-    const startedAt=performance.now();
-
-    console.info(
-        "[MediaAnnotationElement] Page "+pageNumber+" actual instance rendered — "+
-        "DOM container created by PDF.js; annotation id="+
-        (mediaContainer.getAttribute("data-annotation-id") || "unknown")
-    );
-
-    const bindVideo=()=>{
-        const video=mediaContainer.querySelector("video.mediaContent");
-        if(!video || video.dataset.skyreaderVideoInstrumented==="1") return;
-
-        video.dataset.skyreaderVideoInstrumented="1";
-        console.info(
-            "[MediaAnnotationElement] Page "+pageNumber+" media element attached — "+
-            Math.round(performance.now()-startedAt)+"ms after annotation render"
-        );
-
-        const logEvent=eventName=>{
-            console.info(
-                "[MediaAnnotationElement] Page "+pageNumber+" video "+eventName+
-                " — "+Math.round(performance.now()-startedAt)+"ms; readyState="+video.readyState
-            );
-        };
-
-        ["loadstart","loadedmetadata","loadeddata","canplay","playing","error"].forEach(type=>{
-            video.addEventListener(type,()=>{
-                logEvent(type);
-
-                if(type==="loadeddata" || type==="canplay" || type==="playing"){
-                    if(video.readyState>=2){
-                        removeVideoLoadingHolder(pageNumber);
-                    }
-                }
-            },{passive:true});
-        });
-
-        if(video.readyState>=2){
-            removeVideoLoadingHolder(pageNumber);
-        }
-    };
-
-    bindVideo();
-    const observer=new MutationObserver(bindVideo);
-    observer.observe(mediaContainer,{childList:true,subtree:true});
-    mediaContainer._skyreaderMediaObserver=observer;
-}
-
-/*-------------------------------------------------------
- PDF media annotations
--------------------------------------------------------*/
 async function renderMediaAnnotations(surface,page,viewport){
     if(!surface || !surface.annotationLayer) return;
 
@@ -1342,12 +941,7 @@ async function renderMediaAnnotations(surface,page,viewport){
         )
     );
 
-    if(!mediaAnnotations.length){
-        removeVideoLoadingHolder(page.pageNumber);
-        return;
-    }
-
-    revealVideoLoadingHolderForMedia(page.pageNumber);
+    if(!mediaAnnotations.length) return;
 
     console.info(
         "[VideoDiag] Page "+page.pageNumber+" media detected — "+
@@ -1357,6 +951,16 @@ async function renderMediaAnnotations(surface,page,viewport){
 
     console.info("[SkyReader] PDF media annotations:", mediaAnnotations);
 
+    /*
+       IMPORTANT:
+       Embedded Screen/RichMedia playback was added to PDF.js after the
+       5.4.x line. The current PDF.js MediaAnnotationElement creates the
+       actual play button and, on click, retrieves the embedded attachment
+       through PDFLinkService.getAttachmentContent().
+
+       Do not create a second diagnostic button here: PDF.js itself owns the
+       interactive media control.
+    */
     if(!window.pdfjsLib || !pdfjsLib.AnnotationLayer){
         console.warn("[SkyReader] PDF.js AnnotationLayer unavailable.",mediaAnnotations);
         return;
@@ -1373,7 +977,7 @@ async function renderMediaAnnotations(surface,page,viewport){
 
         if(!linkService){
             console.warn("[SkyReader] PDFLinkService unavailable.",mediaAnnotations);
-                return;
+            return;
         }
 
         if(typeof linkService.setDocument==="function"){
@@ -1416,11 +1020,68 @@ async function renderMediaAnnotations(surface,page,viewport){
         );
 
         const mediaContainer=layer.querySelector(".mediaAnnotation");
-        diagnosePageSurfaceVisibility(surface,page.pageNumber,"after AnnotationLayer.render");
         const playButton=layer.querySelector(".mediaAnnotation .mediaPlayButton");
 
         if(mediaContainer){
-            instrumentActualMediaAnnotationDom(surface,page.pageNumber,mediaContainer);
+            /*
+             * TEMPORARY MEDIA-REGION HOLDER
+             *
+             * The diagnostics show that AnnotationLayer.render() is fast,
+             * but PDF.js can take a long time to attach the real <video>
+             * element afterwards.  Put the holder INSIDE the actual
+             * .mediaAnnotation immediately, rather than on sky180FlipHost
+             * or the whole page.  That keeps its geometry exactly tied to
+             * the PDF media rectangle and prevents it from covering the
+             * opposite page in a spread.
+             *
+             * pointer-events:none is intentional: the PDF.js play button
+             * remains clickable above the holder.
+             */
+            const removeMediaLoadingHolder=()=>{
+                const holder=mediaContainer.querySelector(
+                    ".skyreaderEmbeddedVideoLoadingHolder"
+                );
+                if(holder) holder.remove();
+            };
+
+            const existingVideo=mediaContainer.querySelector("video.mediaContent");
+
+            if(existingVideo){
+                removeMediaLoadingHolder();
+            }else{
+                const holder=document.createElement("div");
+                holder.className="skyreaderEmbeddedVideoLoadingHolder";
+                holder.setAttribute("aria-hidden","true");
+                holder.style.position="absolute";
+                holder.style.inset="0";
+                holder.style.zIndex="1";
+                holder.style.pointerEvents="none";
+                holder.style.display="flex";
+                holder.style.alignItems="center";
+                holder.style.justifyContent="center";
+                holder.style.background="rgba(0,0,0,.82)";
+                holder.style.backgroundImage="url(assets/pdf-vid-loading.gif)";
+                holder.style.backgroundRepeat="no-repeat";
+                holder.style.backgroundPosition="center center";
+                holder.style.backgroundSize="64px 64px";
+                holder.style.boxSizing="border-box";
+                holder.style.minWidth="1px";
+                holder.style.minHeight="1px";
+
+                /* The annotation itself normally supplies its own positioned
+                   containing block.  Explicitly establish one so the holder
+                   can never escape the media rectangle. */
+                const mediaPosition=getComputedStyle(mediaContainer).position;
+                if(mediaPosition==="static") mediaContainer.style.position="relative";
+
+                mediaContainer.insertBefore(holder,mediaContainer.firstChild);
+
+                console.info(
+                    "[VideoDiag] Page "+page.pageNumber+
+                    " embedded-video loading holder attached to media rectangle"
+                );
+            }
+
             console.info("[SkyReader] PDF.js media annotation rendered:",mediaContainer);
             if(playButton){
                 playButton.title=playButton.title || "Play embedded video";
@@ -1436,7 +1097,13 @@ async function renderMediaAnnotations(surface,page,viewport){
              */
             const installMediaControls=()=>{
                 const video=mediaContainer.querySelector("video.mediaContent");
-                if(!video || video.dataset.skyreaderControlsInstalled==="1") return;
+                if(!video) return;
+
+                /* The real PDF.js video now exists. Remove the temporary
+                   holder immediately so it can never remain over playback. */
+                removeMediaLoadingHolder();
+
+                if(video.dataset.skyreaderControlsInstalled==="1") return;
 
                 video.dataset.skyreaderControlsInstalled="1";
                 video.controls=false;
@@ -1551,6 +1218,10 @@ async function renderMediaAnnotations(surface,page,viewport){
                     if(typeof request==="function") request.call(video);
                 });
 
+                ["loadstart","loadedmetadata","loadeddata","canplay","playing"].forEach(type=>{
+                    video.addEventListener(type,removeMediaLoadingHolder,{once:type==="playing"});
+                });
+
                 video.addEventListener("play",()=>{ update(); showControls(); });
                 video.addEventListener("pause",()=>{ update(); showControls(); });
                 video.addEventListener("ended",()=>{ update(); showControls(); });
@@ -1619,7 +1290,6 @@ renderer.goTo=async function(page){
 
     Sky180FlipEngine.goTo(page);
     currentPage=Sky180FlipEngine.page();
-    syncVideoLoadingHolderForCurrentPage(currentPage);
     scheduleWindow(currentPage,token);
 
     return true;
@@ -1657,7 +1327,6 @@ renderer.statistics=function(){
 -------------------------------------------------------*/
 
 renderer.close=function(){
-    removeVideoLoadingHolder();
     openToken++;
     presentationToken++;
 
