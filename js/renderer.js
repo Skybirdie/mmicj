@@ -742,6 +742,102 @@ function scheduleWindow(center,token){
 }
 
 /*-------------------------------------------------------
+ Temporary embedded-video pre-paint holder
+-------------------------------------------------------*/
+function nextPaint(){
+    return new Promise(resolve=>{
+        requestAnimationFrame(()=>requestAnimationFrame(resolve));
+    });
+}
+
+function removeEmbeddedVideoLoadingHolder(surface){
+    if(!surface || !surface.element) return;
+    surface.element
+        .querySelectorAll('.skyreaderEmbeddedVideoLoadingHolder')
+        .forEach(el=>el.remove());
+    if(surface._skyreaderVideoHolderObserver){
+        surface._skyreaderVideoHolderObserver.disconnect();
+        surface._skyreaderVideoHolderObserver=null;
+    }
+    if(surface._skyreaderVideoHolderTimer){
+        clearInterval(surface._skyreaderVideoHolderTimer);
+        surface._skyreaderVideoHolderTimer=null;
+    }
+}
+
+function installEmbeddedVideoLoadingHolder(surface,page,viewport,mediaAnnotations,visible){
+    if(!surface || !surface.element || !surface.annotationLayer || !mediaAnnotations?.length) return false;
+
+    removeEmbeddedVideoLoadingHolder(surface);
+
+    const annotation=mediaAnnotations[0];
+    if(!annotation?.rect || typeof viewport?.convertToViewportRectangle!=='function') return false;
+
+    const rect=viewport.convertToViewportRectangle(annotation.rect);
+    const left=Math.min(rect[0],rect[2]);
+    const top=Math.min(rect[1],rect[3]);
+    const width=Math.abs(rect[2]-rect[0]);
+    const height=Math.abs(rect[3]-rect[1]);
+    if(!(width>0 && height>0)) return false;
+
+    const holder=document.createElement('div');
+    holder.className='skyreaderEmbeddedVideoLoadingHolder';
+    holder.setAttribute('aria-hidden','true');
+    Object.assign(holder.style,{
+        position:'absolute',
+        left:left+'px',
+        top:top+'px',
+        width:width+'px',
+        height:height+'px',
+        zIndex:'20',
+        pointerEvents:'none',
+        display:'flex',
+        alignItems:'center',
+        justifyContent:'center',
+        background:'rgba(0,0,0,.82)',
+        backgroundImage:'url(assets/pdf-vid-loading.gif)',
+        backgroundRepeat:'no-repeat',
+        backgroundPosition:'center center',
+        backgroundSize:'64px 64px',
+        boxSizing:'border-box'
+    });
+
+    const layerPosition=getComputedStyle(surface.annotationLayer).position;
+    if(layerPosition==='static') surface.annotationLayer.style.position='absolute';
+    surface.annotationLayer.appendChild(holder);
+
+    /*
+     * During page.render() the current PDF page surface is normally display:none.
+     * For the active page only, expose the already-sized page shell so the holder
+     * can actually be painted while PDF.js is spending seconds/minutes painting
+     * the canvas. This is reverted by the normal StPageFlip lifecycle once the
+     * page is rendered/activated.
+     */
+    if(visible){
+        surface.element.style.display='block';
+        surface.element.dataset.skyreaderPrepaintMedia='1';
+    }
+
+    const hasVideo=()=>!!surface.element.querySelector('video.mediaContent');
+    const removeIfReady=()=>{
+        if(hasVideo()) removeEmbeddedVideoLoadingHolder(surface);
+    };
+
+    surface._skyreaderVideoHolderObserver=new MutationObserver(removeIfReady);
+    surface._skyreaderVideoHolderObserver.observe(surface.element,{childList:true,subtree:true});
+    surface._skyreaderVideoHolderTimer=setInterval(removeIfReady,250);
+    removeIfReady();
+
+    console.info('[VideoDiag] Page '+page.pageNumber+
+        ' pre-paint embedded-video holder attached: '+
+        Math.round(left)+','+Math.round(top)+' '+
+        Math.round(width)+'x'+Math.round(height)+
+        (visible?' (active page exposed before render)':' (background page)'));
+
+    return true;
+}
+
+/*-------------------------------------------------------
  Render one page
 -------------------------------------------------------*/
 
@@ -768,6 +864,37 @@ async function renderPage(pageNumber,visible=false,token=openToken){
         const viewport=page.getViewport({scale:renderScale});
         surface.viewport=viewport;
 
+        /*
+         * Start the cheap annotation lookup before the expensive canvas render.
+         * We do NOT use it as a general render blocker: it is only used to learn
+         * whether this page has an embedded-media rectangle so the temporary
+         * holder can be painted before page.render() begins.
+         */
+        const mediaAnnotationsPromise=page.getAnnotations({intent:'display'})
+            .then(annotations=>annotations.filter(annotation=>
+                annotation && (
+                    annotation.subtype==='Screen' ||
+                    annotation.subtype==='RichMedia' ||
+                    annotation.subtype==='Sound' ||
+                    annotation.subtype==='Movie'
+                )
+            ))
+            .catch(()=>[]);
+
+        const mediaAnnotations=await mediaAnnotationsPromise;
+        if(token!==openToken) return;
+
+        installEmbeddedVideoLoadingHolder(
+            surface,page,viewport,mediaAnnotations,visible
+        );
+
+        if(mediaAnnotations.length && visible){
+            /* Give the browser two paint opportunities before starting the
+             * known-long PDF.js canvas render. */
+            await nextPaint();
+            if(token!==openToken) return;
+        }
+
         surface.canvas.width=viewport.width;
         surface.canvas.height=viewport.height;
 
@@ -785,6 +912,8 @@ async function renderPage(pageNumber,visible=false,token=openToken){
 
         surface.rendered=true;
         renderedPages.add(pageNumber);
+        if(surface.element.dataset.skyreaderPrepaintMedia==='1')
+            delete surface.element.dataset.skyreaderPrepaintMedia;
 
         if(pageNumber===currentPage){
             currentViewport=viewport;
@@ -1023,64 +1152,11 @@ async function renderMediaAnnotations(surface,page,viewport){
         const playButton=layer.querySelector(".mediaAnnotation .mediaPlayButton");
 
         if(mediaContainer){
-            /*
-             * TEMPORARY MEDIA-REGION HOLDER
-             *
-             * The diagnostics show that AnnotationLayer.render() is fast,
-             * but PDF.js can take a long time to attach the real <video>
-             * element afterwards.  Put the holder INSIDE the actual
-             * .mediaAnnotation immediately, rather than on sky180FlipHost
-             * or the whole page.  That keeps its geometry exactly tied to
-             * the PDF media rectangle and prevents it from covering the
-             * opposite page in a spread.
-             *
-             * pointer-events:none is intentional: the PDF.js play button
-             * remains clickable above the holder.
-             */
-            const removeMediaLoadingHolder=()=>{
-                const holder=mediaContainer.querySelector(
-                    ".skyreaderEmbeddedVideoLoadingHolder"
-                );
-                if(holder) holder.remove();
-            };
-
-            const existingVideo=mediaContainer.querySelector("video.mediaContent");
-
-            if(existingVideo){
-                removeMediaLoadingHolder();
-            }else{
-                const holder=document.createElement("div");
-                holder.className="skyreaderEmbeddedVideoLoadingHolder";
-                holder.setAttribute("aria-hidden","true");
-                holder.style.position="absolute";
-                holder.style.inset="0";
-                holder.style.zIndex="1";
-                holder.style.pointerEvents="none";
-                holder.style.display="flex";
-                holder.style.alignItems="center";
-                holder.style.justifyContent="center";
-                holder.style.background="rgba(0,0,0,.82)";
-                holder.style.backgroundImage="url(assets/pdf-vid-loading.gif)";
-                holder.style.backgroundRepeat="no-repeat";
-                holder.style.backgroundPosition="center center";
-                holder.style.backgroundSize="64px 64px";
-                holder.style.boxSizing="border-box";
-                holder.style.minWidth="1px";
-                holder.style.minHeight="1px";
-
-                /* The annotation itself normally supplies its own positioned
-                   containing block.  Explicitly establish one so the holder
-                   can never escape the media rectangle. */
-                const mediaPosition=getComputedStyle(mediaContainer).position;
-                if(mediaPosition==="static") mediaContainer.style.position="relative";
-
-                mediaContainer.insertBefore(holder,mediaContainer.firstChild);
-
-                console.info(
-                    "[VideoDiag] Page "+page.pageNumber+
-                    " embedded-video loading holder attached to media rectangle"
-                );
-            }
+            /* The holder was created before page.render() when the media
+             * annotation rectangle was first known. It stays in the page
+             * surface until the real PDF.js video element is attached. */
+            const removeMediaLoadingHolder=()=>
+                removeEmbeddedVideoLoadingHolder(surface);
 
             console.info("[SkyReader] PDF.js media annotation rendered:",mediaContainer);
             if(playButton){
