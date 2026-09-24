@@ -183,6 +183,7 @@ renderer.initialize=function(){
 
         Sky180FlipEngine.on("page",page=>{
             currentPage=page;
+            syncVideoLoadingHolderForCurrentPage(page);
             renderer.ensureRenderWindow(page);
             emit("page",currentPage,pageCount);
         });
@@ -754,6 +755,10 @@ async function renderPage(pageNumber,visible=false,token=openToken){
     surface.rendering=true;
     const renderStartedAt=performance.now();
 
+    if(visible && Number(pageNumber)===Number(currentPage)){
+        showVideoHolderForSlowPage(pageNumber,token);
+    }
+
     try{
         if(visible){
             progress(
@@ -892,6 +897,11 @@ async function renderPage(pageNumber,visible=false,token=openToken){
          * awaited here, so PDF.js media preparation cannot hold up first paint
          * or the reader's initial ready gate.
          */
+        if(visible && Number(pageNumber)===Number(currentPage) &&
+           Math.round(performance.now()-renderStartedAt)<VIDEO_HOLDER_DELAY_MS){
+            cancelVideoHolderAfterFastRender(pageNumber);
+        }
+
         scheduleAnnotationWork(pageNumber,surface,page,viewport,token);
 
         requestAnimationFrame(()=>{
@@ -1065,10 +1075,197 @@ async function renderLinks(surface,page,viewport){
  Screen/RichMedia annotations. Existing Link annotations stay
  handled by SkyReader's current hyperlink layer.
 -------------------------------------------------------*/
-/* Embedded-media diagnostics intentionally have NO loading overlay in this build.
- * The purpose of this test is to observe the real page/presentation timeline
- * without introducing any loader creation or annotation preflight work.
- */
+/*-------------------------------------------------------
+ Temporary user-facing video/page loading holder
+
+ This holder is deliberately attached to the Sky180FlipHost rather than the
+ individual PDF page surface. StPageFlip can leave a page surface at
+ display:none while page.render() is still running. If the holder lived on
+ that surface, it would be hidden for the exact period we are trying to cover.
+
+ The holder is shown only for a visible/current page, after a short grace
+ period. Fast ordinary pages therefore never flash a loader. A slow page gets
+ a visible message even while page.render() is still blocked. Once media is
+ discovered, the message changes to the video-specific wording. If the page
+ has no media, the holder is removed. Once the actual video reaches usable
+ data, the holder is removed completely.
+-------------------------------------------------------*/
+
+const PDF_VIDEO_LOADING_GIF="assets/pdf-vid-loading.gif";
+const VIDEO_HOLDER_DELAY_MS=750;
+
+let activeVideoHolder=null;
+
+function getVideoHolderHost(){
+    return document.getElementById("sky180FlipHost") || pageContainer || viewer;
+}
+
+function removeVideoLoadingHolder(pageNumber=null){
+    if(!activeVideoHolder) return;
+
+    if(pageNumber!==null &&
+       Number(activeVideoHolder.dataset.page)!==Number(pageNumber)) return;
+
+    if(activeVideoHolder._skyreaderTimer){
+        clearTimeout(activeVideoHolder._skyreaderTimer);
+        activeVideoHolder._skyreaderTimer=null;
+    }
+
+    if(activeVideoHolder.parentNode){
+        activeVideoHolder.parentNode.removeChild(activeVideoHolder);
+    }
+
+    activeVideoHolder=null;
+}
+
+function setVideoHolderMessage(text){
+    if(!activeVideoHolder) return;
+    const message=activeVideoHolder.querySelector(".skyreaderVideoLoadingMessage");
+    if(message) message.textContent=text;
+}
+
+function createVideoLoadingHolder(pageNumber,token){
+    if(!visiblePageNeedsVideoHolder(pageNumber)) return;
+
+    removeVideoLoadingHolder();
+
+    const host=getVideoHolderHost();
+    if(!host) return;
+
+    const holder=document.createElement("div");
+    holder.className="skyreaderVideoLoadingHolder";
+    holder.dataset.page=String(pageNumber);
+    holder.dataset.token=String(token);
+    holder.setAttribute("aria-live","polite");
+    holder.setAttribute("aria-label","Loading page");
+
+    Object.assign(holder.style,{
+        position:"absolute",
+        inset:"0",
+        display:"flex",
+        alignItems:"center",
+        justifyContent:"center",
+        flexDirection:"column",
+        gap:"10px",
+        zIndex:"10000",
+        pointerEvents:"none",
+        background:"rgba(255,255,255,0.88)",
+        boxSizing:"border-box",
+        padding:"24px"
+    });
+
+    const gif=document.createElement("img");
+    gif.src=PDF_VIDEO_LOADING_GIF;
+    gif.alt="";
+    gif.width=72;
+    gif.height=72;
+    gif.style.width="72px";
+    gif.style.height="72px";
+    gif.style.objectFit="contain";
+
+    const message=document.createElement("div");
+    message.className="skyreaderVideoLoadingMessage";
+    message.textContent="Loading page…";
+    Object.assign(message.style,{
+        fontSize:"16px",
+        lineHeight:"1.35",
+        textAlign:"center",
+        fontWeight:"500"
+    });
+
+    const detail=document.createElement("div");
+    detail.className="skyreaderVideoLoadingDetail";
+    detail.textContent="";
+    Object.assign(detail.style,{
+        maxWidth:"320px",
+        fontSize:"13px",
+        lineHeight:"1.4",
+        textAlign:"center",
+        opacity:"0.75"
+    });
+
+    holder.appendChild(gif);
+    holder.appendChild(message);
+    holder.appendChild(detail);
+    host.appendChild(holder);
+    activeVideoHolder=holder;
+
+    /* Do not make ordinary pages flash the holder unless rendering is
+       genuinely slow. The timer is cancelled when renderPage finishes. */
+    holder._skyreaderTimer=setTimeout(()=>{
+        if(activeVideoHolder!==holder) return;
+        if(Number(holder.dataset.token)!==Number(openToken)) return;
+        holder.style.opacity="1";
+    },VIDEO_HOLDER_DELAY_MS);
+
+    return holder;
+}
+
+function visiblePageNeedsVideoHolder(pageNumber){
+    return Number(pageNumber)===Number(currentPage);
+}
+
+function showVideoHolderForSlowPage(pageNumber,token){
+    const holder=createVideoLoadingHolder(pageNumber,token);
+    if(!holder) return;
+
+    holder.style.opacity="0";
+    holder.style.transition="opacity 120ms ease";
+
+    /* The holder itself is created immediately. It is simply transparent
+       for the first 750ms so fast ordinary pages do not flash. */
+    requestAnimationFrame(()=>{
+        if(activeVideoHolder!==holder) return;
+        if(Number(holder.dataset.token)!==Number(openToken)) return;
+        if(holder._skyreaderTimer){
+            /* Timer remains responsible for the actual delayed reveal. */
+        }
+    });
+}
+
+function revealVideoLoadingHolderForMedia(pageNumber){
+    if(!activeVideoHolder ||
+       Number(activeVideoHolder.dataset.page)!==Number(pageNumber)) return;
+
+    if(activeVideoHolder._skyreaderTimer){
+        clearTimeout(activeVideoHolder._skyreaderTimer);
+        activeVideoHolder._skyreaderTimer=null;
+    }
+
+    setVideoHolderMessage("Preparing video…");
+    const detail=activeVideoHolder.querySelector(".skyreaderVideoLoadingDetail");
+    if(detail) detail.textContent="This page contains embedded video and may take a moment to load.";
+    activeVideoHolder.style.opacity="1";
+}
+
+function cancelVideoHolderAfterFastRender(pageNumber){
+    if(!activeVideoHolder ||
+       Number(activeVideoHolder.dataset.page)!==Number(pageNumber)) return;
+
+    /* If the page painted quickly and annotation work has not yet told us
+       whether media exists, leave the holder hidden and let the media path
+       reveal it only if a video is actually found. */
+    activeVideoHolder.style.opacity="0";
+}
+
+function syncVideoLoadingHolderForCurrentPage(pageNumber){
+    if(Number(pageNumber)!==Number(currentPage)) return;
+
+    const surface=pageSurfaces.get(Number(pageNumber));
+    if(!surface || !surface.annotationLayer) return;
+
+    const mediaContainer=surface.annotationLayer.querySelector(".mediaAnnotation");
+    if(!mediaContainer) return;
+
+    const video=mediaContainer.querySelector("video.mediaContent");
+    if(video && video.readyState>=2){
+        removeVideoLoadingHolder(pageNumber);
+        return;
+    }
+
+    showVideoHolderForSlowPage(pageNumber,openToken);
+    revealVideoLoadingHolderForMedia(pageNumber);
+}
 
 function instrumentActualMediaAnnotationDom(surface,pageNumber,mediaContainer){
     if(!mediaContainer || mediaContainer.dataset.skyreaderMediaInstrumented==="1") return;
@@ -1105,12 +1302,14 @@ function instrumentActualMediaAnnotationDom(surface,pageNumber,mediaContainer){
 
                 if(type==="loadeddata" || type==="canplay" || type==="playing"){
                     if(video.readyState>=2){
+                        removeVideoLoadingHolder(pageNumber);
                     }
                 }
             },{passive:true});
         });
 
         if(video.readyState>=2){
+            removeVideoLoadingHolder(pageNumber);
         }
     };
 
@@ -1144,8 +1343,11 @@ async function renderMediaAnnotations(surface,page,viewport){
     );
 
     if(!mediaAnnotations.length){
+        removeVideoLoadingHolder(page.pageNumber);
         return;
     }
+
+    revealVideoLoadingHolderForMedia(page.pageNumber);
 
     console.info(
         "[VideoDiag] Page "+page.pageNumber+" media detected — "+
@@ -1417,6 +1619,7 @@ renderer.goTo=async function(page){
 
     Sky180FlipEngine.goTo(page);
     currentPage=Sky180FlipEngine.page();
+    syncVideoLoadingHolderForCurrentPage(currentPage);
     scheduleWindow(currentPage,token);
 
     return true;
@@ -1454,6 +1657,7 @@ renderer.statistics=function(){
 -------------------------------------------------------*/
 
 renderer.close=function(){
+    removeVideoLoadingHolder();
     openToken++;
     presentationToken++;
 
