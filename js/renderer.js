@@ -844,7 +844,7 @@ function showEmbeddedVideoLoadingHolder(surface,viewport,rect,reason){
             backgroundImage:'url(assets/pdf-vid-loading.gif)',
             backgroundRepeat:'no-repeat',
             backgroundPosition:'center center',
-            backgroundSize:'auto min(30%,96px)',
+            backgroundSize:'75% 75%',
             boxSizing:'border-box'
         });
         surface.element.appendChild(holder);
