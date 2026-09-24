@@ -53,6 +53,147 @@ let activeLoadingTask=null;
 
 const RENDER_WINDOW=6;
 
+/*
+ * PDF.js attachment/media lifecycle diagnostic.
+ *
+ * The previous diagnostic established that AnnotationLayer.render() is fast
+ * and that the <video> element becomes ready almost immediately after it is
+ * created. This layer traces the missing interval: embedded attachment
+ * retrieval, Blob/object-URL creation, and the hand-off back to
+ * MediaAnnotationElement.
+ */
+let videoAttachmentDiagContext=null;
+
+function installVideoAttachmentDiagnostics(){
+    if(videoAttachmentDiagContext===null){
+        videoAttachmentDiagContext={page:null,startedAt:0};
+    }
+
+    const PDFLinkService=window.PDFLinkService;
+
+    if(
+        PDFLinkService &&
+        PDFLinkService.prototype &&
+        typeof PDFLinkService.prototype.getAttachmentContent === "function" &&
+        !PDFLinkService.prototype.getAttachmentContent.__skyVideoDiag
+    ){
+        const originalGetAttachmentContent=PDFLinkService.prototype.getAttachmentContent;
+
+        async function diagnosedGetAttachmentContent(...args){
+            const context=videoAttachmentDiagContext;
+            const page=context && context.page;
+            const id=args[0];
+            const start=performance.now();
+
+            console.info(
+                "[VideoDiag] Page "+page+
+                " getAttachmentContent START; id=",
+                id
+            );
+
+            try{
+                const result=await originalGetAttachmentContent.apply(this,args);
+                const elapsed=Math.round(performance.now()-start);
+
+                let bytes=null;
+                let type=null;
+
+                if(result instanceof Uint8Array){
+                    bytes=result.byteLength;
+                }else if(result instanceof ArrayBuffer){
+                    bytes=result.byteLength;
+                }else if(result && typeof result.byteLength==="number"){
+                    bytes=result.byteLength;
+                }else if(result && typeof result.length==="number"){
+                    bytes=result.length;
+                }
+
+                if(result && typeof result.type==="string"){
+                    type=result.type;
+                }
+
+                console.info(
+                    "[VideoDiag] Page "+page+
+                    " getAttachmentContent END; id=",
+                    id,
+                    "; elapsed="+elapsed+"ms; bytes=",
+                    bytes,
+                    "; type=",
+                    type,
+                    "; result=",
+                    result
+                );
+
+                return result;
+            }catch(error){
+                console.error(
+                    "[VideoDiag] Page "+page+
+                    " getAttachmentContent ERROR after "+
+                    Math.round(performance.now()-start)+"ms; id=",
+                    id,
+                    error
+                );
+                throw error;
+            }
+        }
+
+        diagnosedGetAttachmentContent.__skyVideoDiag=true;
+        diagnosedGetAttachmentContent.__skyOriginal=originalGetAttachmentContent;
+        PDFLinkService.prototype.getAttachmentContent=diagnosedGetAttachmentContent;
+
+        console.info("[VideoDiag] PDFLinkService.getAttachmentContent diagnostic installed.");
+    }
+
+    if(
+        window.URL &&
+        typeof window.URL.createObjectURL === "function" &&
+        !window.URL.createObjectURL.__skyVideoDiag
+    ){
+        const originalCreateObjectURL=window.URL.createObjectURL;
+
+        function diagnosedCreateObjectURL(object){
+            const context=videoAttachmentDiagContext;
+            const page=context && context.page;
+            const start=performance.now();
+            const url=originalCreateObjectURL.call(this,object);
+            const elapsed=Math.round(performance.now()-start);
+
+            let bytes=null;
+            let type=null;
+
+            if(object && typeof object.size==="number"){
+                bytes=object.size;
+            }else if(object instanceof ArrayBuffer){
+                bytes=object.byteLength;
+            }else if(object instanceof Uint8Array){
+                bytes=object.byteLength;
+            }
+
+            if(object && typeof object.type==="string"){
+                type=object.type;
+            }
+
+            console.info(
+                "[VideoDiag] Page "+page+
+                " URL.createObjectURL; elapsed="+elapsed+"ms; bytes=",
+                bytes,
+                "; type=",
+                type,
+                "; url=",
+                url
+            );
+
+            return url;
+        }
+
+        diagnosedCreateObjectURL.__skyVideoDiag=true;
+        diagnosedCreateObjectURL.__skyOriginal=originalCreateObjectURL;
+        window.URL.createObjectURL=diagnosedCreateObjectURL;
+
+        console.info("[VideoDiag] URL.createObjectURL diagnostic installed.");
+    }
+}
+
 renderer.events={
     progress:null,
     ready:null,
@@ -967,6 +1108,10 @@ async function renderMediaAnnotations(surface,page,viewport){
     }
 
     try{
+        installVideoAttachmentDiagnostics();
+        videoAttachmentDiagContext.page=page.pageNumber;
+        videoAttachmentDiagContext.startedAt=performance.now();
+
         const EventBus=window.PDFEventBus;
         const eventBus=EventBus ? new EventBus() : null;
         const linkService=window.PDFLinkService ? new window.PDFLinkService({
@@ -1036,68 +1181,9 @@ async function renderMediaAnnotations(surface,page,viewport){
              * PDF.js creates the actual <video> only after its play button is
              * pressed, so watch the media annotation for that element.
              */
-            const mediaRenderedAt=performance.now();
-            console.info(
-                "[VideoDiag] Page "+page.pageNumber+" media container ready at "+
-                Math.round(mediaRenderedAt)+"ms"
-            );
-
             const installMediaControls=()=>{
                 const video=mediaContainer.querySelector("video.mediaContent");
-                if(!video) return;
-
-                if(video.dataset.skyreaderVideoDiagInstalled!=="1"){
-                    video.dataset.skyreaderVideoDiagInstalled="1";
-
-                    const detectedAt=performance.now();
-                    const elapsed=Math.round(detectedAt-mediaRenderedAt);
-                    console.info(
-                        "[VideoDiag] Page "+page.pageNumber+" <video> detected after "+
-                        elapsed+"ms; readyState="+video.readyState+
-                        "; networkState="+video.networkState+
-                        "; src="+(video.currentSrc||video.src||"(none)")
-                    );
-
-                    const logEvent=(name)=>{
-                        const now=performance.now();
-                        console.info(
-                            "[VideoDiag] Page "+page.pageNumber+" video "+name+
-                            " +"+Math.round(now-detectedAt)+"ms; readyState="+
-                            video.readyState+"; networkState="+video.networkState+
-                            "; currentSrc="+(video.currentSrc||video.src||"(none)")+
-                            (Number.isFinite(video.duration) ? "; duration="+video.duration : "")
-                        );
-                    };
-
-                    [
-                        "loadedmetadata",
-                        "loadeddata",
-                        "canplay",
-                        "canplaythrough",
-                        "playing",
-                        "error",
-                        "stalled",
-                        "waiting",
-                        "progress"
-                    ].forEach(type=>{
-                        video.addEventListener(type,()=>logEvent(type));
-                    });
-
-                    [1000,5000,15000,30000,60000,90000].forEach(delay=>{
-                        setTimeout(()=>{
-                            if(video.readyState<1){
-                                console.info(
-                                    "[VideoDiag] Page "+page.pageNumber+
-                                    " video status at "+delay+"ms: readyState="+
-                                    video.readyState+"; networkState="+video.networkState+
-                                    "; currentSrc="+(video.currentSrc||video.src||"(none)")
-                                );
-                            }
-                        },delay);
-                    });
-                }
-
-                if(video.dataset.skyreaderControlsInstalled==="1") return;
+                if(!video || video.dataset.skyreaderControlsInstalled==="1") return;
 
                 video.dataset.skyreaderControlsInstalled="1";
                 video.controls=false;
