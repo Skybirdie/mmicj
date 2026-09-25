@@ -30,40 +30,13 @@ window.SlideshowUI=(function(){
         cat?.addEventListener("change",()=>{SlideshowLibrary.setCategory(cat.value);closeSlideshowOrgMenus();});
         document.getElementById("slideshowSortButton")?.addEventListener("click",()=>toggleMenu("slideshowSortMenu","slideshowFilterMenu"));
         document.getElementById("slideshowFilterButton")?.addEventListener("click",()=>toggleMenu("slideshowFilterMenu","slideshowSortMenu"));
-        const audioModeSelect=document.getElementById("slideshowAudioMode");
-        audioModeSelect?.addEventListener("change",e=>{
+        document.getElementById("slideshowAudioMode")?.addEventListener("change",e=>{
             if(e.target.value==="music"){
                 SlideshowViewer.openMusicPicker();
             }else{
                 SlideshowViewer.closeMusicPicker();
                 SlideshowViewer.setAudioMode(e.target.value);
             }
-        });
-
-        /*
-         * Native <select> elements do not fire a "change" event when the
-         * user chooses the option that is already selected.  After a music
-         * track is chosen, #slideshowAudioMode intentionally remains on
-         * "music", so choosing Music again would otherwise do nothing and
-         * the track picker would never reopen.
-         *
-         * Intercept the opening gesture only when Music is already selected.
-         * This leaves normal native-select behavior intact for every other
-         * audio mode and makes Music behave like a reusable picker trigger.
-         */
-        audioModeSelect?.addEventListener("pointerdown",e=>{
-            if(e.button!==0 || e.currentTarget.value!=="music") return;
-            e.preventDefault();
-            e.stopPropagation();
-            SlideshowViewer.openMusicPicker();
-        });
-
-        audioModeSelect?.addEventListener("keydown",e=>{
-            if(e.currentTarget.value!=="music") return;
-            if(e.key!=="Enter" && e.key!==" ") return;
-            e.preventDefault();
-            e.stopPropagation();
-            SlideshowViewer.openMusicPicker();
         });
         document.addEventListener("click",e=>{if(!e.target.closest(".slideshow-organization-controls")){document.getElementById("slideshowSortMenu")?.classList.add("hidden");document.getElementById("slideshowFilterMenu")?.classList.add("hidden");}});
         const searchGroup=document.getElementById("slideshowSearchGroup"), searchButton=document.getElementById("slideshowSearchButton"), searchBox=document.getElementById("slideshowSearchBox");
