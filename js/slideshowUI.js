@@ -30,13 +30,53 @@ window.SlideshowUI=(function(){
         cat?.addEventListener("change",()=>{SlideshowLibrary.setCategory(cat.value);closeSlideshowOrgMenus();});
         document.getElementById("slideshowSortButton")?.addEventListener("click",()=>toggleMenu("slideshowSortMenu","slideshowFilterMenu"));
         document.getElementById("slideshowFilterButton")?.addEventListener("click",()=>toggleMenu("slideshowFilterMenu","slideshowSortMenu"));
-        document.getElementById("slideshowAudioMode")?.addEventListener("change",e=>{
+        const audioModeSelect=document.getElementById("slideshowAudioMode");
+        audioModeSelect?.addEventListener("change",e=>{
             if(e.target.value==="music"){
                 SlideshowViewer.openMusicPicker();
             }else{
                 SlideshowViewer.closeMusicPicker();
                 SlideshowViewer.setAudioMode(e.target.value);
             }
+        });
+
+        /*
+         * Native <select> elements do not fire a "change" event when the
+         * user chooses the option that is already selected.  After a music
+         * track is chosen, #slideshowAudioMode intentionally remains on
+         * "music", so re-opening it and picking Music again would otherwise
+         * do nothing and the track picker would never reopen.
+         *
+         * IMPORTANT: the fix below must NOT prevent the dropdown itself
+         * from opening. Doing so (as before) skips the native option list
+         * entirely and jumps straight into the music folder, which also
+         * blocks switching to None / Original sound / Page turn effects
+         * once Music is active.
+         *
+         * Instead, right as the dropdown is about to open while already on
+         * "music", clear the selection (selectedIndex = -1). None of the
+         * four options has an empty value, so this never shows an extra
+         * blank row - it just means nothing is pre-highlighted. The user
+         * then sees the full list and can choose:
+         *   - Music again -> value changes from "" to "music", which DOES
+         *     fire "change" this time, so the handler above reopens the
+         *     track picker.
+         *   - Any other option -> fires "change" as normal.
+         * If the user closes the list without choosing anything (Escape,
+         * clicking away), the blur handler below restores "music" so the
+         * control doesn't get left showing a blank selection.
+         */
+        const resetForReopen=e=>{if(e.currentTarget.value==="music")e.currentTarget.selectedIndex=-1;};
+        audioModeSelect?.addEventListener("pointerdown",e=>{
+            if(e.button!==0) return;
+            resetForReopen(e);
+        });
+        audioModeSelect?.addEventListener("keydown",e=>{
+            if(e.key!=="Enter" && e.key!==" ") return;
+            resetForReopen(e);
+        });
+        audioModeSelect?.addEventListener("blur",()=>{
+            if(audioModeSelect.value==="") audioModeSelect.value="music";
         });
         document.addEventListener("click",e=>{if(!e.target.closest(".slideshow-organization-controls")){document.getElementById("slideshowSortMenu")?.classList.add("hidden");document.getElementById("slideshowFilterMenu")?.classList.add("hidden");}});
         const searchGroup=document.getElementById("slideshowSearchGroup"), searchButton=document.getElementById("slideshowSearchButton"), searchBox=document.getElementById("slideshowSearchBox");
