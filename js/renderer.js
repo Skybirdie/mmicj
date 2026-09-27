@@ -1072,22 +1072,40 @@ async function renderLinks(surface,page,viewport){
     for(const annotation of annotations){
         if(annotation.subtype!=="Link") continue;
 
+        /* Links with neither a URL nor a destination have nothing to
+           activate; do not lay an inert box over the page for them. */
+        const targetUrl=annotation.url||annotation.unsafeUrl||null;
+        if(!targetUrl && !annotation.dest) continue;
+
+        /* annotation.rect is in unscaled PDF user space (origin bottom-left,
+           and possibly offset/rotated), while `viewport` is rendered at
+           renderScale (2x). Dividing the raw rect by viewport.width/height
+           put every link at half size, shifted toward the top-left, so
+           clicks never hit it. convertToViewportRectangle applies scale,
+           rotation, and page origin; the result is normalised because the
+           y axis flips. */
+        const vr=viewport.convertToViewportRectangle(annotation.rect);
+        const vLeft=Math.min(vr[0],vr[2]);
+        const vTop=Math.min(vr[1],vr[3]);
+        const vWidth=Math.abs(vr[2]-vr[0]);
+        const vHeight=Math.abs(vr[3]-vr[1]);
+
         const link=document.createElement("a");
         link.className="pdfLink";
         link.style.position="absolute";
-        link.style.left=(annotation.rect[0]/viewport.width*100)+"%";
-        link.style.top=((viewport.height-annotation.rect[3])/viewport.height*100)+"%";
-        link.style.width=((annotation.rect[2]-annotation.rect[0])/viewport.width*100)+"%";
-        link.style.height=((annotation.rect[3]-annotation.rect[1])/viewport.height*100)+"%";
+        link.style.left=(vLeft/viewport.width*100)+"%";
+        link.style.top=(vTop/viewport.height*100)+"%";
+        link.style.width=(vWidth/viewport.width*100)+"%";
+        link.style.height=(vHeight/viewport.height*100)+"%";
         link.style.cursor="pointer";
         link.style.background="transparent";
         link.style.zIndex="20";
 
-        if(annotation.url){
+        if(targetUrl){
             /* External PDF links open in a separate browser tab/window.
                Keep the reader page intact while allowing the device/browser
                to decide whether the new destination becomes a tab or window. */
-            link.href=annotation.url;
+            link.href=targetUrl;
             link.target="_blank";
             link.rel="noopener noreferrer";
         }
