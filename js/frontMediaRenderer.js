@@ -767,10 +767,6 @@ async function renderSlideshow(item,token){
 
             if(!playing || !pdf) return;
 
-            /* A one-page PDF slideshow is static while its associated
-             * audio plays; do not redraw/fade the same page in a loop. */
-            if(pdf.numPages === 1) return;
-
             timer=setTimeout(()=>{
                 if(index < pdf.numPages){
                     index++;
@@ -829,9 +825,8 @@ async function renderSlideshow(item,token){
                 canvas.width=Math.ceil(viewport.width);
                 canvas.height=Math.ceil(viewport.height);
 
-                const singlePage=(pdf.numPages === 1);
                 canvas.classList.remove("is-entering");
-                if(!singlePage) void canvas.offsetWidth;
+                void canvas.offsetWidth;
 
                 await page.render({
                     canvasContext:canvas.getContext(
@@ -842,7 +837,7 @@ async function renderSlideshow(item,token){
                 }).promise;
 
                 if(token===generation){
-                    if(pdf.numPages !== 1) canvas.classList.add("is-entering");
+                    canvas.classList.add("is-entering");
                     update();
                 }
             }finally{
@@ -1002,10 +997,8 @@ cleanupFn=()=>{
 
         if(!s) return;
 
-        const singleSlide=(slides.length === 1);
-
         img.classList.remove("is-entering");
-        if(!singleSlide) void img.offsetWidth;
+        void img.offsetWidth;
 
         img.src=s.image||"";
         img.alt=s.title||item.title||"";
@@ -1014,7 +1007,7 @@ cleanupFn=()=>{
         ui.status.textContent=
             `${index+1} / ${slides.length}`;
 
-        if(playing && slides.length > 1){
+        if(playing){
             timer=setTimeout(
                 next,
                 Math.max(
