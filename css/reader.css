@@ -298,7 +298,18 @@ image-rendering:auto;
 
 .sky180Page .pdfLink{
 position:absolute;
+display:block;
+z-index:20;
+pointer-events:auto;
+cursor:pointer;
+background:transparent;
 text-decoration:none;
+touch-action:manipulation;
+-webkit-tap-highlight-color:transparent;
+}
+
+.sky180Page .pdfLink:hover{
+background:rgba(80,140,255,.10);
 }
 
 
@@ -763,14 +774,7 @@ box-shadow:0 12px 36px rgba(0,0,0,.22);
 
 padding:16px;
 
-/*
- * Must outrank #app.viewerFocus's z-index:99999!important
- * (css/style.css, "Reader focus mode"). The Bookmark panel is
- * appended to document.body, outside #app, so while Focus mode
- * is active it would otherwise render invisibly behind that
- * fixed full-viewport overlay even though it's technically open.
- */
-z-index:100001;
+z-index:300;
 
 }
 
