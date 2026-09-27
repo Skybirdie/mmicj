@@ -763,7 +763,14 @@ box-shadow:0 12px 36px rgba(0,0,0,.22);
 
 padding:16px;
 
-z-index:300;
+/*
+ * Must outrank #app.viewerFocus's z-index:99999!important
+ * (css/style.css, "Reader focus mode"). The Bookmark panel is
+ * appended to document.body, outside #app, so while Focus mode
+ * is active it would otherwise render invisibly behind that
+ * fixed full-viewport overlay even though it's technically open.
+ */
+z-index:100001;
 
 }
 
