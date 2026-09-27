@@ -3,7 +3,7 @@
 /*
 =========================================================
  SkyReader Renderer
- Version 3.2.7
+ Version 3.2.8
 
  PDF.js rendering engine + page-surface manager.
 
@@ -1053,13 +1053,44 @@ function scheduleAnnotationWork(pageNumber,surface,page,viewport,token){
  Hyperlinks
 -------------------------------------------------------*/
 
+/* Only these schemes may be opened from a PDF link. PDF.js already
+   sanitises `annotation.url`, but `unsafeUrl` is the raw string, so it
+   is checked here before it is ever put into an href. */
+function isSafeLinkUrl(value){
+    if(!value || typeof value!=="string") return false;
+    try{
+        const parsed=new URL(value,window.location.href);
+        return ["http:","https:","mailto:","tel:"].includes(parsed.protocol);
+    }catch(_){
+        return false;
+    }
+}
+
+/* Turn a PDF link destination into a 1-based page number.
+   `dest` is either a named destination (string) that must be looked up,
+   or an explicit destination array already ([pageRef,/XYZ,...]). The
+   old code always called pdf.getDestination(dest), which fails for the
+   explicit-array form that Word/PowerPoint exports commonly use. */
+async function resolveLinkDestinationPage(dest){
+    if(!pdf || dest==null) return null;
+
+    const explicit=(typeof dest==="string") ? await pdf.getDestination(dest) : dest;
+    if(!Array.isArray(explicit) || !explicit.length) return null;
+
+    const target=explicit[0];
+    if(Number.isInteger(target)) return target+1;
+
+    const pageIndex=await pdf.getPageIndex(target);
+    return pageIndex+1;
+}
+
 async function renderLinks(surface,page,viewport){
     surface.element
         .querySelectorAll(".pdfLink")
         .forEach(link=>link.remove());
 
     const annotationStart=performance.now();
-    const annotations=await page.getAnnotations();
+    const annotations=await page.getAnnotations({intent:"display"});
     const annotationMs=Math.round(performance.now()-annotationStart);
 
     if(annotationMs>250){
@@ -1069,19 +1100,31 @@ async function renderLinks(surface,page,viewport){
         );
     }
 
+    let linkAnnotations=0;
+    let wired=0;
+
     for(const annotation of annotations){
         if(annotation.subtype!=="Link") continue;
+        linkAnnotations++;
 
-        /* Links with neither a URL nor a destination have nothing to
-           activate; do not lay an inert box over the page for them. */
-        const targetUrl=annotation.url||annotation.unsafeUrl||null;
-        if(!targetUrl && !annotation.dest) continue;
+        /* Work out what this link does BEFORE drawing anything, so an
+           inert box is never laid over the page. */
+        const rawUrl=annotation.url||annotation.unsafeUrl||null;
+        const targetUrl=isSafeLinkUrl(rawUrl) ? rawUrl : null;
+        const hasDest=annotation.dest!=null;
+        const namedAction=annotation.action||null;   /* NextPage, PrevPage, ... */
+
+        if(!targetUrl && !hasDest && !namedAction){
+            console.info(
+                "[Links] Page "+page.pageNumber+": Link annotation skipped "+
+                "(no usable URL, destination or action).",annotation
+            );
+            continue;
+        }
 
         /* annotation.rect is in unscaled PDF user space (origin bottom-left,
            and possibly offset/rotated), while `viewport` is rendered at
-           renderScale (2x). Dividing the raw rect by viewport.width/height
-           put every link at half size, shifted toward the top-left, so
-           clicks never hit it. convertToViewportRectangle applies scale,
+           renderScale (2x). convertToViewportRectangle applies scale,
            rotation, and page origin; the result is normalised because the
            y axis flips. */
         const vr=viewport.convertToViewportRectangle(annotation.rect);
@@ -1090,39 +1133,66 @@ async function renderLinks(surface,page,viewport){
         const vWidth=Math.abs(vr[2]-vr[0]);
         const vHeight=Math.abs(vr[3]-vr[1]);
 
+        if(!(vWidth>0) || !(vHeight>0)) continue;
+
         const link=document.createElement("a");
         link.className="pdfLink";
-        link.style.position="absolute";
         link.style.left=(vLeft/viewport.width*100)+"%";
         link.style.top=(vTop/viewport.height*100)+"%";
         link.style.width=(vWidth/viewport.width*100)+"%";
         link.style.height=(vHeight/viewport.height*100)+"%";
-        link.style.cursor="pointer";
-        link.style.background="transparent";
-        link.style.zIndex="20";
 
         if(targetUrl){
-            /* External PDF links open in a separate browser tab/window.
-               Keep the reader page intact while allowing the device/browser
-               to decide whether the new destination becomes a tab or window. */
+            /* External links use a real anchor so the browser opens them as
+               a user-initiated navigation (no popup-blocker problems).
+               _blank keeps the reader page intact. */
             link.href=targetUrl;
             link.target="_blank";
             link.rel="noopener noreferrer";
+            link.title=targetUrl;
         }
-        else if(annotation.dest){
+        else{
             link.href="#";
-            link.onclick=async event=>{
+            link.addEventListener("click",async event=>{
                 event.preventDefault();
+                try{
+                    if(hasDest){
+                        const destPage=await resolveLinkDestinationPage(annotation.dest);
+                        if(destPage) renderer.goTo(destPage);
+                        return;
+                    }
 
-                const destination=await pdf.getDestination(annotation.dest);
-                if(!destination) return;
-
-                const pageIndex=await pdf.getPageIndex(destination[0]);
-                renderer.goTo(pageIndex+1);
-            };
+                    switch(namedAction){
+                        case "NextPage":  renderer.goTo(currentPage+1); break;
+                        case "PrevPage":  renderer.goTo(currentPage-1); break;
+                        case "FirstPage": renderer.goTo(1); break;
+                        case "LastPage":  renderer.goTo(pageCount); break;
+                    }
+                }catch(error){
+                    console.warn("[Links] Internal link failed on page "+page.pageNumber,error);
+                }
+            });
         }
+
+        /* A click on a link is a link click, never a page turn. StPageFlip
+           listens for mousedown on the book block; stopping the event here
+           guarantees it cannot start a fold/flip from a link, and stops
+           the document-level click handlers from also reacting. */
+        ["pointerdown","mousedown","click"].forEach(type=>{
+            link.addEventListener(type,event=>event.stopPropagation());
+        });
 
         surface.element.appendChild(link);
+        wired++;
+    }
+
+    /* One quiet line per page so "no link annotations in this PDF" is
+       distinguishable from "annotations found but not wired". */
+    if(linkAnnotations>0){
+        console.info(
+            "[Links] Page "+page.pageNumber+": "+wired+" of "+linkAnnotations+
+            " link annotation(s) wired."
+        );
     }
 }
 
