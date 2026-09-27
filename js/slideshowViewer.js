@@ -819,6 +819,14 @@ function updateAudioCue() { const cue = document.getElementById("slideshowAudioC
             !audioCompleted;
 
         if(audioIsDrivingPlayback){
+            if(total<=1){
+                // A single-slide slideshow has nothing to transition
+                // to. Keep the slide on screen as-is and just keep
+                // waiting for the audio to finish instead of
+                // re-rendering it as a pointless self-transition.
+                schedule();
+                return;
+            }
             if(audioMode==="effects") playSound(EFFECT_URL);
             show(0,1,fromTimer);
         }else if(playing){
