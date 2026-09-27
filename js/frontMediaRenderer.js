@@ -136,8 +136,21 @@ function openFull(item){
                      * so a book opened from the Front Page ends up in
                      * exactly the same state as opening it from the
                      * Reader itself.
+                     *
+                     * Guard with Reader.isOpen(): this call is delayed
+                     * (see the setTimeout below), so it's possible for
+                     * the book to already have been closed - by any
+                     * close route - before this fires. Reader.close()
+                     * already exits focus mode on close, so entering
+                     * it here for a book that's no longer open would
+                     * just leave the app stuck looking fullscreen with
+                     * nothing in it.
                      */
-                    if(window.UI && typeof UI.enterViewerFocus === "function"){
+                    if(window.UI &&
+                       typeof UI.enterViewerFocus === "function" &&
+                       (!window.Reader ||
+                        typeof Reader.isOpen !== "function" ||
+                        Reader.isOpen())){
                         UI.enterViewerFocus();
                     }
                 }
