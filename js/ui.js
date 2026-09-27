@@ -2296,6 +2296,25 @@ updateViewerFocusIcon(false);
 requestAnimationFrame(()=>window.dispatchEvent(new Event("resize")));
 }
 
+/*
+ * Explicit entry (mirrors exitViewerFocus). Lets a caller outside the
+ * Reader's own toolbar - e.g. the Front Page opening a book straight
+ * into its full view - put the Reader into exactly the same "Focus
+ * viewer" state as the viewerFullscreenButton does, rather than
+ * reaching for the unrelated browser Fullscreen API. Safe to call
+ * unconditionally: a no-op when focus mode is already active.
+ */
+function enterViewerFocus(){
+const app=document.getElementById("app");
+if(!app)return;
+if(app.classList.contains("viewerFocus"))return;
+app.classList.add("viewerFocus");
+updateViewerFocusIcon(true);
+requestAnimationFrame(()=>window.dispatchEvent(new Event("resize")));
+}
+
+ui.enterViewerFocus=enterViewerFocus;
+
 /*-------------------------------------------------------
   Responsive Layout
 -------------------------------------------------------*/

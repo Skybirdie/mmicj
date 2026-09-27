@@ -122,31 +122,23 @@ function openFull(item){
             try{
                 if(item.section === "reader"){
                     /*
-                     * Do NOT fullscreen #viewerArea directly. It is an
-                     * inner content-only div: the reader's toolbar,
-                     * status bar, and background all live in sibling
-                     * elements (#toolbar, #statusBar, #viewerBackground).
-                     * Fullscreening #viewerArea alone pulls only that
-                     * div into the browser's top layer — everything
-                     * else (background image, close button, page
-                     * controls) is left outside it and simply isn't
-                     * rendered, and #viewerArea's own transparent
-                     * background reveals the browser's default black
-                     * ::backdrop. That produced a black screen with no
-                     * visible way to exit, and a broken layout once
-                     * fullscreen was dismissed (e.g. via the device
-                     * back button).
-                     *
-                     * The Reader's own real fullscreen path
-                     * (ui.toggleFullscreen) fullscreens the whole
-                     * document instead, which keeps the reader's
-                     * chrome (including the close button) inside the
-                     * fullscreen element. Match that here so book
-                     * playback opened from the Front Page behaves the
-                     * same way as opening it from the Reader itself.
+                     * The Reader's own fullscreen control (the
+                     * "Focus viewer" button in its toolbar) does not
+                     * use the browser Fullscreen API — it toggles the
+                     * #app.viewerFocus CSS state, which hides the
+                     * library side panel while leaving the app's top
+                     * bar in place. Using document.documentElement's
+                     * real Fullscreen API here instead produced the
+                     * opposite of that layout: the :fullscreen CSS
+                     * rule that hides #topBar applied, but nothing
+                     * hid #libraryPanel, since that only happens
+                     * under .viewerFocus. Go through UI.enterViewerFocus
+                     * so a book opened from the Front Page ends up in
+                     * exactly the same state as opening it from the
+                     * Reader itself.
                      */
-                    if(!document.fullscreenElement){
-                        document.documentElement.requestFullscreen?.().catch(()=>{});
+                    if(window.UI && typeof UI.enterViewerFocus === "function"){
+                        UI.enterViewerFocus();
                     }
                 }
                 else if(item.section === "video"){
@@ -767,6 +759,14 @@ async function renderSlideshow(item,token){
 
             if(!playing || !pdf) return;
 
+            if(pdf.numPages<=1){
+                // A single page has nothing to advance to. Keep
+                // waiting without redrawing the same page as a
+                // needless self-transition.
+                timer=setTimeout(schedule,5000);
+                return;
+            }
+
             timer=setTimeout(()=>{
                 if(index < pdf.numPages){
                     index++;
@@ -1022,6 +1022,25 @@ cleanupFn=()=>{
         clear();
 
         if(!slides.length) return;
+
+        if(slides.length<=1){
+            // A single slide has nothing to transition to. Keep it
+            // on screen and just keep the loop timer going instead
+            // of re-rendering the same image as a needless
+            // self-transition.
+            if(playing){
+                const s=slides[index];
+
+                timer=setTimeout(
+                    next,
+                    Math.max(
+                        1,
+                        Number(s?.duration)||5
+                    )*1000
+                );
+            }
+            return;
+        }
 
         if(index < slides.length-1){
             index++;
