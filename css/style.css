@@ -1730,15 +1730,7 @@ html[data-theme="dark"] #readerPanel #toolbar .iconButton{
 .sr-settings-panel{
   position:fixed;
   inset:0;
-  /*
-   * Must outrank #app.viewerFocus's z-index:99999!important
-   * (see "Reader focus mode" in this file). The Settings panel
-   * is appended to document.body, outside #app, so while Focus
-   * mode is active it would otherwise render invisibly behind
-   * that fixed full-viewport overlay even though it's technically
-   * open.
-   */
-  z-index:100001;
+  z-index:10000;
   display:flex;
   align-items:center;
   justify-content:center;
@@ -1987,6 +1979,26 @@ html[data-theme="dark"] #readerPanel #toolbar .iconButton{
 
   #libraryPanel.visible{transform:translateX(0)!important;}
   #libraryPanel.libraryCollapsed{transform:translateX(-102%)!important;}
+
+  /* Exception: narrowLibraryToggle (in #topBar, which stays visible
+     during book fullscreen — see #app.viewerFocus in the non-responsive
+     rules above) can still open #libraryPanel as an overlay drawer over
+     the fullscreen book here (SkyReader.toggleLibrary() adds .visible /
+     removes .libraryCollapsed; see js/library.js, js/skyreader.js).
+     Without this exception, #app.viewerFocus #libraryPanel's blanket
+     display:none!important wins regardless of .visible, so toggling the
+     drawer open while a book is in fullscreen had no visible effect.
+     Scoped to this narrow (max-width:999px) block only: at >=1000px
+     #libraryPanel normally carries .visible permanently as the
+     always-on sidebar (there is no narrowLibraryToggle there), so
+     applying this at that width would leak the sidebar back into what
+     should be a fully immersive desktop fullscreen. This drawer's own
+     z-index (1900!important, above) already paints above #topBar
+     (z-index 100, its own local stacking context) inside the stacking
+     context #app.viewerFocus establishes, so no z-index change is
+     needed for the drawer or the toggle button itself — confirmed by
+     inspecting computed styles with the drawer forced open. */
+  #app.viewerFocus #libraryPanel.visible{display:flex!important;}
 
 
   #recentSection{
