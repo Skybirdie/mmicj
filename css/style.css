@@ -1730,7 +1730,18 @@ html[data-theme="dark"] #readerPanel #toolbar .iconButton{
 .sr-settings-panel{
   position:fixed;
   inset:0;
-  z-index:10000;
+  /* #srSettingsPanel is appended straight to <body> (see
+     js/settingsPanel.js), a sibling of #app, not a descendant — so its
+     z-index competes directly against #app's, not against anything
+     inside #app. #app.viewerFocus (book fullscreen) raises #app itself
+     to z-index:99999!important, which put this modal (10000) behind
+     the fullscreen reader: the Settings button (inside #topBar, inside
+     #app) still opened it, but the dialog painted underneath #app and
+     was invisible. 100000 keeps this modal above #app in every state,
+     including book fullscreen, while staying below the near-max
+     z-index used for share toasts / #skyLinkCopiedFeedback, which are
+     intentionally the one thing allowed to sit above every modal. */
+  z-index:100000;
   display:flex;
   align-items:center;
   justify-content:center;
