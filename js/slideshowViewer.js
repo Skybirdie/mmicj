@@ -760,22 +760,6 @@ function updateAudioCue() { const cue = document.getElementById("slideshowAudioC
 
         const startTransition=()=>{
             if(generation!==transitionGeneration || !current)return;
-
-            /*
-             * A one-slide slideshow has nothing to transition to.
-             * Display the slide directly instead of fading the same
-             * slide in again when its playback interval is reached.
-             * Multi-slide shows continue through the existing
-             * SlideshowTransitions path unchanged.
-             */
-            if(total === 1){
-                stage.innerHTML="";
-                stage.appendChild(fresh);
-                transitionBusy=false;
-                if(playing) schedule();
-                return;
-            }
-
             stage.appendChild(fresh);
             transitionBusy=true;
 
@@ -820,27 +804,6 @@ function updateAudioCue() { const cue = document.getElementById("slideshowAudioC
         if(!fromTimer) stopTimer();
         const total=slideCount();
         if(!total)return;
-
-        /*
-         * SINGLE-SLIDE SPECIAL CASE
-         *
-         * Never transition from the only slide back to itself.
-         * When original/music audio is driving playback, leave the
-         * slide displayed until that audio ends; its existing ended
-         * handler will call finish(). Without continuous audio, the
-         * normal slide interval simply completes the slideshow.
-         */
-        if(total === 1){
-            if(
-                (audioMode === "original" || audioMode === "music") &&
-                !audioCompleted
-            ){
-                return;
-            }
-
-            if(playing) finish();
-            return;
-        }
 
         if(index<total-1){
             if(audioMode==="effects") playSound(EFFECT_URL);
