@@ -16,6 +16,50 @@
 /* =======================================================
    VIDEO SECTION
 ======================================================= */
+/* =======================================================
+   FULLSCREEN MEDIA CHROME
+
+   Front Page fullscreen opens the existing Video Viewer in
+   the browser fullscreen layer. The media area is black, so
+   keep the viewer controls in a dark/glass treatment while
+   fullscreen. Normal (non-fullscreen) theme behavior is
+   unchanged.
+======================================================= */
+#videoViewer:fullscreen{
+    --panel:#171a1f;
+    --panel2:#111419;
+    --text:#f4f6f8;
+    --control-bg:rgba(12,15,20,.72);
+    --control-text:#f3f6f8;
+    --line:rgba(255,255,255,.16);
+    background:#000;
+    color:#f4f6f8;
+}
+
+#videoViewer:fullscreen::backdrop{
+    background:#000;
+}
+
+#videoViewer:fullscreen .video-icon-button,
+#videoViewer:fullscreen .video-viewer-close,
+#videoViewer:fullscreen .video-viewer-share{
+    background:rgba(12,15,20,.72);
+    color:#f3f6f8;
+    border-color:rgba(255,255,255,.20);
+}
+
+#videoViewer:fullscreen .video-icon-button .icon,
+#videoViewer:fullscreen .video-viewer-close .icon,
+#videoViewer:fullscreen .video-viewer-share .icon{
+    color:#f3f6f8;
+}
+
+#videoViewer:fullscreen .video-icon-button:hover,
+#videoViewer:fullscreen .video-viewer-close:hover,
+#videoViewer:fullscreen .video-viewer-share:hover{
+    background:rgba(255,255,255,.16);
+}
+
 
 .video-section{
     --video-topbar-height:clamp(44px,5.5vh,68px);

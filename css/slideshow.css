@@ -31,6 +31,47 @@
 #slideshowSection.app-section-hidden{display:none!important}
 .slideshow-section *,.slideshow-section *::before,.slideshow-section *::after{box-sizing:border-box}
 
+/* =========================================================
+   FULLSCREEN MEDIA CHROME
+
+   Front Page fullscreen opens the existing Slideshow Viewer
+   in the browser fullscreen layer. Slideshows sit against a
+   black media background there, so use the dark/glass control
+   treatment only while fullscreen. Normal theme behavior is
+   unchanged.
+========================================================= */
+#slideshowViewer:fullscreen{
+    --panel:#171a1f;
+    --panel2:#111419;
+    --text:#f4f6f8;
+    --control-bg:rgba(12,15,20,.72);
+    --control-text:#f3f6f8;
+    --line:rgba(255,255,255,.16);
+    background:#000;
+    color:#f4f6f8;
+}
+
+#slideshowViewer:fullscreen::backdrop{
+    background:#000;
+}
+
+#slideshowViewer:fullscreen .slideshow-control,
+#slideshowViewer:fullscreen .slideshow-audio-mode{
+    background:rgba(12,15,20,.72);
+    color:#f3f6f8;
+    border-color:rgba(255,255,255,.20);
+}
+
+#slideshowViewer:fullscreen .slideshow-control .icon,
+#slideshowViewer:fullscreen .slideshow-audio-mode .icon,
+#slideshowViewer:fullscreen .slideshow-audio-mode select{
+    color:#f3f6f8;
+}
+
+#slideshowViewer:fullscreen .slideshow-control:hover{
+    background:rgba(255,255,255,.16)!important;
+}
+
 /* ---------- Top bar ---------- */
 .slideshow-top-bar{
     height:var(--slideshow-topbar-height);
