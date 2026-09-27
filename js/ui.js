@@ -330,21 +330,25 @@ if(dom.loadingText){
 
 });
 
-Reader.on(
-
-"closed",
-
-()=>{
-
-ui.hideToolbar();
-
-if(dom.progress){
-
-dom.progress.value=0;
-
-}
-
-});
+/*
+ * A second, more complete "closed" handler is registered further down
+ * this file (see "Reader Events" — it also calls exitViewerFocus(),
+ * updateReaderTitle(), updatePageIndicator() and updateProgress()).
+ * reader.events.closed is a single-slot callback, not a listener list,
+ * so whichever registration runs LAST wins. That other registration
+ * sits at this module's top level and therefore runs as soon as this
+ * script is parsed, while this function only runs later, when
+ * UI.initialize() is actually invoked (see app.js) — so a handler
+ * registered here would silently overwrite the more complete one and
+ * "closed" would fall back to only hiding the toolbar and resetting
+ * the progress bar. Concretely, that meant exitViewerFocus() never
+ * ran, so a book closed from the Front Page's fullscreen view left
+ * #app stuck in .viewerFocus with #libraryPanel and the rest of the
+ * chrome hidden. Do not re-add a "closed" registration here; add to
+ * the one near "Reader Events" instead. (updateProgress() already
+ * resets dom.progress to 0 when the Reader is closed, so no
+ * functionality was lost by removing the duplicate.)
+ */
 
 }
 
