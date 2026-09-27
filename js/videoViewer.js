@@ -853,23 +853,19 @@ function createLandingCircle(video) {
         "video-landing-circle";
 
 
-    if (video.thumbnail) {
+    const image =
+        document.createElement("img");
 
-        const image =
-            document.createElement("img");
+    image.src =
+        video.thumbnail || "assets/default-thumbnail.png";
 
-        image.src =
-            video.thumbnail;
+    image.alt =
+        video.title || "";
 
-        image.alt =
-            video.title || "";
+    image.loading =
+        "lazy";
 
-        image.loading =
-            "lazy";
-
-        circle.appendChild(image);
-
-    }
+    circle.appendChild(image);
 
 
     button.appendChild(circle);
@@ -1615,33 +1611,11 @@ function closeVideo() {
     Release true browser fullscreen first.
     */
 
-    const fullscreenElement = document.fullscreenElement;
-    const videoSection = document.getElementById("videoSection");
-
-    /*
-     * The Front Page "Open full viewer" control fullscreens the
-     * complete #videoViewer, not the <video>/<iframe> element.
-     * Therefore the old check could leave #videoViewer as the
-     * browser fullscreen element after closeVideo() removed its
-     * active player.  That leaves the Video section looking like
-     * a black fullscreen surface with its normal shell hidden.
-     *
-     * Exit fullscreen whenever the fullscreen element belongs to
-     * the Video section.  This covers both the Front Page path
-     * (#videoViewer) and the existing direct-player path.
-     */
     if (
-        fullscreenElement &&
+        document.fullscreenElement &&
         (
-            fullscreenElement === videoElement ||
-            fullscreenElement === iframeElement ||
-            (
-                videoSection &&
-                (
-                    fullscreenElement === videoSection ||
-                    videoSection.contains(fullscreenElement)
-                )
-            )
+            document.fullscreenElement === videoElement ||
+            document.fullscreenElement === iframeElement
         )
     ) {
 
