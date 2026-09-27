@@ -1730,7 +1730,15 @@ html[data-theme="dark"] #readerPanel #toolbar .iconButton{
 .sr-settings-panel{
   position:fixed;
   inset:0;
-  z-index:10000;
+  /*
+   * Must outrank #app.viewerFocus's z-index:99999!important
+   * (see "Reader focus mode" in this file). The Settings panel
+   * is appended to document.body, outside #app, so while Focus
+   * mode is active it would otherwise render invisibly behind
+   * that fixed full-viewport overlay even though it's technically
+   * open.
+   */
+  z-index:100001;
   display:flex;
   align-items:center;
   justify-content:center;
