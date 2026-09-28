@@ -957,3 +957,121 @@ html[data-theme="dark"] #frontPage{
         transition:none;
     }
 }
+
+
+/* =========================================================
+   FRONT PAGE SHARE BUTTON
+   ---------------------------------------------------------
+   Plain "share this link" button (js/frontShare.js). It is a child of
+   #frontPage, so it only exists visually while the Front Page is the
+   active section. #frontPage has no transform/filter, so position:fixed
+   below is relative to the viewport.
+
+   Wide screens : 60x60, bottom edge of the screen,
+                  right:clamp(60px,5vw,20%)
+   Narrow (<=700px, the Front Page's own breakpoint):
+                  right:clamp(5px,5vw,15%), bottom:clamp(110px,20vw,25%)
+   ========================================================= */
+
+#frontShareButton{
+    position:fixed;
+    right:clamp(60px,5vw,20%);
+    bottom:0;
+    z-index:200;
+
+    width:60px;
+    height:60px;
+    box-sizing:border-box;
+    margin:0;
+    padding:8px;
+
+    display:flex;
+    align-items:center;
+    justify-content:center;
+
+    border:2px solid #ecc440;
+    border-radius:8px;
+    background:transparent;
+    color:#0d723b;
+
+    cursor:pointer;
+    pointer-events:auto;
+    appearance:none;
+    -webkit-appearance:none;
+    -webkit-tap-highlight-color:transparent;
+    touch-action:manipulation;
+    transition:filter .2s ease, transform .2s ease;
+}
+
+#frontShareButton img{
+    display:block;
+    width:70%;
+    height:70%;
+    margin:0;
+    padding:0;
+    object-fit:contain;
+    user-select:none;
+    -webkit-user-drag:none;
+    pointer-events:none;
+}
+
+#frontShareButton:hover{
+    filter:brightness(1.12);
+    transform:translateY(-2px);
+}
+
+#frontShareButton:active{
+    transform:translateY(0) scale(.96);
+}
+
+#frontShareButton:focus-visible{
+    outline:2px solid #fff;
+    outline-offset:3px;
+}
+
+@media (max-width:700px){
+    #frontShareButton{
+        right:clamp(5px,5vw,15%);
+        bottom:clamp(110px,20vw,25%);
+    }
+}
+
+/* Link-copied confirmation shown by frontShare.js when the link is copied
+   to the clipboard (no native share sheet). Same image, size, position
+   and fade as the app's other share links (#skyLinkCopiedFeedback in
+   style.css), but its own element. Centered, above everything, and never
+   intercepts a tap. */
+#frontShareCopiedFeedback{
+    position:fixed!important;
+    top:50%!important;
+    left:50%!important;
+    transform:translate(-50%,-50%) scale(.85)!important;
+
+    width:60px!important;
+    height:60px!important;
+
+    z-index:2147483647!important;
+
+    pointer-events:none!important;
+    user-select:none;
+    -webkit-user-drag:none;
+
+    opacity:0;
+    visibility:hidden;
+
+    transition:
+        opacity .18s ease,
+        transform .18s ease,
+        visibility .18s ease;
+}
+
+#frontShareCopiedFeedback.visible{
+    opacity:1;
+    visibility:visible;
+    transform:translate(-50%,-50%) scale(1)!important;
+}
+
+@media (prefers-reduced-motion:reduce){
+    #frontShareButton,
+    #frontShareCopiedFeedback{transition:none;}
+}
