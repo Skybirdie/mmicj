@@ -1819,6 +1819,48 @@ html[data-theme="dark"] #readerPanel #toolbar .iconButton{
 
 
 
+/* =========================================================
+   MOBILE READER FULLSCREEN
+   ---------------------------------------------------------
+   On phones (and touch tablets, matching what the reader engine already
+   treats as a single-page device) the Reader's fullscreen / "Focus
+   viewer" toggle also hides the top bar, the welcome banner and the
+   status bar (title + page indicator), so the book gets the whole
+   screen.
+
+   Desktop is deliberately untouched: the query below never matches a
+   desktop/mouse window, so #app.viewerFocus keeps its existing
+   behaviour there (library panel hidden, top bar / banner / status kept).
+
+   Nothing needs to be "restored" in JavaScript. These rules exist only
+   while #app carries .viewerFocus, and the existing code removes that
+   class on exit-fullscreen (the toolbar toggle) and on closing the book
+   (Reader "closed" -> exitViewerFocus()), so the chrome comes back
+   automatically. If the device is rotated or resized across the
+   breakpoint while in fullscreen, the rules apply/lift by themselves.
+
+   The condition mirrors isSinglePageDevice() in renderer.js:
+   narrow (<=760px) OR a coarse-pointer touch device up to 1024px.
+   ========================================================= */
+
+@media (max-width:760px), (pointer:coarse) and (max-width:1024px){
+
+  #app.viewerFocus #topBar{
+    display:none!important;
+    height:0!important;
+    min-height:0!important;
+    flex:0 0 0!important;
+    padding:0!important;
+    overflow:hidden!important;
+  }
+
+  #app.viewerFocus #statusBar,
+  #app.viewerFocus .sr-welcome-banner{
+    display:none!important;
+  }
+
+}
+
 /* ---------- Responsive system ---------- */
 
 @media (max-width:999px){
