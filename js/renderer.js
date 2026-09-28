@@ -3,7 +3,7 @@
 /*
 =========================================================
  SkyReader Renderer
- Version 3.2.8
+ Version 3.2.9
 
  PDF.js rendering engine + page-surface manager.
 
@@ -1015,7 +1015,15 @@ function scheduleAnnotationWork(pageNumber,surface,page,viewport,token){
     (async()=>{
         const linksStart=performance.now();
         try{
-            await renderLinks(surface,page,viewport);
+            /* Links and media are independent. A failure while wiring links
+               must never stop the embedded video/audio from being wired. */
+            try{
+                await renderLinks(surface,page,viewport);
+            }catch(linkError){
+                if(token===openToken){
+                    console.warn("[Renderer] Link wiring failed for page",pageNumber,linkError);
+                }
+            }
             if(token!==openToken) return;
 
             const mediaStart=performance.now();
@@ -1084,6 +1092,62 @@ async function resolveLinkDestinationPage(dest){
     return pageIndex+1;
 }
 
+/* Convert a PDF-space rectangle [x1,y1,x2,y2] into viewport (canvas
+   pixel) space.
+
+   PDF.js 6.x PageViewport no longer has convertToViewportRectangle(),
+   and calling it threw "is not a function" before a single link was
+   created. This helper uses the method when a PDF.js build still has it,
+   otherwise applies the viewport transform matrix itself, and as a last
+   resort rebuilds that matrix from viewBox/scale/rotation using the
+   same maths PDF.js uses internally. */
+function pdfRectToViewportRect(viewport,rect){
+    if(typeof viewport.convertToViewportRectangle==="function"){
+        return viewport.convertToViewportRectangle(rect);
+    }
+
+    let t=viewport.transform;
+
+    if(!Array.isArray(t) || t.length!==6){
+        const scale=viewport.scale||1;
+        const rotation=(((viewport.rotation||0)%360)+360)%360;
+        const vb=viewport.viewBox||[0,0,viewport.width/scale,viewport.height/scale];
+
+        let a,b,c,d;
+        switch(rotation){
+            case 90:  a=0;  b=1;  c=1;  d=0;  break;
+            case 180: a=-1; b=0;  c=0;  d=1;  break;
+            case 270: a=0;  b=-1; c=-1; d=0;  break;
+            default:  a=1;  b=0;  c=0;  d=-1; break;
+        }
+
+        const cx=(vb[2]+vb[0])/2;
+        const cy=(vb[3]+vb[1])/2;
+        let ox,oy;
+        if(a===0){
+            ox=Math.abs(cy-vb[1])*scale;
+            oy=Math.abs(cx-vb[0])*scale;
+        }else{
+            ox=Math.abs(cx-vb[0])*scale;
+            oy=Math.abs(cy-vb[1])*scale;
+        }
+
+        t=[
+            a*scale,b*scale,c*scale,d*scale,
+            ox-a*scale*cx-c*scale*cy,
+            oy-b*scale*cx-d*scale*cy
+        ];
+    }
+
+    const apply=(x,y)=>[
+        t[0]*x+t[2]*y+t[4],
+        t[1]*x+t[3]*y+t[5]
+    ];
+    const p1=apply(rect[0],rect[1]);
+    const p2=apply(rect[2],rect[3]);
+    return [p1[0],p1[1],p2[0],p2[1]];
+}
+
 async function renderLinks(surface,page,viewport){
     surface.element
         .querySelectorAll(".pdfLink")
@@ -1127,7 +1191,7 @@ async function renderLinks(surface,page,viewport){
            renderScale (2x). convertToViewportRectangle applies scale,
            rotation, and page origin; the result is normalised because the
            y axis flips. */
-        const vr=viewport.convertToViewportRectangle(annotation.rect);
+        const vr=pdfRectToViewportRect(viewport,annotation.rect);
         const vLeft=Math.min(vr[0],vr[2]);
         const vTop=Math.min(vr[1],vr[3]);
         const vWidth=Math.abs(vr[2]-vr[0]);
