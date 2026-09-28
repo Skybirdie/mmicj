@@ -27,7 +27,7 @@
 <link rel="stylesheet" href="css/library.css">
 <link rel="stylesheet" href="css/video.css">
 <link rel="stylesheet" href="css/slideshow.css?v=1.1.0">
-<link rel="stylesheet" href="css/front-page.css?v=release-notification-1">
+<link rel="stylesheet" href="css/front-page.css?v=fs2">
 <link rel="stylesheet" href="css/share.css">
 
 <script>
@@ -190,6 +190,20 @@ body.sky-share-mode #workspacePrimaryLogo {
             <svg class="icon" aria-hidden="true"><use href="#icon-slideshow"></use></svg><span>Images/Graphics</span>
         </button>
     </nav>
+
+    <!--
+         Front-page-only "share this link" button.
+         Lives inside #frontPage so it is shown/hidden with the Front Page
+         itself and can never appear in Books, Videos or Images/Graphics.
+         It is a plain link share (see js/frontShare.js) and is unrelated
+         to the app's share mode. Image: assets/front-share.png
+    -->
+    <button id="frontShareButton"
+            type="button"
+            title="Share Meditation Mornings"
+            aria-label="Share Meditation Mornings">
+        <img src="assets/front-share.png" alt="" draggable="false">
+    </button>
 </section>
 
 <div id="app">
@@ -672,6 +686,7 @@ stroke-linecap="round"/>
 <script src="js/slideshowUI.js"></script>
 <script src="js/frontMediaRenderer.js?v=4.2.1"></script>
 <script src="js/frontPage.js?v=4.3.1"></script>
+<script src="js/frontShare.js?v=1.1.0"></script>
 <script src="js/releaseNotification.js?v=1.1.0"></script>
 <script src="js/appSwitcher.js?v=1.1.0"></script>
 <script src="js/responsiveAppMenu.js"></script>
