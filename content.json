@@ -38,23 +38,6 @@
       "date": "202609011900"
     },
     {
-      "id": "slideshow-001",
-      "type": "slideshow",
-      "title": "Not trees",
-      "subtitle": "Sample Magazine",
-      "thumbnail": "assets/thumbnails/khurasan.jpg",
-      "media": [
-        "test-content/slideshows/Brick-Navy-Blue-Color-Palette-1024x691.webp",
-        "test-content/slideshows/Cool-White-Navy-Blue-Color-Palette-1024x691.webp",
-        "test-content/slideshows/Coral-Navy-Blue-Color-Palette-1024x691.webp",
-        "test-content/slideshows/Sage-Green-Navy-Blue-Color-Palette-1024x691.webp"
-      ],
-      "audio": "test-content/audio/freesound_community-harp-motif2-36586.mp3",
-      "author": "",
-      "category": "Affirmations",
-      "date": "202309020902"
-    },
-    {
       "id": "slideshow-002",
       "type": "slideshow",
       "title": "Nature Collection",
@@ -65,22 +48,6 @@
       "author": "",
       "category": "BYOB",
       "date": "202609011200"
-    },
-    {
-      "id": "slideshow-003",
-      "type": "slideshow",
-      "title": "Silent Gallery",
-      "subtitle": "Sample Magazine",
-      "thumbnail": "test-content/thumbnails/file-sample_150kB.png",
-      "media": [
-        "test-content/slideshows/Pastel-Yellow-Navy-Blue-Color-Palette-1024x691.webp",
-        "test-content/slideshows/Pewter-Navy-Blue-Color-Palette-1024x691.webp",
-        "test-content/slideshows/Sage-Green-Navy-Blue-Color-Palette-1024x691.webp"
-      ],
-      "audio": "",
-      "author": "",
-      "category": "Sayings",
-      "date": "202608301000"
     },
     {
       "id": "video-003",
@@ -105,35 +72,6 @@
       "author": "Kathryn Kuhlman",
       "category": "Testimonies",
       "date": "202609011900"
-    },
-    {
-      "id": "slideshow-004",
-      "type": "slideshow",
-      "title": "Morning Reflection",
-      "subtitle": "Sample Magazine",
-      "thumbnail": "test-content/thumbnails/Cool-White-Navy-Blue-Color-Palette-1024x691.webp",
-      "media": [
-        "test-content/slideshows/Brick-Navy-Blue-Color-Palette-1024x691.webp",
-        "test-content/slideshows/Cool-White-Navy-Blue-Color-Palette-1024x691.webp",
-        "test-content/slideshows/Coral-Navy-Blue-Color-Palette-1024x691.webp",
-        "test-content/slideshows/Sage-Green-Navy-Blue-Color-Palette-1024x691.webp"
-      ],
-      "audio": "test-content/audio/freesound_community-group-talking-29731.mp3",
-      "author": "",
-      "category": "Meditation",
-      "date": "202609020902"
-    },
-    {
-      "id": "slideshow-005",
-      "type": "slideshow",
-      "title": "Trees",
-      "subtitle": "Sample Magazine",
-      "thumbnail": "",
-      "media": "pdf/Trees.pdf",
-      "audio": "test-content/audio/freesound_community-harp-glissando-down-69334.mp3",
-      "author": "",
-      "category": "Affirmations",
-      "date": "202609070400"
     },
     {
       "id": "slideshow-007",
