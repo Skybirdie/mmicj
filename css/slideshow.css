@@ -314,7 +314,7 @@ position:relative;    height: fit-content;
 .slideshow-library-card-media img{display:block;width:100%;object-fit:contain}
 .slideshow-library-card-info{padding:6px 34px 5px 2px;display:flex;flex-direction:column;gap:3px}
 
-.slideshow-library-grid[data-view="grid"] .slideshow-library-card-info {align-items:center; margin:0; padding:5px 10px}
+.slideshow-library-grid[data-view="grid"] .slideshow-library-card-info {align-items:flex-start; text-align:left; margin:0; padding:5px 10px}
 
 .slideshow-library-card-info strong{font-size:13px;line-height:1.2}
 /* Category line: was fixed light text, which vanished on the light
