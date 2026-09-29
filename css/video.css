@@ -3083,3 +3083,20 @@ and (orientation:landscape){
         padding-inline:0;
     }
 }
+
+
+/* =======================================================
+   PHONE: Video library list view text matches the Reader
+   library list view (#listView .listTitle 14px, .listSubtitle
+   12px at max-width:600px). The clamp() sizes above resolved to
+   ~11.7px / 8px on phones, which was too small to read.
+======================================================= */
+@media (max-width:600px){
+    .video-list-title{
+        font-size:14px;
+    }
+
+    .video-list-meta{
+        font-size:12px;
+    }
+}
