@@ -83,18 +83,6 @@
       "date": "202608301000"
     },
     {
-      "id": "book-004",
-      "type": "book",
-      "title": "A Walk Through Nature",
-      "subtitle": "Sample Magazine",
-      "thumbnail": "assets/thumbnails/trees.jpg",
-      "media": "pdf/Trees.pdf",
-      "audio": "",
-      "author": "",
-      "category": "Booklet",
-      "date": "202609010830"
-    },
-    {
       "id": "video-003",
       "type": "video",
       "title": "Breathing",
