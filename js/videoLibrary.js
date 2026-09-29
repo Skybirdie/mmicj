@@ -603,6 +603,28 @@ circle.appendChild(image);
             title
         );
 
+        /*
+        Category (smaller text under the title, as in list view)
+        */
+
+        if (video.category) {
+
+            const category =
+                document.createElement(
+                    "span"
+                );
+
+            category.className =
+                "video-circle-category";
+
+            category.textContent =
+                video.category;
+
+            overlay.appendChild(
+                category
+            );
+        }
+
         circle.appendChild(
             overlay
         );

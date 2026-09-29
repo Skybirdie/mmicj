@@ -198,7 +198,7 @@ SkyReader.filteredLibrary.forEach(book=>{
 
 shelf.appendChild(
 
-this.createShelfCard(book)
+this.createShelfCard(book,{showCategory:true})
 
 );
 
@@ -375,9 +375,14 @@ const subtitle=document.createElement("div");
 
 subtitle.className="bookSubtitle";
 
+/* Left panel grid cards show the item's category in place of the
+   subtitle. Viewer Landing shelf cards (createShelfCard called with
+   includeDate) do not pass showCategory, so they keep the subtitle. */
 subtitle.textContent=
 
-book.subtitle||"";
+options.showCategory
+    ? (book.category||"")
+    : (book.subtitle||"");
 
 const favoriteButton=this.createFavoriteButton(book);
 
@@ -472,7 +477,8 @@ title.textContent=book.title;
 
 const subtitle=document.createElement("div");
 subtitle.className="listSubtitle";
-subtitle.textContent=book.subtitle||"";
+/* Left panel list view shows the category in place of the subtitle. */
+subtitle.textContent=book.category||"";
 
 const favoriteButton=this.createFavoriteButton(book);
 
