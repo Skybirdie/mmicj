@@ -989,7 +989,7 @@ html[data-theme="dark"] #frontPage{
     align-items:center;
     justify-content:center;
 
-    border:2px solid #ecc440;
+    border:none;
     border-radius:8px;
     background:transparent;
     color:#0d723b;
