@@ -2121,6 +2121,31 @@ function getCurrentVideo() {
 
 
 /*
+ True while the current video is actively playing. Embedded
+ (iframe) players cannot be inspected, so they are treated as
+ playing while open. Used by AppSwitcher to honour the
+ Background Playback setting when leaving the Video section.
+*/
+function isPlaying() {
+
+    if (!currentVideo) {
+        return false;
+    }
+
+    if (activePlayerType === "iframe") {
+        return true;
+    }
+
+    return Boolean(
+        videoElement &&
+        !videoElement.paused &&
+        !videoElement.ended
+    );
+
+}
+
+
+/*
 =========================================================
  PUBLIC API
 =========================================================
@@ -2147,6 +2172,8 @@ return {
     fullscreen,
 
     getCurrentVideo,
+
+    isPlaying,
 
     renderLanding
 

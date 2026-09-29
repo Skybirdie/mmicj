@@ -28,6 +28,84 @@ window.AppSwitcher = (function () {
 
     let current = "reader";
     let initialized = false;
+    let hasShown = false;
+
+
+    /*
+    -------------------------------------------------------
+     Navigating away from a viewer section counts as closing
+     whatever item is open in it, so returning shows the
+     section's landing (with the item in its Continue /
+     Recent shelves) instead of re-selecting the item.
+
+     Each viewer's own close routine is used, so last page /
+     recent information is saved exactly as for a manual close.
+
+     Exception: with Background Playback enabled, media that is
+     actually playing keeps going (that is the whole point of
+     the setting), so it is left open.  Paused or stopped media
+     is closed like anything else.
+    -------------------------------------------------------
+    */
+    function closeOpenItem(sectionId) {
+
+        try {
+
+            const backgroundOn =
+                window.MediaManager &&
+                typeof MediaManager.getBackgroundPlayback === "function" &&
+                MediaManager.getBackgroundPlayback();
+
+            if (sectionId === "reader") {
+
+                if (
+                    window.Reader &&
+                    typeof Reader.isOpen === "function" &&
+                    Reader.isOpen()
+                ) {
+                    Reader.close({ playSound: false });
+                }
+
+            }
+            else if (sectionId === "video") {
+
+                if (
+                    window.VideoViewer &&
+                    typeof VideoViewer.getCurrentVideo === "function" &&
+                    VideoViewer.getCurrentVideo() &&
+                    !(
+                        backgroundOn &&
+                        typeof VideoViewer.isPlaying === "function" &&
+                        VideoViewer.isPlaying()
+                    )
+                ) {
+                    VideoViewer.closeVideo();
+                }
+
+            }
+            else if (sectionId === "slideshow") {
+
+                if (
+                    window.SlideshowViewer &&
+                    typeof SlideshowViewer.getCurrent === "function" &&
+                    SlideshowViewer.getCurrent() &&
+                    !(
+                        backgroundOn &&
+                        typeof SlideshowViewer.isPlaying === "function" &&
+                        SlideshowViewer.isPlaying()
+                    )
+                ) {
+                    SlideshowViewer.close();
+                }
+
+            }
+
+        }
+        catch (error) {
+            console.warn("[AppSwitcher] Unable to close open item.", error);
+        }
+
+    }
 
 
     function rootFor(id) {
@@ -137,6 +215,16 @@ function show(id, options = {}) {
             FrontMediaRenderer.stopPlayback();
         }
     }
+
+    /*
+     * Leaving a section (not the initial page load, and not a
+     * click on the section already showing) closes its open item.
+     */
+    if (hasShown && current !== id) {
+        closeOpenItem(current);
+    }
+
+    hasShown = true;
 
     current = id;
 
