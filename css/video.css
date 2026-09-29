@@ -3044,3 +3044,24 @@ and (orientation:landscape){
 .video-section.videoFocus .video-viewer > .sr-welcome-banner{
     display:none!important;
 }
+
+/* =======================================================
+   PHONE: Watch Again card width matches the Reader Read Again
+   card (about a 10px inset inside the landing panel).
+   The card sat inside the landing padding + the row padding
+   + the circle-row padding (~34px each side at 390px), so it
+   rendered narrower than the Reader card. Pull the row out to
+   the panel edge and drop the circle-row padding for this one
+   card. Padding of .video-landing is clamp(20px,4vw,46px).
+======================================================= */
+@media (max-width:560px){
+    #videoLanding .video-landing-media-row{
+        margin-inline:calc(1px - clamp(20px,4vw,46px));
+        width:calc(100% - 2px + 2 * clamp(20px,4vw,46px));
+        max-width:none;
+    }
+
+    #videoLanding #videoLandingContinue{
+        padding-inline:0;
+    }
+}

@@ -1582,3 +1582,16 @@ body.sky-share-mode .slideshow-audio-cue{
         opacity .35s ease,
         visibility .35s ease;
 }
+
+/* =======================================================
+   PHONE: View Again card width matches the Reader Read Again
+   card (about a 10px inset inside the landing panel). The row
+   is pulled out through the landing padding, clamp(20px,4vw,46px);
+   the continue section keeps its own 10px padding as the inset.
+======================================================= */
+@media (max-width:560px){
+    .slideshow-landing .slideshow-landing-media-row{
+        margin-inline:calc(1px - clamp(20px,4vw,46px));
+        width:calc(100% - 2px + 2 * clamp(20px,4vw,46px));
+    }
+}
