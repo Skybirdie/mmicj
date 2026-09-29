@@ -989,7 +989,7 @@ html[data-theme="dark"] #frontPage{
     align-items:center;
     justify-content:center;
 
-    border:none;
+    border:2px solid #ecc440;
     border-radius:8px;
     background:transparent;
     color:#0d723b;
@@ -1047,8 +1047,8 @@ html[data-theme="dark"] #frontPage{
     left:50%!important;
     transform:translate(-50%,-50%) scale(.85)!important;
 
-    width:120px!important;
-    height:120px!important;
+    width:60px!important;
+    height:60px!important;
 
     z-index:2147483647!important;
 
@@ -1074,4 +1074,258 @@ html[data-theme="dark"] #frontPage{
 @media (prefers-reduced-motion:reduce){
     #frontShareButton,
     #frontShareCopiedFeedback{transition:none;}
+}
+
+
+/* =========================================================
+   FRONT PAGE SHARE PANEL
+   ---------------------------------------------------------
+   Built by js/frontShare.js inside #frontPage, so it only exists while the
+   Front Page is the active section. Styled after the browser's own share
+   sheet: a bottom sheet on narrow screens, a popover anchored above the
+   share button on wide screens. Light and dark themes follow
+   html[data-theme="dark"], like the rest of the app.
+   ========================================================= */
+
+#frontSharePanel{
+    --fs-bg:#ffffff;
+    --fs-text:#202124;
+    --fs-muted:#5f6368;
+    --fs-line:rgba(32,33,36,.12);
+    --fs-hover:rgba(32,33,36,.07);
+    --fs-preview:#f1f3f4;
+
+    position:fixed;
+    inset:0;
+    z-index:300;
+    visibility:hidden;
+    pointer-events:none;
+    font-family:Inter,"Segoe UI",Roboto,Arial,sans-serif;
+}
+
+html[data-theme="dark"] #frontSharePanel{
+    --fs-bg:#2b2d30;
+    --fs-text:#e8eaed;
+    --fs-muted:#a7abb0;
+    --fs-line:rgba(232,234,237,.16);
+    --fs-hover:rgba(232,234,237,.10);
+    --fs-preview:#3a3d41;
+}
+
+#frontSharePanel.is-open{
+    visibility:visible;
+    pointer-events:auto;
+}
+
+#frontSharePanel .frontShareBackdrop{
+    position:absolute;
+    inset:0;
+    background:rgba(0,0,0,.30);
+    opacity:0;
+    transition:opacity .2s ease;
+}
+
+#frontSharePanel.is-open .frontShareBackdrop{opacity:1;}
+
+#frontSharePanel .frontShareDialog{
+    position:absolute;
+    box-sizing:border-box;
+    background:var(--fs-bg);
+    color:var(--fs-text);
+    border-radius:16px;
+    box-shadow:0 12px 40px rgba(0,0,0,.32), 0 0 0 1px var(--fs-line);
+    padding:14px 16px 16px;
+    overflow:auto;
+    overscroll-behavior:contain;
+    opacity:0;
+    transform:translateY(10px) scale(.98);
+    transition:opacity .2s ease, transform .2s ease;
+}
+
+#frontSharePanel.is-open .frontShareDialog{
+    opacity:1;
+    transform:none;
+}
+
+/* Wide screens: popover above the share button, aligned to it. */
+@media (min-width:701px){
+    #frontSharePanel .frontShareDialog{
+        right:clamp(60px,5vw,20%);
+        bottom:76px;
+        width:380px;
+        max-width:calc(100vw - 24px);
+        max-height:calc(100dvh - 100px);
+        transform-origin:100% 100%;
+    }
+
+    #frontSharePanel .frontShareHandle{display:none;}
+}
+
+/* Narrow screens: bottom sheet. */
+@media (max-width:700px){
+    #frontSharePanel .frontShareDialog{
+        left:0;
+        right:0;
+        bottom:0;
+        width:100%;
+        max-height:min(84dvh,640px);
+        border-radius:20px 20px 0 0;
+        padding-bottom:calc(18px + env(safe-area-inset-bottom));
+        transform:translateY(28px);
+    }
+
+    #frontSharePanel .frontShareBackdrop{background:rgba(0,0,0,.42);}
+}
+
+#frontSharePanel .frontShareHandle{
+    width:38px;
+    height:4px;
+    margin:0 auto 10px;
+    border-radius:2px;
+    background:var(--fs-line);
+}
+
+#frontSharePanel .frontShareHeader{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+}
+
+#frontSharePanel .frontShareHeader h2{
+    margin:0;
+    font-size:18px;
+    line-height:1.3;
+    font-weight:600;
+    color:var(--fs-text);
+}
+
+#frontSharePanel .frontShareClose{
+    display:grid;
+    place-items:center;
+    width:36px;
+    height:36px;
+    margin:-4px -6px -4px 0;
+    padding:0;
+    border:0;
+    border-radius:50%;
+    background:transparent;
+    color:var(--fs-muted);
+    cursor:pointer;
+    -webkit-tap-highlight-color:transparent;
+}
+
+#frontSharePanel .frontShareClose svg{width:20px;height:20px;display:block;}
+#frontSharePanel .frontShareClose:hover{background:var(--fs-hover);color:var(--fs-text);}
+
+#frontSharePanel .frontSharePreview{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    margin-top:12px;
+    padding:10px 12px;
+    border-radius:12px;
+    background:var(--fs-preview);
+    min-width:0;
+}
+
+#frontSharePanel .frontSharePreview img{
+    flex:0 0 auto;
+    width:44px;
+    height:44px;
+    object-fit:contain;
+    border-radius:10px;
+    background:rgba(255,255,255,.65);
+    user-select:none;
+    -webkit-user-drag:none;
+}
+
+#frontSharePanel .frontSharePreviewText{
+    display:flex;
+    flex-direction:column;
+    min-width:0;
+    line-height:1.3;
+}
+
+#frontSharePanel .frontSharePreviewText strong{
+    font-size:14px;
+    font-weight:600;
+    color:var(--fs-text);
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}
+
+#frontSharePanel .frontSharePreviewText span{
+    font-size:12.5px;
+    color:var(--fs-muted);
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}
+
+#frontSharePanel .frontShareGrid{
+    display:grid;
+    grid-template-columns:repeat(4,minmax(0,1fr));
+    gap:6px 4px;
+    margin-top:14px;
+}
+
+#frontSharePanel .frontShareTile{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:7px;
+    box-sizing:border-box;
+    min-width:0;
+    margin:0;
+    padding:9px 2px 8px;
+    border:0;
+    border-radius:12px;
+    background:transparent;
+    color:var(--fs-text);
+    font:inherit;
+    text-decoration:none;
+    cursor:pointer;
+    appearance:none;
+    -webkit-appearance:none;
+    -webkit-tap-highlight-color:transparent;
+}
+
+#frontSharePanel .frontShareTile:hover{background:var(--fs-hover);}
+#frontSharePanel .frontShareTile:active{transform:scale(.97);}
+
+#frontSharePanel .frontShareTile:focus-visible,
+#frontSharePanel .frontShareClose:focus-visible{
+    outline:2px solid #1a73e8;
+    outline-offset:1px;
+}
+
+#frontSharePanel .frontShareIcon{
+    display:block;
+    width:48px;
+    height:48px;
+    flex:0 0 auto;
+}
+
+#frontSharePanel .frontShareIcon svg{
+    display:block;
+    width:100%;
+    height:100%;
+}
+
+#frontSharePanel .frontShareLabel{
+    max-width:100%;
+    font-size:12px;
+    line-height:1.2;
+    text-align:center;
+    color:var(--fs-text);
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}
+
+@media (prefers-reduced-motion:reduce){
+    #frontSharePanel .frontShareBackdrop,
+    #frontSharePanel .frontShareDialog{transition:none;}
 }
