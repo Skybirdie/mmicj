@@ -22,16 +22,25 @@
     --front-upper-backdrop:url("../assets/front-top-graphic.png");
     --front-lower-backdrop:url("../assets/front-bottom-graphic.png");
 
+    /* Fill the viewport exactly. Width/height are left to inset:0 rather
+       than 100vw / 100dvh: in an installed PWA (standalone window) the
+       vw/dvh units can come out a fraction of a pixel short of the real
+       window (display scaling, system bars), which left a thin strip of
+       the page behind #frontPage showing above the taskbar / nav bar. */
     position:fixed;
     inset:0;
     z-index:5000;
     display:none;
-    width:100vw;
-    height:100dvh;
-    min-height:100svh;
     overflow:hidden;
     background:#000;
     isolation:isolate;
+}
+
+/* Belt and braces: while the Front Page is showing, anything that still
+   peeks out around it is black like the Front Page, not the app theme. */
+html:has(#frontPage.app-section-active),
+html:has(#frontPage.app-section-active) body{
+    background:#000;
 }
 
 html[data-theme="dark"] #frontPage{
