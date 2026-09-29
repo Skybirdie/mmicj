@@ -8,7 +8,12 @@ window.SlideshowSorter = (function () {
     const title = x => String(x.title||"");
     const searchable = x => [x.title,x.subtitle,x.category,x.author,x.id,...(x.slides||[]).flatMap(s=>[s.title,s.caption])].filter(Boolean).join(" ").toLowerCase();
     function categories(source){return [...new Set(copy(source).map(category))].sort((a,b)=>a.localeCompare(b));}
-    function recentValue(x){ try { return Number(localStorage.getItem("skyslideshow-recent:"+x.id)||0); } catch(e){ return 0; } }
+    /* SlideshowViewer stores recents as one list of ids, newest first, under
+       "skyslideshow-recent" (same shape as the video list). The old per-item
+       "skyslideshow-recent:<id>" keys were never written, so Recently Viewed
+       could not sort. Higher value = more recently viewed; never viewed = 0. */
+    function recentIds(){ try { const v=JSON.parse(localStorage.getItem("skyslideshow-recent")||"[]"); return Array.isArray(v)?v:[]; } catch(e){ return []; } }
+    function recentValue(x,ids){ const i=(ids||recentIds()).indexOf(x.id); return i<0?0:ids?ids.length-i:recentIds().length-i; }
     function organize(options={}){
         let result=copy(options.slideshows);
         const filter=options.filter||"all", cat=options.category||"all", search=String(options.search||"").toLowerCase();
@@ -16,13 +21,14 @@ window.SlideshowSorter = (function () {
         if(filter==="favorites") result=result.filter(x=>window.SlideshowFavorites&&SlideshowFavorites.has(x.id));
         if(search) result=result.filter(x=>searchable(x).includes(search));
         const mode=options.sort||modes.ALPHABETICAL;
+        const recentList=mode===modes.RECENT?recentIds():null;
         if(mode===modes.FAVORITES) result=result.filter(x=>window.SlideshowFavorites&&SlideshowFavorites.has(x.id));
         else if(mode===modes.RANDOM){for(let i=result.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[result[i],result[j]]=[result[j],result[i]];}}
         else result.sort((a,b)=>{
             if(mode===modes.NEWEST)return dateValue(b.date)-dateValue(a.date)||title(a).localeCompare(title(b));
             if(mode===modes.OLDEST)return dateValue(a.date)-dateValue(b.date)||title(a).localeCompare(title(b));
             if(mode===modes.CATEGORY)return category(a).localeCompare(category(b))||title(a).localeCompare(title(b));
-            if(mode===modes.RECENT)return recentValue(b)-recentValue(a)||title(a).localeCompare(title(b));
+            if(mode===modes.RECENT)return recentValue(b,recentList)-recentValue(a,recentList)||title(a).localeCompare(title(b));
             return title(a).localeCompare(title(b));
         });
         return result;

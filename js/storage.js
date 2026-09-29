@@ -54,9 +54,14 @@ save(){
 
 const state={
 
-lastMagazine:SkyReader.currentMagazine?.id||null,
+/* Reader.close() calls SkyReader.resetViewer() (currentMagazine = null,
+   currentPage = 0) BEFORE the final save(). Persisting only the transient
+   fields therefore wiped the Read Again memory from storage on every
+   close, so the card was empty after the next load. Fall back to the
+   preserved resume fields, which resetViewer() deliberately keeps. */
+lastMagazine:SkyReader.currentMagazine?.id||SkyReader.resume?.magazineId||null,
 
-lastPage:SkyReader.currentPage,
+lastPage:SkyReader.currentMagazine?SkyReader.currentPage:(SkyReader.resume?.page||0),
 
 shelfView:SkyReader.ui.shelfView,
 
