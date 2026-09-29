@@ -1966,6 +1966,12 @@ html[data-theme="dark"] #readerPanel #toolbar .iconButton{
   #listView .listThumb{width:48px;height:68px;flex-basis:48px;}
   #listView .listTitle{font-size:14px;}
   #listView .listSubtitle{font-size:12px;}
+
+  /* Reader landing shelf on phones: a little wider than the generic
+     max-width:999px rule above (which clamps to 96px at phone widths).
+     Thumbnail height is driven by the shelf height, not the card width,
+     so only the width changes. */
+  #viewerShelfView .bookCard{width:clamp(108px,28vw,132px);min-width:clamp(108px,28vw,132px);max-width:clamp(108px,28vw,132px);}
 }
 
 @media (max-width:999px){
