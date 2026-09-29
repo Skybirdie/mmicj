@@ -14,18 +14,6 @@
       "date": "202609020901"
     },
     {
-      "id": "book-002",
-      "type": "book",
-      "title": "Source",
-      "subtitle": "Sample Magazine",
-      "thumbnail": "assets/thumbnails/source.jpg",
-      "media": "pdf/Source.pdf",
-      "audio": "",
-      "author": "",
-      "category": "Affirmations",
-      "date": "202609010830"
-    },
-    {
       "id": "video-001",
       "type": "video",
       "title": "The Holy Spirit as Guide",
@@ -93,18 +81,6 @@
       "author": "",
       "category": "Sayings",
       "date": "202608301000"
-    },
-    {
-      "id": "book-003",
-      "type": "book",
-      "title": "The Morning Reader",
-      "subtitle": "Sample Magazine",
-      "thumbnail": "test-content/thumbnails/file-sample_150kB.jpg",
-      "media": "test-content/books/file-sample_150kB.pdf",
-      "audio": "",
-      "author": "",
-      "category": "General",
-      "date": "202609020901"
     },
     {
       "id": "book-004",
@@ -210,18 +186,6 @@
       "author": "naph",
       "category": "Meditation",
       "date": "202609212200"
-    },
-    {
-      "id": "book-005",
-      "type": "book",
-      "title": "Video-Embed-Test",
-      "subtitle": "Sample Magazine",
-      "thumbnail": "",
-      "media": "pdf/test1.pdf",
-      "audio": "",
-      "author": "",
-      "category": "Book Club",
-      "date": "202609090330"
     }
   ],
   "frontPage": {
