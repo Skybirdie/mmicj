@@ -1057,7 +1057,7 @@ html[data-theme="dark"] #frontPage{
     transform:translate(-50%,-50%) scale(.85)!important;
 
     width:120px!important;
-    height:auto!important;
+    height:120px!important;
 
     z-index:2147483647!important;
 
