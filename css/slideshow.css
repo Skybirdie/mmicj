@@ -317,7 +317,10 @@ position:relative;    height: fit-content;
 .slideshow-library-grid[data-view="grid"] .slideshow-library-card-info {align-items:center; margin:0; padding:5px 10px}
 
 .slideshow-library-card-info strong{font-size:13px;line-height:1.2}
-.slideshow-library-card-info span{font-size:11px;color:rgba(255,255,255,.72)}
+/* Category line: was fixed light text, which vanished on the light
+   card background; use the theme's muted text colour like the Reader
+   panel cards. */
+.slideshow-library-card-info span{font-size:11px;color:var(--muted,rgba(255,255,255,.72));font-weight:550;min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 .slideshow-library-card.selected .slideshow-library-card{box-shadow:
         0 0 0 3px #66CDAA,

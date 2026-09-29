@@ -589,6 +589,24 @@ AppSwitcher marks the active section.
     display:none!important;
 }
 
+/* Category under the title in grid (circle) view; sizes follow the
+   three circle sizes and stay smaller than the title. */
+.video-circle-category{
+    max-width:100%;
+    margin-top:3px;
+    color:rgba(255,255,255,.92);
+    font-size:11px;
+    font-weight:550;
+    line-height:1.15;
+    text-shadow:0 1px 3px rgba(0,0,0,.85);
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}
+.video-circle-size-2 .video-circle-category{font-size:10px;}
+/* The smallest circle (62px) has no room for a second line. */
+.video-circle-size-3 .video-circle-category{display:none;}
+
 
 .video-favorite-control{
     position:absolute;
