@@ -146,16 +146,13 @@ border: none;
 
 /* ---------------------------------------------------------
    Reader fullscreen
+   ---------------------------------------------------------
+   Page fullscreen no longer hides #topBar by itself. What the Reader
+   looks like in fullscreen is its own Focus viewer state
+   (#app.viewerFocus, applied by UI.toggleFullscreen), which already
+   hides the top bar where that mode is meant to (phones / touch
+   tablets) and keeps it on desktop.
    --------------------------------------------------------- */
-
-html:fullscreen #topBar{
-  display:none !important;
-  height:0 !important;
-  min-height:0 !important;
-  flex:0 0 0 !important;
-  padding:0 !important;
-  overflow:hidden !important;
-}
 
 
 #settingsButton{
