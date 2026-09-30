@@ -79,13 +79,65 @@ window.waitForPdfjs = function (timeoutMs) {
 };
 </script>
 <script type="module">
-import * as pdfjsLibModule from "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.3.289/pdf.min.mjs";
-import { EventBus, PDFLinkService } from "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.3.289/pdf_viewer.mjs";
-pdfjsLibModule.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.3.289/pdf.worker.min.mjs";
-window.pdfjsLib=pdfjsLibModule;
-window.PDFLinkService=PDFLinkService;
-window.PDFEventBus=EventBus;
-window.dispatchEvent(new Event("skyreader-pdfjs-ready"));
+/*
+ * pdf.js 6's standard build calls very new built-ins
+ * (Map.prototype.getOrInsertComputed, Promise.try) with no fallback.
+ * Safari/iOS versions that lack them fail as soon as a book is opened
+ * ("...getOrInsertComputed is not a function"), while videos and
+ * slideshows keep working.
+ *
+ * Browsers that have those built-ins keep loading exactly the same
+ * cdnjs files as before. Only browsers that lack them are given pdf.js's
+ * own "legacy" build (same version, polyfills included, page + worker).
+ * If the legacy files cannot be loaded, the standard build is used, so
+ * this can never be worse than the previous behaviour.
+ */
+const CDNJS_BASE="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.3.289/";
+const LEGACY_BASE="https://cdn.jsdelivr.net/npm/pdfjs-dist@6.3.289/legacy/";
+
+const needsLegacy=
+    typeof Map.prototype.getOrInsertComputed!=="function" ||
+    typeof Promise.try!=="function";
+
+async function loadStandard(){
+    const lib=await import(CDNJS_BASE+"pdf.min.mjs");
+    const viewer=await import(CDNJS_BASE+"pdf_viewer.mjs");
+    lib.GlobalWorkerOptions.workerSrc=CDNJS_BASE+"pdf.worker.min.mjs";
+    return {lib,viewer};
+}
+
+async function loadLegacy(){
+    const lib=await import(LEGACY_BASE+"build/pdf.min.mjs");
+    const viewer=await import(LEGACY_BASE+"web/pdf_viewer.mjs");
+    lib.GlobalWorkerOptions.workerSrc=LEGACY_BASE+"build/pdf.worker.min.mjs";
+    return {lib,viewer};
+}
+
+/*
+ * Wrapped in an async function rather than using top-level await, so
+ * older iOS versions that predate top-level await still parse this script.
+ */
+(async function(){
+try{
+    let loaded=null;
+    if(needsLegacy){
+        try{
+            loaded=await loadLegacy();
+        }catch(error){
+            console.warn("[SkyReader] pdf.js legacy build unavailable; using the standard build.",error);
+        }
+    }
+    if(!loaded){
+        loaded=await loadStandard();
+    }
+    window.pdfjsLib=loaded.lib;
+    window.PDFLinkService=loaded.viewer.PDFLinkService;
+    window.PDFEventBus=loaded.viewer.EventBus;
+    window.dispatchEvent(new Event("skyreader-pdfjs-ready"));
+}catch(error){
+    console.error("[SkyReader] pdf.js failed to load.",error);
+}
+})();
 </script>
 <script src="page-flip.browser.js"></script>
 
