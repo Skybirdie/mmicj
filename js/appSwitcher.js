@@ -47,6 +47,34 @@ window.AppSwitcher = (function () {
      is closed like anything else.
     -------------------------------------------------------
     */
+    /*
+     * Video / Slideshow fullscreen their own viewer element, which
+     * would be left fullscreen (and blank) once its section is hidden.
+     * Leaving a viewer section ends that fullscreen, like the close
+     * above. The Reader ends page fullscreen through Reader.close().
+     */
+    function leaveViewerFullscreen(sectionId) {
+
+        try {
+
+            const element = document.fullscreenElement;
+
+            if (
+                element &&
+                (sectionId === "video" || sectionId === "slideshow") &&
+                element !== document.documentElement &&
+                typeof document.exitFullscreen === "function"
+            ) {
+                document.exitFullscreen().catch(() => {});
+            }
+
+        }
+        catch (error) {
+            console.warn("[AppSwitcher] Unable to leave fullscreen.", error);
+        }
+
+    }
+
     function closeOpenItem(sectionId) {
 
         try {
@@ -222,6 +250,7 @@ function show(id, options = {}) {
      */
     if (hasShown && current !== id) {
         closeOpenItem(current);
+        leaveViewerFullscreen(current);
     }
 
     hasShown = true;

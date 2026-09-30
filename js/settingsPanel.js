@@ -73,6 +73,12 @@ window.SettingsPanel=(function(){
         root.querySelector("#srFullscreenButton").onclick=async()=>{
             if(typeof UI!=="undefined" && UI.toggleFullscreen){
                 await UI.toggleFullscreen();
+                /* Video / Slideshow fullscreen a single viewer element,
+                   which cannot paint this body-level dialog. Close it so
+                   it does not reappear when fullscreen ends. */
+                if(document.fullscreenElement && document.fullscreenElement!==document.documentElement){
+                    api.hide();
+                }
                 api.sync();
             }
         };
