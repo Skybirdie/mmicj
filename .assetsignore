@@ -1,1 +1,11 @@
 .git
+node_modules
+worker.js
+wrangler.jsonc
+README.txt
+GLIDE_CONTRACT.md
+docs
+tests
+glide-generator-single-item-KV.txt
+*.diff
+*.zip
