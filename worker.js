@@ -71,6 +71,15 @@ const PDF_PROXY_ALLOWED_HOSTS =
     "storage.googleapis.com"
   ]);
 
+/* Bumped once, deliberately: an earlier version of this proxy could
+   cache a WRONG partial response under a given PDF's URL (see the
+   comment in handlePdfProxy). Changing this forces every PDF to be
+   fetched fresh under a new cache key instead of potentially being
+   served whatever that earlier bug already wrote into Cloudflare's
+   cache for the same URL. */
+const PDF_PROXY_CACHE_VERSION =
+  "2";
+
 const SHARE_PATH_PREFIX =
   "/s/";
 
@@ -79,6 +88,48 @@ const SHARE_RECORD_PREFIX =
 
 const CATALOG_RECORD_PREFIX =
   "catalog:v1:";
+
+/* ---------------------------------------------------------
+   CATALOG SNAPSHOT
+
+   One KV record holding the complete, cleaned catalog, so the
+   app can load it from the base URL without a Glide contract.
+
+   Written by the catalog publish (below) ONLY when the catalog
+   actually changed, and served at CATALOG_SNAPSHOT_PATH.
+--------------------------------------------------------- */
+
+const CATALOG_SNAPSHOT_PATH =
+  "/__sky_catalog";
+
+const CATALOG_SNAPSHOT_KEY =
+  "catalog:snapshot:v1";
+
+const CATALOG_SNAPSHOT_PREV_KEY =
+  "catalog:snapshot:v1:prev";
+
+/* Bump to force one re-write of the snapshot after a format change. */
+const CATALOG_SNAPSHOT_FORMAT =
+  "1";
+
+/* Refuse a publish that keeps fewer than this share of the
+   previous item count (unless the publish sends force:true). */
+const CATALOG_SNAPSHOT_MIN_RETAIN_RATIO =
+  0.5;
+
+/* The shrink guard only applies once the previous snapshot had at
+   least this many items, so small catalogs can be edited freely. */
+const CATALOG_SNAPSHOT_GUARD_MIN_PREVIOUS =
+  6;
+
+/* Browsers may reuse the snapshot for this long without asking. */
+const CATALOG_SNAPSHOT_CLIENT_MAX_AGE =
+  300;
+
+/* Per-isolate memory copy, so warm isolates do not read KV on
+   every request. (The Cache API is not available on workers.dev.) */
+const CATALOG_SNAPSHOT_MEMORY_TTL_MS =
+  60000;
 
 const KV_CACHE_TTL =
   300;
@@ -2420,104 +2471,117 @@ async function handlePdfProxy(
     );
   }
 
-  /* Forward the browser's Range header (or its absence, for the
-     very first probing request PDF.js sometimes makes without
-     one) straight through to the source. */
-  const upstreamHeaders =
-    new Headers();
+  /*
+   * IMPORTANT — why this does not forward the client's Range header to
+   * the origin:
+   *
+   * An earlier version of this proxy forwarded the browser's Range
+   * header straight through to GCS and relied on `cf.cacheEverything`
+   * to cache the result. That was wrong: Cloudflare's cache key is the
+   * request URL, which does NOT include the Range header. Every byte
+   * range of the same PDF shares one cache key, so the first range
+   * fetched (say, bytes 0-1000 while opening the document) could get
+   * cached and then served back for every OTHER range request to that
+   * same PDF too — silently returning the wrong bytes. PDF.js would
+   * then try to parse corrupted data: pages stalling partway through
+   * rendering, embedded video attachments failing outright.
+   *
+   * The correct pattern: fetch the FULL object from the origin once
+   * (ignoring the client's Range header entirely on this leg — this
+   * fetch is edge-to-GCS, not the visitor's own connection, so even a
+   * large file is fast here), cache that single full response under a
+   * Range-agnostic key, and then let Cloudflare's Cache API do the
+   * actual Range slicing per request. cache.match(request) natively
+   * supports this: given a full cached response with Content-Length,
+   * it returns the correct 206 for whatever Range header the incoming
+   * request carries, safely and independently, no matter how many
+   * different ranges get requested afterward. This also means every
+   * request after the very first, for any byte range, from any
+   * visitor, is served straight from cache without touching GCS again.
+   */
+  const cache=caches.default;
 
-  const range =
-    request.headers.get(
-      "Range"
-    );
+  /* Strip Range from the cache lookup key: it's irrelevant to what we
+     stored (a full object) and must not affect the cache key. The
+     __skypdfcv marker forces this onto a cache key the old, buggy
+     version of this proxy never wrote to (see PDF_PROXY_CACHE_VERSION
+     above) — belt-and-braces alongside the max-age on the entry
+     itself. */
+  const cacheKeyUrl=new URL(target.toString());
+  cacheKeyUrl.searchParams.set("__skypdfcv",PDF_PROXY_CACHE_VERSION);
+  const cacheKey=new Request(cacheKeyUrl.toString(),{method:"GET"});
 
-  if (range) {
-    upstreamHeaders.set(
-      "Range",
-      range
-    );
-  }
+  let stored=await cache.match(cacheKey);
 
-  let upstreamResponse;
+  if(!stored){
+    let upstreamResponse;
 
-  try {
-    upstreamResponse =
-      await fetch(
-        target.toString(),
-        {
-          headers:
-            upstreamHeaders,
-
-          /* Let Cloudflare's edge cache full-object bytes across
-             requests/readers once fetched, without buffering the
-             whole thing in Worker memory on this request. */
-          cf: {
-            cacheEverything: true,
-            cacheTtl: 86400
-          }
-        }
+    try{
+      upstreamResponse=await fetch(target.toString());
+    }
+    catch(error){
+      return new Response(
+        "Upstream PDF fetch failed: "+
+          (error && error.message ? error.message : String(error)),
+        { status: 502 }
       );
-  }
-  catch (error) {
-    return new Response(
-      "Upstream PDF fetch failed: " +
-        (error && error.message ? error.message : String(error)),
-      { status: 502 }
-    );
-  }
+    }
 
-  /* Mirror status (200 or 206) and only the headers PDF.js
-     actually needs. This response is same-origin as far as the
-     browser is concerned, so there is no CORS exposure list to
-     satisfy — every header set here is simply visible. */
-  const headers =
-    new Headers();
+    if(!upstreamResponse.ok){
+      return new Response(
+        "Upstream PDF fetch failed with status "+upstreamResponse.status+".",
+        { status: 502 }
+      );
+    }
 
-  const passthroughHeaders =
-    [
+    const headers=new Headers();
+    const passthroughHeaders=[
       "content-type",
-      "content-length",
-      "content-range",
-      "accept-ranges",
-      "cache-control",
       "etag",
       "last-modified"
     ];
 
-  for (const name of passthroughHeaders) {
-    const value =
-      upstreamResponse.headers.get(
-        name
-      );
-
-    if (value) {
-      headers.set(
-        name,
-        value
-      );
+    for(const name of passthroughHeaders){
+      const value=upstreamResponse.headers.get(name);
+      if(value) headers.set(name,value);
     }
-  }
 
-  /* GCS returns this on a 200, but be explicit regardless — it's
-     the exact signal PDF.js checks before it will attempt range
-     requests at all. */
-  if (!headers.has("accept-ranges")) {
-    headers.set(
-      "accept-ranges",
-      "bytes"
-    );
-  }
+    /* Content-Length is what lets the Cache API compute Range slices
+       against this cached copy — required, not optional, here. */
+    const contentLength=upstreamResponse.headers.get("content-length");
+    if(contentLength) headers.set("content-length",contentLength);
 
-  return new Response(
-    upstreamResponse.body,
-    {
-      status:
-        upstreamResponse.status,
-      statusText:
-        upstreamResponse.statusText,
+    headers.set("accept-ranges","bytes");
+    headers.set("cache-control","public, max-age=86400");
+
+    const toCache=new Response(upstreamResponse.body,{
+      status:200,
       headers
-    }
-  );
+    });
+
+    /* Store before returning so the very next request — even one that
+       lands in this same execution's wake — can hit the cache instead
+       of racing another full fetch. */
+    await cache.put(cacheKey,toCache.clone());
+    stored=toCache;
+  }
+
+  /*
+   * Re-match using cacheKeyUrl (what was actually stored) combined with
+   * the ACTUAL incoming request's Range header (if any) — that Range
+   * header is what triggers Cloudflare's built-in Range handling
+   * against the full object cached above, rather than us slicing bytes
+   * ourselves. Matching against the wrong URL here (e.g. this Worker's
+   * own request URL) would simply never hit.
+   */
+  const rangeHeader=request.headers.get("Range");
+  const rangedLookup=new Request(cacheKeyUrl.toString(),{
+    method:"GET",
+    headers:rangeHeader ? {Range:rangeHeader} : {}
+  });
+
+  const ranged=await cache.match(rangedLookup);
+  return ranged || stored;
 }
 
 /* =========================================================
@@ -3207,9 +3271,430 @@ function catalogTestCorsHeaders() {
   };
 }
 
+/* ---------------------------------------------------------
+   SNAPSHOT HELPERS
+--------------------------------------------------------- */
+
+async function sha256Hex(text) {
+  const digest =
+    await crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(
+        text
+      )
+    );
+
+  return Array.from(
+    new Uint8Array(
+      digest
+    )
+  )
+    .map(
+      byte =>
+        byte
+          .toString(16)
+          .padStart(
+            2,
+            "0"
+          )
+    )
+    .join("");
+}
+
+/*
+ * Build the snapshot from the SAME cleaned items the per-item
+ * records use (buildCatalogPreview), so the snapshot and the
+ * share records can never disagree about an item.
+ *
+ * The payload has no timestamps, so identical catalogs always
+ * produce the identical hash.
+ */
+async function buildCatalogSnapshot(
+  contract,
+  body
+) {
+  const preview =
+    buildCatalogPreview(
+      contract
+    );
+
+  const payload = {
+    version:
+      "1.0",
+
+    content:
+      preview.contract
+  };
+
+  /*
+   * Optional extras. The Glide generator does not send these today;
+   * they are accepted so the Front Page categories / background can
+   * be carried later without another worker change.
+   */
+  const categories =
+    Array.isArray(
+      body?.frontPage?.categories
+    )
+      ? body.frontPage.categories
+          .map(
+            value =>
+              cleanString(
+                value
+              )
+          )
+          .filter(
+            Boolean
+          )
+      : [];
+
+  if (
+    categories.length
+  ) {
+    payload.frontPage = {
+      categories
+    };
+  }
+
+  const background =
+    cleanString(
+      body?.background
+    );
+
+  if (
+    background
+  ) {
+    payload.background =
+      background;
+  }
+
+  const json =
+    JSON.stringify(
+      payload
+    );
+
+  return {
+    json,
+
+    hash:
+      await sha256Hex(
+        CATALOG_SNAPSHOT_FORMAT +
+        "\n" +
+        json
+      ),
+
+    count:
+      preview.contract.length,
+
+    skippedCount:
+      preview.skippedCount
+  };
+}
+
+/*
+ * KV allows roughly one write per second to the same key. A second
+ * publish landing inside that window is retried once instead of
+ * failing the whole publish.
+ */
+async function kvPutWithRetry(
+  env,
+  key,
+  value,
+  options
+) {
+  try {
+    await env.MEDIA_KV.put(
+      key,
+      value,
+      options
+    );
+  } catch (_) {
+    await new Promise(
+      resolve =>
+        setTimeout(
+          resolve,
+          1100
+        )
+    );
+
+    await env.MEDIA_KV.put(
+      key,
+      value,
+      options
+    );
+  }
+}
+
+/* Isolate-local copy of the snapshot (see CATALOG_SNAPSHOT_MEMORY_TTL_MS). */
+let catalogSnapshotMemo =
+  null;
+
+function snapshotEtagMatches(
+  request,
+  etag
+) {
+  const header =
+    request.headers.get(
+      "If-None-Match"
+    );
+
+  if (!header) {
+    return false;
+  }
+
+  return header
+    .split(",")
+    .map(
+      value =>
+        value
+          .trim()
+          .replace(
+            /^W\//,
+            ""
+          )
+    )
+    .includes(
+      etag
+    );
+}
+
+async function handleCatalogSnapshot(
+  request,
+  env
+) {
+  const method =
+    request.method;
+
+  if (
+    method !== "GET" &&
+    method !== "HEAD"
+  ) {
+    return new Response(
+      JSON.stringify({
+        error:
+          "Catalog snapshot requires GET."
+      }),
+      {
+        status:
+          405,
+
+        headers: {
+          "Content-Type":
+            "application/json; charset=utf-8",
+
+          "Allow":
+            "GET, HEAD",
+
+          "Cache-Control":
+            "no-store"
+        }
+      }
+    );
+  }
+
+  const now =
+    Date.now();
+
+  let entry =
+    catalogSnapshotMemo &&
+    now -
+      catalogSnapshotMemo.at <
+      CATALOG_SNAPSHOT_MEMORY_TTL_MS
+      ? catalogSnapshotMemo
+      : null;
+
+  if (!entry) {
+    let stored;
+
+    try {
+      stored =
+        await env.MEDIA_KV.getWithMetadata(
+          CATALOG_SNAPSHOT_KEY
+        );
+    } catch (error) {
+      console.error(
+        "MMicjMedia catalog snapshot KV read failure:",
+        error
+      );
+
+      /*
+       * Prefer an out-of-date snapshot over an error page: the
+       * catalog changes rarely, so stale is almost always fine.
+       */
+      if (
+        catalogSnapshotMemo
+      ) {
+        entry =
+          catalogSnapshotMemo;
+      } else {
+        return new Response(
+          JSON.stringify({
+            error:
+              "Catalog snapshot is temporarily unavailable."
+          }),
+          {
+            status:
+              503,
+
+            headers: {
+              "Content-Type":
+                "application/json; charset=utf-8",
+
+              "Retry-After":
+                "30",
+
+              "Cache-Control":
+                "no-store"
+            }
+          }
+        );
+      }
+    }
+
+    if (!entry) {
+      if (
+        !stored ||
+        stored.value === null
+      ) {
+        return new Response(
+          JSON.stringify({
+            error:
+              "No catalog snapshot has been published yet."
+          }),
+          {
+            status:
+              404,
+
+            headers: {
+              "Content-Type":
+                "application/json; charset=utf-8",
+
+              "Cache-Control":
+                "no-store"
+            }
+          }
+        );
+      }
+
+      const hash =
+        stored.metadata?.hash
+          ? String(
+              stored.metadata.hash
+            )
+          : await sha256Hex(
+              stored.value
+            );
+
+      entry =
+        catalogSnapshotMemo = {
+          value:
+            stored.value,
+
+          etag:
+            '"' +
+            hash.slice(
+              0,
+              32
+            ) +
+            '"',
+
+          at:
+            now
+        };
+    }
+  }
+
+  const headers = {
+    "Content-Type":
+      "application/json; charset=utf-8",
+
+    "Cache-Control":
+      "public, max-age=" +
+      CATALOG_SNAPSHOT_CLIENT_MAX_AGE,
+
+    "ETag":
+      entry.etag,
+
+    "X-Content-Type-Options":
+      "nosniff"
+  };
+
+  if (
+    snapshotEtagMatches(
+      request,
+      entry.etag
+    )
+  ) {
+    return new Response(
+      null,
+      {
+        status:
+          304,
+
+        headers
+      }
+    );
+  }
+
+  return new Response(
+    method === "HEAD"
+      ? null
+      : entry.value,
+    {
+      status:
+        200,
+
+      headers
+    }
+  );
+}
+
+/* ---------------------------------------------------------
+   PUBLISH AUTHORIZATION
+
+   The publish token can now be a Worker secret:
+
+     npx wrangler secret put CATALOG_PUBLISH_TOKEN
+
+   While the secret is set, both it and the original built-in
+   token are accepted, so the Glide generator can be switched
+   over without a gap. Once the generator sends the secret,
+   set the plain variable CATALOG_DISABLE_LEGACY_TOKEN to any
+   value (dashboard -> Variables) to stop accepting the
+   built-in token.
+--------------------------------------------------------- */
+
+function tokensEqual(
+  provided,
+  expected
+) {
+  if (
+    !provided ||
+    !expected ||
+    provided.length !== expected.length
+  ) {
+    return false;
+  }
+
+  let diff =
+    0;
+
+  for (
+    let i = 0;
+    i < expected.length;
+    i++
+  ) {
+    diff |=
+      provided.charCodeAt(i) ^
+      expected.charCodeAt(i);
+  }
+
+  return diff === 0;
+}
+
 function catalogTestAuthorized(
   request,
-  url
+  url,
+  env
 ) {
   const headerToken =
     String(
@@ -3225,12 +3710,36 @@ function catalogTestAuthorized(
       ) || ""
     ).trim();
 
-  return (
-    headerToken ===
-      CATALOG_TEST_TOKEN ||
+  const secret =
+    String(
+      env?.CATALOG_PUBLISH_TOKEN || ""
+    ).trim();
 
-    queryToken ===
-      CATALOG_TEST_TOKEN
+  const acceptLegacy =
+    !(
+      secret &&
+      env?.CATALOG_DISABLE_LEGACY_TOKEN
+    );
+
+  return [
+    headerToken,
+    queryToken
+  ].some(
+    token =>
+      (
+        secret &&
+        tokensEqual(
+          token,
+          secret
+        )
+      ) ||
+      (
+        acceptLegacy &&
+        tokensEqual(
+          token,
+          CATALOG_TEST_TOKEN
+        )
+      )
   );
 }
 
@@ -3264,7 +3773,8 @@ async function handleCatalogPublishTest(
   if (
     !catalogTestAuthorized(
       request,
-      url
+      url,
+      env
     )
   ) {
     return new Response(
@@ -3540,6 +4050,219 @@ async function handleCatalogPublishTest(
     new Date()
       .toISOString();
 
+  /* =======================================================
+     SNAPSHOT GATE
+
+     1 KV read decides whether anything needs doing at all:
+
+       - same catalog as the stored snapshot -> nothing is
+         read or written per item, and no write happens.
+       - far fewer items than before -> refused, nothing is
+         written (send force:true to replace anyway).
+
+     Items are written first and the snapshot LAST, so a
+     matching hash always means the items were fully written.
+  ======================================================= */
+
+  let snapshot;
+
+  try {
+    snapshot =
+      await buildCatalogSnapshot(
+        contract,
+        body
+      );
+  } catch (error) {
+    console.error(
+      "MMicjMedia catalog snapshot build failure:",
+      error
+    );
+
+    return new Response(
+      JSON.stringify({
+        error:
+          "Catalog snapshot could not be built.",
+
+        detail:
+          error instanceof Error
+            ? error.message
+            : String(error)
+      }),
+      {
+        status:
+          500,
+
+        headers
+      }
+    );
+  }
+
+  if (
+    snapshot.count === 0
+  ) {
+    return new Response(
+      JSON.stringify({
+        error:
+          "Catalog publish contains no valid items; nothing was written.",
+
+        contractItemCount:
+          contract.length,
+
+        skippedCount:
+          snapshot.skippedCount
+      }),
+      {
+        status:
+          422,
+
+        headers
+      }
+    );
+  }
+
+  let previousSnapshot;
+
+  try {
+    previousSnapshot =
+      await env.MEDIA_KV.getWithMetadata(
+        CATALOG_SNAPSHOT_KEY
+      );
+  } catch (error) {
+    console.error(
+      "MMicjMedia catalog snapshot KV read failure:",
+      error
+    );
+
+    return new Response(
+      JSON.stringify({
+        error:
+          "Catalog snapshot KV read failed.",
+
+        detail:
+          error instanceof Error
+            ? error.message
+            : String(error),
+
+        key:
+          CATALOG_SNAPSHOT_KEY
+      }),
+      {
+        status:
+          500,
+
+        headers
+      }
+    );
+  }
+
+  const previousMeta =
+    previousSnapshot?.metadata &&
+    typeof previousSnapshot.metadata === "object"
+      ? previousSnapshot.metadata
+      : null;
+
+  const hadPrevious =
+    previousSnapshot?.value !== null &&
+    previousSnapshot?.value !== undefined;
+
+  if (
+    hadPrevious &&
+    previousMeta?.hash === snapshot.hash
+  ) {
+    return new Response(
+      JSON.stringify({
+        received:
+          true,
+
+        phase:
+          2,
+
+        receivedAt:
+          publishedAt,
+
+        method:
+          request.method,
+
+        test:
+          body?.test === true,
+
+        source:
+          String(
+            body?.source || ""
+          ),
+
+        contractItemCount:
+          contract.length,
+
+        storedCount:
+          0,
+
+        unchangedCount:
+          snapshot.count,
+
+        skippedCount:
+          snapshot.skippedCount,
+
+        sample:
+          [],
+
+        snapshot: {
+          action:
+            "unchanged",
+
+          count:
+            snapshot.count,
+
+          hash:
+            snapshot.hash
+        }
+      }),
+      {
+        status:
+          200,
+
+        headers
+      }
+    );
+  }
+
+  const previousCount =
+    Number(
+      previousMeta?.count
+    ) || 0;
+
+  if (
+    hadPrevious &&
+    body?.force !== true &&
+    previousCount >=
+      CATALOG_SNAPSHOT_GUARD_MIN_PREVIOUS &&
+    snapshot.count <
+      previousCount *
+        CATALOG_SNAPSHOT_MIN_RETAIN_RATIO
+  ) {
+    return new Response(
+      JSON.stringify({
+        error:
+          "Catalog publish refused: it keeps far fewer items than the current snapshot. Nothing was written.",
+
+        previousItemCount:
+          previousCount,
+
+        incomingItemCount:
+          snapshot.count,
+
+        hint:
+          "If this reduction is intended, publish again with force (generator p3 = publish-force)."
+      }),
+      {
+        status:
+          409,
+
+        headers
+      }
+    );
+  }
+
   let storedCount =
     0;
 
@@ -3701,6 +4424,79 @@ async function handleCatalogPublishTest(
       }
     }
 
+    /* -------------------------------------------------------
+       SNAPSHOT WRITE (last)
+
+       Keep the previous snapshot as a one-step rollback copy,
+       then write the new one and verify it with an uncached read.
+    ------------------------------------------------------- */
+
+    if (
+      hadPrevious
+    ) {
+      await kvPutWithRetry(
+        env,
+        CATALOG_SNAPSHOT_PREV_KEY,
+        previousSnapshot.value,
+        {
+          metadata:
+            previousMeta || {}
+        }
+      );
+    }
+
+    await kvPutWithRetry(
+      env,
+      CATALOG_SNAPSHOT_KEY,
+      snapshot.json,
+      {
+        metadata: {
+          hash:
+            snapshot.hash,
+
+          count:
+            snapshot.count,
+
+          at:
+            publishedAt,
+
+          v:
+            CATALOG_SNAPSHOT_FORMAT
+        }
+      }
+    );
+
+    const snapshotReadBack =
+      await env.MEDIA_KV.getWithMetadata(
+        CATALOG_SNAPSHOT_KEY
+      );
+
+    if (
+      snapshotReadBack?.metadata?.hash !==
+      snapshot.hash
+    ) {
+      throw new Error(
+        "Catalog snapshot KV verification failed."
+      );
+    }
+
+    /* This isolate serves the new snapshot immediately. */
+    catalogSnapshotMemo =
+      null;
+
+    const snapshotResult = {
+      action:
+        hadPrevious
+          ? "updated"
+          : "created",
+
+      count:
+        snapshot.count,
+
+      hash:
+        snapshot.hash
+    };
+
     const statusRecord = {
       received:
         true,
@@ -3731,7 +4527,10 @@ async function handleCatalogPublishTest(
 
       skippedCount,
 
-      sample
+      sample,
+
+      snapshot:
+        snapshotResult
     };
 
     const statusJson =
@@ -3857,6 +4656,20 @@ export default {
       PDF_PROXY_PATH
     ) {
       return handlePdfProxy(
+        request,
+        env
+      );
+    }
+
+    /* -----------------------------------------------------
+       Catalog snapshot (read by the app on the base URL)
+    ----------------------------------------------------- */
+
+    if (
+      url.pathname ===
+      CATALOG_SNAPSHOT_PATH
+    ) {
+      return handleCatalogSnapshot(
         request,
         env
       );
