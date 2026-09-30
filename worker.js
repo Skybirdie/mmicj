@@ -78,7 +78,7 @@ const PDF_PROXY_ALLOWED_HOSTS =
    served whatever that earlier bug already wrote into Cloudflare's
    cache for the same URL. */
 const PDF_PROXY_CACHE_VERSION =
-  "2";
+  "2"; /* No longer used: the proxy streams straight through now. */
 
 const SHARE_PATH_PREFIX =
   "/s/";
@@ -2472,116 +2472,81 @@ async function handlePdfProxy(
   }
 
   /*
-   * IMPORTANT — why this does not forward the client's Range header to
-   * the origin:
+   * STREAMING PASS-THROUGH (no Worker-side caching)
    *
-   * An earlier version of this proxy forwarded the browser's Range
-   * header straight through to GCS and relied on `cf.cacheEverything`
-   * to cache the result. That was wrong: Cloudflare's cache key is the
-   * request URL, which does NOT include the Range header. Every byte
-   * range of the same PDF shares one cache key, so the first range
-   * fetched (say, bytes 0-1000 while opening the document) could get
-   * cached and then served back for every OTHER range request to that
-   * same PDF too — silently returning the wrong bytes. PDF.js would
-   * then try to parse corrupted data: pages stalling partway through
-   * rendering, embedded video attachments failing outright.
+   * The previous version of this proxy downloaded the WHOLE PDF from
+   * GCS on every request, tried to store it with the Cache API, and
+   * then let the Cache API slice byte ranges out of that stored copy.
+   * That cannot work on a *.workers.dev address: the Cache API is only
+   * functional on custom domains there, so cache.put() stored nothing
+   * and cache.match() never hit. Every request therefore fell through
+   * to "return the full 200 body", and cloning that body for
+   * cache.put() forced the Worker to hold the unread half of the copy
+   * in memory. For a small PDF that goes unnoticed; for a large one
+   * (a book with an embedded video, say) it exceeds the Worker's
+   * memory limit and the visitor sees a bare HTTP 500.
    *
-   * The correct pattern: fetch the FULL object from the origin once
-   * (ignoring the client's Range header entirely on this leg — this
-   * fetch is edge-to-GCS, not the visitor's own connection, so even a
-   * large file is fast here), cache that single full response under a
-   * Range-agnostic key, and then let Cloudflare's Cache API do the
-   * actual Range slicing per request. cache.match(request) natively
-   * supports this: given a full cached response with Content-Length,
-   * it returns the correct 206 for whatever Range header the incoming
-   * request carries, safely and independently, no matter how many
-   * different ranges get requested afterward. This also means every
-   * request after the very first, for any byte range, from any
-   * visitor, is served straight from cache without touching GCS again.
+   * Instead, the visitor's Range header is forwarded to GCS, which
+   * natively answers 206 Partial Content, and the response body is
+   * streamed straight back without ever being buffered. Nothing is
+   * cached by this code, so the original cache-poisoning problem (one
+   * cached byte range served back for every other range) cannot occur
+   * either. PDF.js gets real 206 responses and streams the book.
    */
-  const cache=caches.default;
-
-  /* Strip Range from the cache lookup key: it's irrelevant to what we
-     stored (a full object) and must not affect the cache key. The
-     __skypdfcv marker forces this onto a cache key the old, buggy
-     version of this proxy never wrote to (see PDF_PROXY_CACHE_VERSION
-     above) — belt-and-braces alongside the max-age on the entry
-     itself. */
-  const cacheKeyUrl=new URL(target.toString());
-  cacheKeyUrl.searchParams.set("__skypdfcv",PDF_PROXY_CACHE_VERSION);
-  const cacheKey=new Request(cacheKeyUrl.toString(),{method:"GET"});
-
-  let stored=await cache.match(cacheKey);
-
-  if(!stored){
-    let upstreamResponse;
-
-    try{
-      upstreamResponse=await fetch(target.toString());
-    }
-    catch(error){
-      return new Response(
-        "Upstream PDF fetch failed: "+
-          (error && error.message ? error.message : String(error)),
-        { status: 502 }
-      );
-    }
-
-    if(!upstreamResponse.ok){
-      return new Response(
-        "Upstream PDF fetch failed with status "+upstreamResponse.status+".",
-        { status: 502 }
-      );
-    }
-
-    const headers=new Headers();
-    const passthroughHeaders=[
-      "content-type",
-      "etag",
-      "last-modified"
-    ];
-
-    for(const name of passthroughHeaders){
-      const value=upstreamResponse.headers.get(name);
-      if(value) headers.set(name,value);
-    }
-
-    /* Content-Length is what lets the Cache API compute Range slices
-       against this cached copy — required, not optional, here. */
-    const contentLength=upstreamResponse.headers.get("content-length");
-    if(contentLength) headers.set("content-length",contentLength);
-
-    headers.set("accept-ranges","bytes");
-    headers.set("cache-control","public, max-age=86400");
-
-    const toCache=new Response(upstreamResponse.body,{
-      status:200,
-      headers
-    });
-
-    /* Store before returning so the very next request — even one that
-       lands in this same execution's wake — can hit the cache instead
-       of racing another full fetch. */
-    await cache.put(cacheKey,toCache.clone());
-    stored=toCache;
-  }
-
-  /*
-   * Re-match using cacheKeyUrl (what was actually stored) combined with
-   * the ACTUAL incoming request's Range header (if any) — that Range
-   * header is what triggers Cloudflare's built-in Range handling
-   * against the full object cached above, rather than us slicing bytes
-   * ourselves. Matching against the wrong URL here (e.g. this Worker's
-   * own request URL) would simply never hit.
-   */
+  const upstreamHeaders=new Headers();
   const rangeHeader=request.headers.get("Range");
-  const rangedLookup=new Request(cacheKeyUrl.toString(),{
-    method:"GET",
-    headers:rangeHeader ? {Range:rangeHeader} : {}
-  });
-
-  const ranged=await cache.match(rangedLookup);
-  return ranged || stored;
+  if(rangeHeader) upstreamHeaders.set("Range",rangeHeader);
+  const ifRangeHeader=request.headers.get("If-Range");
+  if(ifRangeHeader) upstreamHeaders.set("If-Range",ifRangeHeader);
+  /* Keep byte offsets and Content-Length meaning what they say. */
+  upstreamHeaders.set("Accept-Encoding","identity");
+  let upstreamResponse;
+  try{
+    upstreamResponse=await fetch(
+      target.toString(),
+      {
+        method:request.method==="HEAD" ? "HEAD" : "GET",
+        headers:upstreamHeaders
+      }
+    );
+  }
+  catch(error){
+    return new Response(
+      "Upstream PDF fetch failed: "+
+        (error && error.message ? error.message : String(error)),
+      { status: 502 }
+    );
+  }
+  /* 200 and 206 are ok. 416 (range not satisfiable) is passed on to
+     the browser as-is; anything else is an upstream failure. */
+  if(!upstreamResponse.ok && upstreamResponse.status!==416){
+    return new Response(
+      "Upstream PDF fetch failed with status "+upstreamResponse.status+".",
+      { status: 502 }
+    );
+  }
+  const headers=new Headers();
+  const passthroughHeaders=[
+    "content-type",
+    "content-length",
+    "content-range",
+    "etag",
+    "last-modified"
+  ];
+  for(const name of passthroughHeaders){
+    const value=upstreamResponse.headers.get(name);
+    if(value) headers.set(name,value);
+  }
+  if(!headers.has("content-type")) headers.set("content-type","application/pdf");
+  headers.set("accept-ranges","bytes");
+  headers.set("cache-control","public, max-age=86400");
+  return new Response(
+    upstreamResponse.body,
+    {
+      status:upstreamResponse.status,
+      headers
+    }
+  );
 }
 
 /* =========================================================
@@ -3424,6 +3389,68 @@ async function kvPutWithRetry(
   }
 }
 
+/*
+ * Items the PREVIOUS snapshot already recorded, keyed exactly like the
+ * per-item KV records. Because the snapshot is written LAST (after every
+ * item record), an item that is identical in the previous snapshot is
+ * known to be stored already, so the publish can skip its KV read.
+ *
+ * Returns null (=> fall back to the full per-item comparison) when the
+ * previous snapshot is missing, unreadable, or from another format.
+ */
+function buildPreviousItemMap(
+  snapshotValue
+) {
+  try {
+    const parsed =
+      JSON.parse(
+        snapshotValue
+      );
+
+    if (
+      !parsed ||
+      !Array.isArray(
+        parsed.content
+      )
+    ) {
+      return null;
+    }
+
+    const map =
+      new Map();
+
+    for (
+      const item of
+      parsed.content
+    ) {
+      const section =
+        sectionFromItem(
+          item
+        );
+
+      if (
+        !section ||
+        !item ||
+        !item.id
+      ) {
+        continue;
+      }
+
+      map.set(
+        makeCatalogRecordKey(
+          section,
+          item.id
+        ),
+        item
+      );
+    }
+
+    return map;
+  } catch (_) {
+    return null;
+  }
+}
+
 /* Isolate-local copy of the snapshot (see CATALOG_SNAPSHOT_MEMORY_TTL_MS). */
 let catalogSnapshotMemo =
   null;
@@ -4167,6 +4194,7 @@ async function handleCatalogPublishTest(
 
   if (
     hadPrevious &&
+    body?.force !== true &&
     previousMeta?.hash === snapshot.hash
   ) {
     return new Response(
@@ -4263,6 +4291,22 @@ async function handleCatalogPublishTest(
     );
   }
 
+  /*
+   * Compare against the previous snapshot in memory instead of reading
+   * every item record from KV. publish-force (force:true) skips this
+   * shortcut and re-checks every record against KV, which also repairs
+   * any record that was deleted by hand.
+   */
+  const previousItems =
+    hadPrevious &&
+    body?.force !== true &&
+    previousMeta?.v ===
+      CATALOG_SNAPSHOT_FORMAT
+      ? buildPreviousItemMap(
+          previousSnapshot.value
+        )
+      : null;
+
   let storedCount =
     0;
 
@@ -4325,6 +4369,54 @@ async function handleCatalogPublishTest(
 
         publishedAt
       };
+
+      /*
+       * Identical to the previous snapshot -> already stored; no read.
+       */
+      if (
+        previousItems
+      ) {
+        const previousItem =
+          previousItems.get(
+            key
+          );
+
+        if (
+          previousItem &&
+          catalogRecordsEqual(
+            {
+              version:
+                record.version,
+
+              section,
+
+              id:
+                item.id,
+
+              item:
+                previousItem
+            },
+            record
+          )
+        ) {
+          unchangedCount++;
+
+          if (
+            sample.length < 10
+          ) {
+            sample.push({
+              section,
+              id:
+                item.id,
+              key,
+              action:
+                "unchanged"
+            });
+          }
+
+          continue;
+        }
+      }
 
       /*
        * Idempotent publish: read the existing record first and
