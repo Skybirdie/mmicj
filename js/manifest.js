@@ -8,8 +8,14 @@
  to Reader, Video Viewer, and Slideshow Viewer.
 
  Source priority:
-   1. Glide contract
-   2. content.json
+   1. Glide contract (?contractz= / ?contract= / injected global)
+   2. Catalog snapshot published by the Worker (/__sky_catalog)
+   3. content.json
+
+ A usable Glide contract is used exactly as before and the
+ snapshot is never requested. The snapshot is only asked for when
+ there is no Glide contract (e.g. the plain base URL) or the one
+ supplied could not be used.
 
  The raw source is never exposed directly to feature modules.
 =========================================================
@@ -31,19 +37,199 @@ window.Manifest = {
         }
     },
 
+    /*
+    -------------------------------------------------------
+     Catalog snapshot (served by the Worker from KV)
+
+     Same shape as content.json / the Glide contract:
+     { version, content: [...] }. It is fetched with the normal
+     browser cache (the Worker sends max-age + ETag), so repeat
+     opens within a few minutes cost the Worker nothing. The last
+     good copy is kept in localStorage purely as an offline /
+     outage fallback.
+    -------------------------------------------------------
+    */
+
+    snapshot: {
+        url: "/__sky_catalog",
+        storageKey: "skymedia-catalog-snapshot-v1",
+        timeoutMs: 8000,
+
+        _valid(data) {
+            return !!(
+                data &&
+                typeof data === "object" &&
+                Array.isArray(data.content) &&
+                data.content.length
+            );
+        },
+
+        _readCache() {
+            try {
+                const saved = JSON.parse(
+                    localStorage.getItem(this.storageKey) || "null"
+                );
+
+                return saved && this._valid(saved.data)
+                    ? saved
+                    : null;
+            } catch (error) {
+                return null;
+            }
+        },
+
+        _writeCache(data) {
+            try {
+                localStorage.setItem(
+                    this.storageKey,
+                    JSON.stringify({ savedAt: Date.now(), data })
+                );
+            } catch (error) {
+                /* Storage blocked or full: the cache is optional. */
+            }
+        },
+
+        async load() {
+            const controller =
+                typeof AbortController === "function"
+                    ? new AbortController()
+                    : null;
+
+            const timer = controller
+                ? setTimeout(() => controller.abort(), this.timeoutMs)
+                : null;
+
+            try {
+                const response = await fetch(
+                    this.url,
+                    controller ? { signal: controller.signal } : undefined
+                );
+
+                if (!response.ok) {
+                    throw new Error(
+                        "Catalog snapshot request failed (" +
+                        response.status +
+                        ")."
+                    );
+                }
+
+                const data = await response.json();
+
+                if (!this._valid(data)) {
+                    throw new Error(
+                        "Catalog snapshot contained no items."
+                    );
+                }
+
+                this._writeCache(data);
+
+                return data;
+
+            } catch (error) {
+                const cached = this._readCache();
+
+                if (cached) {
+                    console.warn(
+                        "[Manifest] Catalog snapshot unavailable; using the copy saved on " +
+                        new Date(cached.savedAt).toISOString() +
+                        ".",
+                        error
+                    );
+
+                    return cached.data;
+                }
+
+                throw error;
+
+            } finally {
+                if (timer) {
+                    clearTimeout(timer);
+                }
+            }
+        }
+    },
+
     _data: null,
+    _sourceLabel: "",
+
+    /*
+    -------------------------------------------------------
+     Pick the first source that yields usable content.
+     Behaviour is unchanged when a usable Glide contract exists.
+    -------------------------------------------------------
+    */
+    async resolve() {
+        const sources = [];
+
+        if (GlideContract.available()) {
+            sources.push(["Glide contract", () => GlideContract.load()]);
+        }
+
+        sources.push(["catalog snapshot", () => this.snapshot.load()]);
+        sources.push(["content.json", () => this.source.load()]);
+
+        let last = null;
+        let lastError = null;
+
+        for (const [label, loader] of sources) {
+            let raw = null;
+
+            try {
+                raw = await loader();
+            } catch (error) {
+                lastError = error;
+
+                console.warn(
+                    "[Manifest] " + label + " could not be loaded.",
+                    error
+                );
+
+                continue;
+            }
+
+            if (!raw) {
+                continue;
+            }
+
+            const manifest = ContentContract.normalizeManifest(raw);
+
+            last = { raw, manifest, label };
+
+            if (manifest.content.length) {
+                return last;
+            }
+
+            console.warn(
+                "[Manifest] " + label + " contained no usable content."
+            );
+        }
+
+        if (last) {
+            return last;
+        }
+
+        throw lastError || new Error("Unable to load content.json");
+    },
+
+    sourceLabel() {
+        return this._sourceLabel;
+    },
 
     async load() {
         SkyReader.setLoading(5, "Loading content...");
 
         try {
-            const rawManifest =
-                GlideContract.available()
-                    ? await GlideContract.load()
-                    : await this.source.load();
+            const resolved = await this.resolve();
 
-            const manifest =
-                ContentContract.normalizeManifest(rawManifest);
+            const rawManifest = resolved.raw;
+
+            const manifest = resolved.manifest;
+
+            this._sourceLabel = resolved.label;
+
+            console.info(
+                "[Manifest] Content source: " + resolved.label
+            );
 
             if (!manifest.content.length) {
                 throw new Error("No visible content is available.");
