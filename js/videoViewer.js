@@ -1825,13 +1825,23 @@ function closeVideo() {
 
     /*
     Release true browser fullscreen first.
+
+    The Front Page "open full viewer" control fullscreens the
+    whole #videoViewer element (not just the <video>/iframe), so
+    that element must be released here too, otherwise the viewer
+    stays fullscreen/black with the section bars and panels hidden
+    after the item is closed.
     */
 
     if (
         document.fullscreenElement &&
         (
             document.fullscreenElement === videoElement ||
-            document.fullscreenElement === iframeElement
+            document.fullscreenElement === iframeElement ||
+            (
+                viewerElement &&
+                document.fullscreenElement === viewerElement
+            )
         )
     ) {
 
