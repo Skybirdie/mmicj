@@ -48,7 +48,6 @@
     let grid = null;
     let previewImg = null;
     let previewName = null;
-    let previewUrl = null;
     let lastFocus = null;
     let isOpen = false;
 
@@ -287,8 +286,7 @@
         const meta = document.createElement("div");
         meta.className = "itemSharePreviewText";
         previewName = document.createElement("strong");
-        previewUrl = document.createElement("span");
-        meta.append(previewName, previewUrl);
+        meta.append(previewName);
 
         preview.append(previewImg, meta);
 
@@ -396,7 +394,6 @@
         if(!panel) buildPanel();
 
         previewName.textContent = SHARE_TITLE;
-        previewUrl.textContent  = SHARE_URL.replace(/^https?:\/\//, "");
         previewImg.style.visibility = "";
         previewImg.src = opts.thumbnail || DEFAULT_LOGO;
 

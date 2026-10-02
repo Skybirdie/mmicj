@@ -468,6 +468,29 @@ progress(
 );
 
     try{
+        /*
+         * pdf.js is loaded as an ES module from a CDN (see index.html) and
+         * only exists on window once that download finishes. A normal open
+         * is a user click, long after that. A shared-book link is different:
+         * the Worker injects the item, so Share Mode reaches this line
+         * within milliseconds of page load - before pdf.js has arrived -
+         * and pdfjsLib.getDocument() below threw ReferenceError. Videos and
+         * slideshows never touch pdf.js, which is why only books vanished.
+         * Wait (bounded) for the same readiness gate every other PDF path
+         * is meant to use. Already-loaded case: no wait at all.
+         */
+        if(!window.pdfjsLib){
+            progress(6,"Preparing reader");
+            if(typeof window.waitForPdfjs==="function"){
+                await window.waitForPdfjs(30000);
+            }
+            if(!window.pdfjsLib){
+                throw new Error(
+                    "The PDF engine could not be loaded. Check your connection and reload."
+                );
+            }
+        }
+
         const pdfUrl=await resolvePdfUrl(book.pdf);
         progress(8,"Loading PDF");
 
