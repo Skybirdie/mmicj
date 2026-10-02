@@ -634,9 +634,9 @@ window.ShareManager = (function () {
 
             try {
 
+                /* Link only: title/text would be added to the message
+                   by apps like WhatsApp. The card comes from the link. */
                 await navigator.share({
-                    title,
-                    text: title,
                     url
                 });
 

@@ -482,10 +482,10 @@
            the panel. Standalone: prefer the native sheet. */
         if(!isEmbedded() && nativeShareAvailable()){
             try{
+                /* Link only: title/text would be added to the message
+                   by apps like WhatsApp. The card comes from the link. */
                 await navigator.share({
-                    title: SHARE_TITLE,
-                    text:  SHARE_TEXT,
-                    url:   SHARE_URL
+                    url: SHARE_URL
                 });
                 return;
             }catch(error){
