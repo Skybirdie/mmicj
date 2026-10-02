@@ -130,7 +130,7 @@
        Icons are simple drawings of each brand's mark (48x48 viewBox).
        --------------------------------------------------------- */
     const enc = encodeURIComponent;
-    const MESSAGE = SHARE_TEXT + " " + SHARE_URL;
+    const MESSAGE = SHARE_URL;
 
     const svg = body =>
         '<svg viewBox="0 0 48 48" aria-hidden="true" focusable="false">' + body + "</svg>";
@@ -174,7 +174,7 @@
         },
         {
             id: "x", label: "X",
-            href: () => "https://x.com/intent/post?text=" + enc(SHARE_TEXT) + "&url=" + enc(SHARE_URL),
+            href: () => "https://x.com/intent/post?url=" + enc(SHARE_URL),
             icon: svg(
                 '<circle cx="24" cy="24" r="24" fill="#000"/>' +
                 '<path d="M14 14h5.6L34 34h-5.6z" fill="#fff"/>' +
@@ -189,14 +189,14 @@
         },
         {
             id: "telegram", label: "Telegram",
-            href: () => "https://t.me/share/url?url=" + enc(SHARE_URL) + "&text=" + enc(SHARE_TEXT),
+            href: () => "https://t.me/share/url?url=" + enc(SHARE_URL) + "",
             icon: svg(
                 '<circle cx="24" cy="24" r="24" fill="#229ED9"/>' +
                 '<path d="M11 23.4L35.6 13.9c1.1-.4 2 .3 1.7 1.8l-4.2 19.6c-.3 1.4-1.1 1.7-2.3 1.1l-6.3-4.7-3 2.9c-.3.3-.6.6-1.3.6l.5-6.4 11.7-10.6c.5-.5-.1-.7-.8-.3L15.4 27l-6.2-1.9c-1.3-.4-1.4-1.3.4-1.9z" fill="#fff"/>')
         },
         {
             id: "line", label: "LINE",
-            href: () => "https://social-plugins.line.me/lineit/share?url=" + enc(SHARE_URL) + "&text=" + enc(SHARE_TEXT),
+            href: () => "https://social-plugins.line.me/lineit/share?url=" + enc(SHARE_URL) + "",
             icon: svg(
                 '<circle cx="24" cy="24" r="24" fill="#06C755"/>' +
                 '<path d="M24 12c-8 0-14.5 5.2-14.5 11.6 0 5.7 5.1 10.5 12 11.4.5.1 1.1.3 1.3.7.1.4.1.9 0 1.3l-.2 1.3c-.1.4-.3 1.5 1.3.8s8.6-5 11.7-8.6c2.2-2.4 3.2-4.9 3.2-7.4C38.5 17.2 32 12 24 12z" fill="#fff"/>' +
@@ -240,7 +240,7 @@
         },
         {
             id: "email", label: "Email", sameTab: true,
-            href: () => "mailto:?subject=" + enc(SHARE_TITLE) + "&body=" + enc(SHARE_TEXT + "\n\n" + SHARE_URL),
+            href: () => "mailto:?subject=" + enc(SHARE_TITLE) + "&body=" + enc(SHARE_URL),
             icon: svg(
                 '<circle cx="24" cy="24" r="24" fill="#3B82F6"/>' +
                 '<rect x="11" y="15" width="26" height="18" rx="3" fill="none" stroke="#fff" stroke-width="2.6"/>' +
@@ -248,7 +248,7 @@
         },
         {
             id: "gmail", label: "Gmail",
-            href: () => "https://mail.google.com/mail/?view=cm&fs=1&su=" + enc(SHARE_TITLE) + "&body=" + enc(SHARE_TEXT + "\n\n" + SHARE_URL),
+            href: () => "https://mail.google.com/mail/?view=cm&fs=1&su=" + enc(SHARE_TITLE) + "&body=" + enc(SHARE_URL),
             icon: svg(
                 '<circle cx="24" cy="24" r="23" fill="#fff" stroke="#dadce0" stroke-width="2"/>' +
                 '<path d="M12.5 17v15" stroke="#4285F4" stroke-width="3.2" stroke-linecap="round"/>' +
@@ -257,7 +257,7 @@
         },
         {
             id: "outlook", label: "Outlook",
-            href: () => "https://outlook.live.com/mail/0/deeplink/compose?subject=" + enc(SHARE_TITLE) + "&body=" + enc(SHARE_TEXT + "\n\n" + SHARE_URL),
+            href: () => "https://outlook.live.com/mail/0/deeplink/compose?subject=" + enc(SHARE_TITLE) + "&body=" + enc(SHARE_URL),
             icon: svg(
                 '<circle cx="24" cy="24" r="24" fill="#0078D4"/>' +
                 '<path d="M27.5 17h7.5a1.5 1.5 0 0 1 1.5 1.5v11a1.5 1.5 0 0 1-1.5 1.5h-7.5z" fill="#fff" opacity=".85"/>' +
@@ -265,7 +265,7 @@
         },
         {
             id: "yahoo", label: "Yahoo Mail",
-            href: () => "https://compose.mail.yahoo.com/?subject=" + enc(SHARE_TITLE) + "&body=" + enc(SHARE_TEXT + "\n\n" + SHARE_URL),
+            href: () => "https://compose.mail.yahoo.com/?subject=" + enc(SHARE_TITLE) + "&body=" + enc(SHARE_URL),
             icon: svg(
                 '<circle cx="24" cy="24" r="24" fill="#6001D2"/>' +
                 '<text x="24" y="31.5" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-weight="900" font-style="italic" font-size="22" fill="#fff">y!</text>')
