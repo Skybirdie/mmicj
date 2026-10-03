@@ -4619,7 +4619,7 @@ body.sky-share-mode .sky-share-shell.sky-share-document-closed .sky-share-replay
     border: 1px solid rgba(255,255,255,.55) !important;
     border-radius: clamp(8px, 1vw, 13px) !important;
     background-color: rgba(216,239,238,.30) !important;
-    color: #24504b !important;
+    color: #E0E0E0 !important;
     box-sizing: border-box !important;
     overflow: hidden !important;
 
