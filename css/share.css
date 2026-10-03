@@ -4639,7 +4639,7 @@ body.sky-share-mode .sky-share-shell.sky-share-document-closed .sky-share-replay
     height: 58% !important;
     display: block !important;
     pointer-events: none !important;
-    filter: drop-shadow(0 0 3px rgba(0,0,0,.85));
+    filter: drop-shadow(0 0 3px rgba(84,231,196,.85));
 }
 
 body.sky-share-mode .sky-share-shell.sky-share-document-closed .sky-share-replay-button:hover {
