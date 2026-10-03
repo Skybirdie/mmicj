@@ -183,6 +183,44 @@ error
   Book Opening
 -------------------------------------------------------*/
 
+/*-------------------------------------------------------
+  Refresh-only resume (see Reader.open)
+-------------------------------------------------------*/
+
+const REFRESH_RESUME_KEY="skyreader-refresh-resume";
+let refreshResume=null;
+
+(function consumeRefreshResume(){
+    try{
+        const raw=sessionStorage.getItem(REFRESH_RESUME_KEY);
+        /* One-shot: whatever happens, the marker never outlives the
+           page load that read it. */
+        sessionStorage.removeItem(REFRESH_RESUME_KEY);
+        const entry=performance.getEntriesByType("navigation")[0];
+        if(raw && entry && entry.type==="reload"){
+            const marker=JSON.parse(raw);
+            if(marker && marker.id!=null && Number(marker.page)>0){
+                refreshResume=marker;
+            }
+        }
+    }catch(error){
+        refreshResume=null;
+    }
+})();
+
+window.addEventListener("pagehide",()=>{
+    try{
+        if(currentBook){
+            sessionStorage.setItem(REFRESH_RESUME_KEY,JSON.stringify({
+                id:currentBook.id,
+                page:currentPage
+            }));
+        }else{
+            sessionStorage.removeItem(REFRESH_RESUME_KEY);
+        }
+    }catch(error){}
+});
+
 reader.open=async function(book,startPage=null){
     if(!book)return false;
 
@@ -197,13 +235,25 @@ reader.open=async function(book,startPage=null){
     let transaction;
     transaction=(async()=>{
 
-    const savedPage=(
-        SkyReader.resume.magazineId===book.id
-    ) ? Number(SkyReader.resume.page)||0 : 0;
+    /* A book opens at page 1 unless a page is explicitly requested
+       (a bookmark, or an internal caller that names one). The last page
+       read is kept for the Continue/recent shelf label only; it is never
+       used as a silent default.
 
+       The one exception is a browser refresh while the book was open:
+       that is not a close, so the page being read comes back. The marker
+       is written on pagehide below, read once at load, and only honoured
+       when the load really was a reload. */
     const explicitPage=Number(startPage)||0;
-    const requestedPage=Math.max(1,explicitPage||savedPage||1);
-    const effectiveSavedPage=explicitPage>0 ? explicitPage : savedPage;
+    let refreshPage=0;
+    if(!explicitPage && refreshResume &&
+       String(refreshResume.id)===String(book.id)){
+        refreshPage=Number(refreshResume.page)||0;
+    }
+    refreshResume=null;
+
+    const requestedPage=Math.max(1,explicitPage||refreshPage||1);
+    const effectiveSavedPage=explicitPage>0 ? explicitPage : refreshPage;
 
     currentBook=book;
     restoring=effectiveSavedPage>0;

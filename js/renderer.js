@@ -1300,6 +1300,19 @@ async function renderMediaAnnotations(surface,page,viewport){
     if(!surface || !surface.annotationLayer) return;
 
     const layer=surface.annotationLayer;
+
+    /* Never rebuild the layer while one of its videos is fullscreen.
+       Clearing it removes that <video> from the document, and the browser
+       ends fullscreen the instant the fullscreen element is removed -- which
+       is why "maximize" opened the video and closed it again straight away
+       (entering fullscreen resizes the page, the resize refreshes the
+       Reader, the refresh re-renders this page). The existing layer is
+       still valid, so skipping the rebuild loses nothing. */
+    const fullscreenHost=document.fullscreenElement || document.webkitFullscreenElement;
+    if(fullscreenHost && layer.contains(fullscreenHost)) return;
+    const nativeFullscreenVideo=layer.querySelector("video.mediaContent");
+    if(nativeFullscreenVideo && nativeFullscreenVideo.webkitDisplayingFullscreen) return;
+
     layer.innerHTML="";
     surface.annotationRenderer=null;
 

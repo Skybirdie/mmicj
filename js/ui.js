@@ -2439,9 +2439,33 @@ try{
 
 };
 
+/* A video embedded in a PDF page has its own maximize button. That is the
+   video's fullscreen, not the app's fullscreen mode, so the handler below
+   must not react to it (it re-showed the toolbar and fired a synthetic
+   resize on both enter and exit, which made the book flicker). The exit
+   event arrives with no fullscreen element, so it is remembered. */
+let embeddedPdfVideoFullscreen=false;
+
+function isEmbeddedPdfVideo(element){
+    return !!(element &&
+              element.tagName==="VIDEO" &&
+              typeof element.closest==="function" &&
+              element.closest(".skyreaderMediaAnnotationLayer"));
+}
+
 document.addEventListener(
 "fullscreenchange",
 ()=>{
+
+    if(isEmbeddedPdfVideo(document.fullscreenElement)){
+        embeddedPdfVideoFullscreen=true;
+        return;
+    }
+
+    if(embeddedPdfVideoFullscreen){
+        embeddedPdfVideoFullscreen=false;
+        return;
+    }
 
     fullscreen=!!document.fullscreenElement;
 
