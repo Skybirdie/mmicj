@@ -3410,7 +3410,21 @@ async function waitForSharedSlideshowReady() {
                 "#pageJump",
                 "#pageJumpInput",
                 ".sky-share-actions",
-                ".sky-share-close-button"
+                ".sky-share-close-button",
+                /*
+                 * The final-page guards exist only to stop a click on
+                 * the last page from CLOSING the book. They cancel every
+                 * click/mousedown/mouseup inside #viewerArea, and a phone
+                 * tap reaches a button as a synthesized click - so an
+                 * embedded video's play button and its controls, and PDF
+                 * hyperlinks, were dead on the last page of a shared
+                 * book. These are interactive content, never a close
+                 * gesture (Renderer already excludes them from
+                 * skyreader:last-page-click), so they pass through.
+                 */
+                ".mediaAnnotation",
+                ".skyreaderMediaControls",
+                ".pdfLink"
             ].join(",")
         );
     }

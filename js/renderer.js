@@ -468,29 +468,6 @@ progress(
 );
 
     try{
-        /*
-         * pdf.js is loaded as an ES module from a CDN (see index.html) and
-         * only exists on window once that download finishes. A normal open
-         * is a user click, long after that. A shared-book link is different:
-         * the Worker injects the item, so Share Mode reaches this line
-         * within milliseconds of page load - before pdf.js has arrived -
-         * and pdfjsLib.getDocument() below threw ReferenceError. Videos and
-         * slideshows never touch pdf.js, which is why only books vanished.
-         * Wait (bounded) for the same readiness gate every other PDF path
-         * is meant to use. Already-loaded case: no wait at all.
-         */
-        if(!window.pdfjsLib){
-            progress(6,"Preparing reader");
-            if(typeof window.waitForPdfjs==="function"){
-                await window.waitForPdfjs(30000);
-            }
-            if(!window.pdfjsLib){
-                throw new Error(
-                    "The PDF engine could not be loaded. Check your connection and reload."
-                );
-            }
-        }
-
         const pdfUrl=await resolvePdfUrl(book.pdf);
         progress(8,"Loading PDF");
 
@@ -1388,14 +1365,17 @@ async function renderMediaAnnotations(surface,page,viewport){
             Math.round(performance.now()-annotationStart)+"ms"
         );
 
-        const mediaContainer=layer.querySelector(".mediaAnnotation");
-        const playButton=layer.querySelector(".mediaAnnotation .mediaPlayButton");
+        /* A page can carry several embedded videos. Every one needs the
+           same wiring; wiring only the first left the others as bare
+           PDF.js play buttons with none of SkyReader's controls. */
+        const mediaContainers=Array.from(layer.querySelectorAll(".mediaAnnotation"));
 
         /* PDF.js has now built the real media control (or produced none):
            the temporary loading holder has done its job either way. */
         removeEmbeddedVideoLoadingHolder(surface);
 
-        if(mediaContainer){
+        mediaContainers.forEach(mediaContainer=>{
+            const playButton=mediaContainer.querySelector(".mediaPlayButton");
             const removeMediaLoadingHolder=()=>
                 removeEmbeddedVideoLoadingHolder(surface);
 
@@ -1531,8 +1511,19 @@ async function renderMediaAnnotations(surface,page,viewport){
                 });
 
                 fullscreen.addEventListener("click",()=>{
-                    const request=video.requestFullscreen || video.webkitRequestFullscreen;
-                    if(typeof request==="function") request.call(video);
+                    /* iPhone Safari only offers webkitEnterFullscreen on a
+                       <video>; the standard calls do not exist there. */
+                    const request=video.requestFullscreen ||
+                                  video.webkitRequestFullscreen ||
+                                  video.webkitEnterFullscreen;
+                    if(typeof request==="function"){
+                        try{
+                            const result=request.call(video);
+                            if(result && typeof result.catch==="function") result.catch(()=>{});
+                        }catch(error){
+                            console.warn("[SkyReader] Video fullscreen failed.",error);
+                        }
+                    }
                 });
 
                 ["loadstart","loadedmetadata","loadeddata","canplay","playing"].forEach(type=>{
@@ -1560,7 +1551,9 @@ async function renderMediaAnnotations(surface,page,viewport){
             const mediaObserver=new MutationObserver(installMediaControls);
             mediaObserver.observe(mediaContainer,{childList:true,subtree:true});
             mediaContainer._skyreaderMediaObserver=mediaObserver;
-        }else{
+        });
+
+        if(!mediaContainers.length){
             console.warn("[SkyReader] PDF.js returned no mediaAnnotation element.",mediaAnnotations);
         }
     }catch(error){
