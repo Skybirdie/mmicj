@@ -3500,6 +3500,27 @@ async function waitForSharedSlideshowReady() {
         event
     ) {
 
+        /*
+         * skyreader:last-page-click is dispatched on document, so the
+         * "target is inside #viewerArea" test below can never match it and
+         * it used to slip through on touch (touch pointer events are
+         * deliberately allowed past these guards so swipes work). In a
+         * shared book it must never reach the Reader's close handler.
+         */
+        if (event.type === "skyreader:last-page-click") {
+            if (isBookShare()) {
+                event.preventDefault();
+                event.stopPropagation();
+                if (
+                    typeof event.stopImmediatePropagation ===
+                        "function"
+                ) {
+                    event.stopImmediatePropagation();
+                }
+            }
+            return;
+        }
+
         if (
             !isFinalPageBookSurface(
                 event.target

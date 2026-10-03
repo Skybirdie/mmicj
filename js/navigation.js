@@ -200,6 +200,9 @@ document.addEventListener("skyreader:open-book",event=>{
 });
 
 document.addEventListener("skyreader:last-page-click",()=>{
+    /* Share Mode owns its own close (X -> landing); a last-page tap must
+       not close the book here. */
+    if(document.body && document.body.classList.contains("sky-share-mode")) return;
     if(Reader.isOpen() && !busy){
         navigation.closeMagazine();
     }

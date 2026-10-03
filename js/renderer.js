@@ -331,6 +331,12 @@ function hydratePageSurface(pageNumber){
         if(Number(pageNumber)!==Number(pageCount)) return;
         if(event.target.closest && event.target.closest(".pdfLink")) return;
         if(event.target.closest && event.target.closest(".skyreaderMediaAnnotationLayer")) return;
+        /* Share Mode: a tap on the last page must never close the book.
+           Touch pointer events are deliberately let through there (so swipes
+           work), which used to let this event fire and close the book through
+           the normal Reader route instead of Share Mode's own X / landing
+           flow. The only legitimate close in Share Mode is the X button. */
+        if(document.body && document.body.classList.contains("sky-share-mode")) return;
         document.dispatchEvent(new CustomEvent("skyreader:last-page-click"));
     },{passive:true});
 
