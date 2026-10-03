@@ -1311,7 +1311,7 @@ body.sky-share-mode .app-switch-button {
 
 .sky-share-media-host .slideshow-playback-status {
     position: absolute !important;
-
+    display:none;
     top: calc(
         var(--sky-share-upper-safe) - 8px
     ) !important;
@@ -4576,4 +4576,84 @@ body.sky-share-mode.sky-share-book #pageJump {
 
 .sky-share-go-button .sky-share-go-gif hover{
     filter:brightness(1.08);
+}
+
+
+/* =========================================================
+   CLOSED SHARE VIEW - REPLAY BUTTON (top-right)
+
+   Same look as body.sky-share-mode .sky-share-open-button
+   (size, border, radius, translucent teal, blur and the
+   frontMenuGlow animation), clamped to the top-right corner.
+   Only shown in the closed state.
+   ========================================================= */
+
+.sky-share-replay-button {
+    display: none !important;
+}
+
+body.sky-share-mode.sky-share-document-closed .sky-share-replay-button {
+    position: fixed !important;
+    top: calc(clamp(15px, 1.2vw, 25px) + env(safe-area-inset-top, 0px)) !important;
+    right: calc(clamp(15px, 1.2vw, 25px) + env(safe-area-inset-right, 0px)) !important;
+    left: auto !important;
+    bottom: auto !important;
+
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+
+    width: clamp(42px, 5vw, 64px) !important;
+    height: clamp(42px, 5vw, 64px) !important;
+    min-width: 42px !important;
+    min-height: 42px !important;
+    max-width: 64px !important;
+    max-height: 64px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+
+    border: 1px solid rgba(255,255,255,.55) !important;
+    border-radius: clamp(8px, 1vw, 13px) !important;
+    background-color: rgba(216,239,238,.30) !important;
+    color: #24504b !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+
+    cursor: pointer !important;
+    backdrop-filter: blur(7px);
+    -webkit-backdrop-filter: blur(7px);
+    animation: frontMenuGlow 4s ease-in-out infinite;
+    transition: transform .25s ease, box-shadow .25s ease;
+
+    z-index: 1000042 !important;
+    pointer-events: auto !important;
+    -webkit-tap-highlight-color: transparent;
+}
+
+body.sky-share-mode.sky-share-document-closed .sky-share-replay-button svg {
+    width: 58% !important;
+    height: 58% !important;
+    display: block !important;
+    pointer-events: none !important;
+    filter: drop-shadow(0 0 3px rgba(255,255,255,.85));
+}
+
+body.sky-share-mode.sky-share-document-closed .sky-share-replay-button:hover {
+    transform: translateY(-2px) !important;
+    animation-play-state: paused !important;
+    box-shadow:
+        0 0 7px #ACE1AF,
+        0 0 14px #00FA9A,
+        inset 0 0 12px #ACE1AF !important;
+}
+
+body.sky-share-mode.sky-share-document-closed .sky-share-replay-button:active {
+    transform: scale(.95) !important;
+}
+
+body.sky-share-mode.sky-share-document-closed .sky-share-replay-button:disabled {
+    opacity: .6 !important;
+    cursor: default !important;
 }
