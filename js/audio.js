@@ -91,25 +91,23 @@ window.AudioController=(function(){
     const SELECT_VOLUME_SCALE=0.5;
     audio.register("bookSelect","assets/audio/select.mp3",3,SELECT_VOLUME_SCALE);
     audio.register("pageCurl","assets/audio/pagecurl.mp3",3,1);
-    // Page-turn variation: three short preloaded pools. Two players per clip
+    // Page-turn variation: five short preloaded pools. Two players per clip
     // preserve overlap for rapid flipping without creating Audio objects per turn.
-    const PAGE_TURN_SOUNDS=["pageTurn1","pageTurn2","pageTurn3"];
-    let lastPageTurnSound=-1;
+    const PAGE_TURN_SOUNDS=["pageTurn1","pageTurn2","pageTurn3","pageTurn4","pageTurn5"];
     audio.register("pageTurn1","assets/audio/pageturn.mp3",2,1);
     audio.register("pageTurn2","assets/audio/pageturn2.mp3",2,1);
     audio.register("pageTurn3","assets/audio/pageturn3.mp3",2,1);
+    audio.register("pageTurn4","assets/audio/pageturn4.mp3",2,1);
+    audio.register("pageTurn5","assets/audio/pageturn5.mp3",2,1);
     audio.register("bookClose","assets/audio/close.mp3",2,1);
     audio.register("libraryOpen","assets/audio/open.mp3",2,1);
 
     audio.playSelect=function(){return audio.play("bookSelect");};
     audio.playPageCurl=function(){ return audio.play("pageCurl"); };
     audio.playPageTurn=function(){
-        // Randomize the clip while avoiding an immediate repeat when 3 clips exist.
-        let index=Math.floor(Math.random()*PAGE_TURN_SOUNDS.length);
-        if(PAGE_TURN_SOUNDS.length>1 && index===lastPageTurnSound){
-            index=(index+1+Math.floor(Math.random()*(PAGE_TURN_SOUNDS.length-1)))%PAGE_TURN_SOUNDS.length;
-        }
-        lastPageTurnSound=index;
+        // Truly random: every clip is equally likely on every turn, so the
+        // same clip may play twice (or more) in a row.
+        const index=Math.floor(Math.random()*PAGE_TURN_SOUNDS.length);
         return audio.play(PAGE_TURN_SOUNDS[index]);
     };
     audio.playBookClose=function(){return audio.play("bookClose");};
