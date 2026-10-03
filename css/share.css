@@ -4585,14 +4585,16 @@ body.sky-share-mode.sky-share-book #pageJump {
    Same look as body.sky-share-mode .sky-share-open-button
    (size, border, radius, translucent teal, blur and the
    frontMenuGlow animation), clamped to the top-right corner.
-   Only shown in the closed state.
+   Only shown in the closed state. The closed class lives on
+   the shell element (not on <body>), so the selectors below
+   are anchored on .sky-share-shell.sky-share-document-closed.
    ========================================================= */
 
 .sky-share-replay-button {
     display: none !important;
 }
 
-body.sky-share-mode.sky-share-document-closed .sky-share-replay-button {
+body.sky-share-mode .sky-share-shell.sky-share-document-closed .sky-share-replay-button {
     position: fixed !important;
     top: calc(clamp(15px, 1.2vw, 25px) + env(safe-area-inset-top, 0px)) !important;
     right: calc(clamp(15px, 1.2vw, 25px) + env(safe-area-inset-right, 0px)) !important;
@@ -4632,7 +4634,7 @@ body.sky-share-mode.sky-share-document-closed .sky-share-replay-button {
     -webkit-tap-highlight-color: transparent;
 }
 
-body.sky-share-mode.sky-share-document-closed .sky-share-replay-button svg {
+body.sky-share-mode .sky-share-shell.sky-share-document-closed .sky-share-replay-button svg {
     width: 58% !important;
     height: 58% !important;
     display: block !important;
@@ -4640,7 +4642,7 @@ body.sky-share-mode.sky-share-document-closed .sky-share-replay-button svg {
     filter: drop-shadow(0 0 3px rgba(255,255,255,.85));
 }
 
-body.sky-share-mode.sky-share-document-closed .sky-share-replay-button:hover {
+body.sky-share-mode .sky-share-shell.sky-share-document-closed .sky-share-replay-button:hover {
     transform: translateY(-2px) !important;
     animation-play-state: paused !important;
     box-shadow:
@@ -4649,11 +4651,11 @@ body.sky-share-mode.sky-share-document-closed .sky-share-replay-button:hover {
         inset 0 0 12px #ACE1AF !important;
 }
 
-body.sky-share-mode.sky-share-document-closed .sky-share-replay-button:active {
+body.sky-share-mode .sky-share-shell.sky-share-document-closed .sky-share-replay-button:active {
     transform: scale(.95) !important;
 }
 
-body.sky-share-mode.sky-share-document-closed .sky-share-replay-button:disabled {
+body.sky-share-mode .sky-share-shell.sky-share-document-closed .sky-share-replay-button:disabled {
     opacity: .6 !important;
     cursor: default !important;
 }
