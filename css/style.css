@@ -3223,3 +3223,40 @@ margin:0 !important;
   padding-top:10px;
   padding-bottom:10px;
 }
+
+
+/* =========================================================
+   HERO LOGO STANDARD (Reader / Video / Slideshow)
+   Identical logo tile in all three landing heroes. Everything is
+   derived from the hero title size (--hero-h2, the same clamp the
+   h2 uses), so the tile and the gap scale with the text:
+   tile = title size * 1.05 (title line) + 21px (4px + 14px
+   subtitle line), i.e. about the height of the two text lines;
+   gap = 40% of the title size; corner radius = 31% of the tile.
+   ========================================================= */
+#viewerLibrary .viewerLibraryHero{
+  --hero-h2:clamp(30px,4vw,55px);
+  --hero-icon:calc(var(--hero-h2) * 1.05 + 21px);
+  gap:calc(var(--hero-h2) * .4);
+}
+#viewerLibrary .viewerLibraryVector{
+  width:var(--hero-icon);
+  height:var(--hero-icon);
+  flex:0 0 auto;
+  border-radius:calc(var(--hero-icon) * .31);
+  background:color-mix(in srgb,var(--panel) 55%,transparent);
+  color:var(--text);
+  box-shadow:none;
+}
+#viewerLibrary .viewerLibraryLogo{
+  display:block;
+  width:72%;
+  height:72%;
+  object-fit:contain;
+}
+@media (max-width:700px){
+  #viewerLibrary .viewerLibraryHero{--hero-h2:clamp(25px,5vw,35px)}
+  #viewerLibrary .viewerLibraryVector{
+    background:color-mix(in srgb,var(--panel) 75%,transparent);
+  }
+}

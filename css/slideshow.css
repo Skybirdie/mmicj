@@ -1642,3 +1642,35 @@ body.sky-share-mode .slideshow-audio-cue{
         line-height:1.2;
     }
 }
+
+
+/* =========================================================
+   HERO LOGO STANDARD (Reader / Video / Slideshow)
+   Same logo tile, gap and proportions in all three heroes; see the
+   matching block at the end of style.css for the formulas. Here the
+   <img> is the tile itself, so the 72% glyph size is produced with
+   14% padding on each side.
+   ========================================================= */
+#slideshowLanding .slideshow-landing-hero{
+    --hero-h2:clamp(30px,4vw,55px);
+    --hero-icon:calc(var(--hero-h2) * 1.05 + 21px);
+    gap:calc(var(--hero-h2) * .4);
+}
+#slideshowLanding .slideshow-landing-logo{
+    display:block;
+    box-sizing:border-box;
+    width:var(--hero-icon);
+    height:var(--hero-icon);
+    flex:0 0 auto;
+    padding:calc(var(--hero-icon) * .14);
+    object-fit:contain;
+    border-radius:calc(var(--hero-icon) * .31);
+    background:color-mix(in srgb,var(--panel) 55%,transparent);
+    box-shadow:none;
+}
+@media (max-width:700px){
+    #slideshowLanding .slideshow-landing-hero{--hero-h2:clamp(25px,5vw,35px)}
+    #slideshowLanding .slideshow-landing-logo{
+        background:color-mix(in srgb,var(--panel) 75%,transparent);
+    }
+}

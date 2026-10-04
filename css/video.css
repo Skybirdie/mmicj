@@ -3156,3 +3156,36 @@ and (orientation:landscape){
         max-width:100%;
     }
 }
+
+
+/* =========================================================
+   HERO LOGO STANDARD (Reader / Video / Slideshow)
+   Same logo tile, gap and proportions in all three heroes; see the
+   matching block at the end of style.css for the formulas.
+   ========================================================= */
+#videoLanding .video-landing-hero{
+    --hero-h2:clamp(30px,4vw,55px);
+    --hero-icon:calc(var(--hero-h2) * 1.05 + 21px);
+    gap:calc(var(--hero-h2) * .4);
+}
+#videoLanding .video-landing-hero-icon{
+    width:var(--hero-icon);
+    height:var(--hero-icon);
+    flex:0 0 auto;
+    border-radius:calc(var(--hero-icon) * .31);
+    background:color-mix(in srgb,var(--panel) 55%,transparent);
+    color:var(--text);
+    box-shadow:none;
+}
+#videoLanding .video-landing-hero-logo{
+    display:block;
+    width:72%;
+    height:72%;
+    object-fit:contain;
+}
+@media (max-width:700px){
+    #videoLanding .video-landing-hero{--hero-h2:clamp(25px,5vw,35px)}
+    #videoLanding .video-landing-hero-icon{
+        background:color-mix(in srgb,var(--panel) 75%,transparent);
+    }
+}
