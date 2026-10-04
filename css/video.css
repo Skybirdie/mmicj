@@ -1560,7 +1560,7 @@ html[data-theme="dark"] .video-narrow-library-toggle{
         calc(50% - (var(--video-statusbar-height,28px) + var(--video-welcome-height,22px)) / 2);
 
     width:
-        calc(100% - 32px);
+        calc((100% - 32px) * .9);
 
     height:55%;
 
@@ -2525,7 +2525,7 @@ padding: 10px;
            (style.css) and .slideshow-landing's width:100% at its mobile
            breakpoint (slideshow.css) - all three landings are full-bleed
            on mobile so they occupy the same screen width. */
-        width:100%;
+        width:90%;
 
         height:60%;
 

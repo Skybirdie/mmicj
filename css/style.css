@@ -300,7 +300,11 @@ border: none;
   right:0;
   top:50%;
   bottom:auto;
-  width: 100%;
+  /* 90% of the former full width; auto side margins keep it centered
+     between left:0 / right:0 (same axis as before). */
+  width: 90%;
+  margin-left:auto;
+  margin-right:auto;
   /* Strictly 60% of the viewer background height. */
   height:60%;
   min-height:0;
@@ -1922,7 +1926,7 @@ html[data-theme="dark"] #readerPanel #toolbar .iconButton{
     padding-right:env(safe-area-inset-right);
   }
 
-  #viewerLibrary{padding:10px;height:63%;width:100%}
+  #viewerLibrary{padding:10px;height:63%;width:90%}
   #viewerShelfView .bookCard{width:clamp(96px,16vw,145px);min-width:clamp(96px,16vw,145px);max-width:clamp(96px,16vw,145px);}
 
   #topSearchGroup{
