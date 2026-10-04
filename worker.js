@@ -71,6 +71,40 @@ const PDF_PROXY_ALLOWED_HOSTS =
     "storage.googleapis.com"
   ]);
 
+/* Narrower than the host check: only this Glide app's own uploads may
+   be proxied, so the route cannot be used as a relay for anybody
+   else's files on storage.googleapis.com (that would spend THIS
+   Worker's request quota). To change it without a redeploy, set the
+   plain variable PDF_PROXY_ALLOWED_PREFIXES to a comma-separated list
+   of path prefixes, each starting with "/". The check runs on the
+   parsed URL, so "../" and "%2e%2e" tricks are already normalised. */
+const PDF_PROXY_DEFAULT_PATH_PREFIXES = [
+  "/glide-prod.appspot.com/uploads-v2/mKxnsa8ky8uPGbBKpTyv/"
+];
+
+function pdfProxyPathAllowed(
+  env,
+  pathname
+) {
+  const configured =
+    String(
+      env?.PDF_PROXY_ALLOWED_PREFIXES || ""
+    )
+      .split(",")
+      .map(value => value.trim())
+      .filter(value => value.startsWith("/"));
+
+  const prefixes =
+    configured.length
+      ? configured
+      : PDF_PROXY_DEFAULT_PATH_PREFIXES;
+
+  return prefixes.some(
+    prefix =>
+      pathname.startsWith(prefix)
+  );
+}
+
 /* Bumped once, deliberately: an earlier version of this proxy could
    cache a WRONG partial response under a given PDF's URL (see the
    comment in handlePdfProxy). Changing this forces every PDF to be
@@ -148,6 +182,157 @@ function kvGet(
       cacheTtl:
         KV_CACHE_TTL
     }
+  );
+}
+
+/* =========================================================
+   KV MISS GUARD + LIMITED LOGGING
+
+   Link-preview crawlers and bots request /s/<section>/<id> URLs
+   that do not exist. Each one used to cost two KV reads (catalog
+   record, then the legacy share record) and one log event, and
+   KV bills a read even when the answer is "not found".
+
+   kvGetGuarded() remembers a miss inside this isolate for a
+   minute, so asking for the same missing key again costs nothing.
+   A publish clears the memory, so a newly published item is never
+   hidden by an old miss.
+
+   logLimited() writes the same log line at most once per ten
+   minutes per isolate, which keeps expected misses (and a KV
+   outage) from turning into one Observability event per request.
+========================================================= */
+
+const KV_MISS_TTL_MS =
+  60000;
+
+const KV_MISS_MAX_ENTRIES =
+  500;
+
+const kvMissMemo =
+  new Map();
+
+async function kvGetGuarded(
+  env,
+  key
+) {
+  const now =
+    Date.now();
+
+  const missedAt =
+    kvMissMemo.get(
+      key
+    );
+
+  if (
+    missedAt !== undefined &&
+    now - missedAt <
+      KV_MISS_TTL_MS
+  ) {
+    return null;
+  }
+
+  const value =
+    await kvGet(
+      env,
+      key
+    );
+
+  if (!value) {
+    if (
+      kvMissMemo.size >=
+      KV_MISS_MAX_ENTRIES
+    ) {
+      kvMissMemo.clear();
+    }
+
+    kvMissMemo.set(
+      key,
+      now
+    );
+  } else if (
+    missedAt !== undefined
+  ) {
+    kvMissMemo.delete(
+      key
+    );
+  }
+
+  return value;
+}
+
+const LOG_LIMIT_WINDOW_MS =
+  600000;
+
+const logLastAt =
+  new Map();
+
+function logLimited(
+  level,
+  label,
+  ...args
+) {
+  const now =
+    Date.now();
+
+  const last =
+    logLastAt.get(
+      label
+    );
+
+  if (
+    last !== undefined &&
+    now - last <
+      LOG_LIMIT_WINDOW_MS
+  ) {
+    return;
+  }
+
+  if (
+    logLastAt.size >= 50
+  ) {
+    logLastAt.clear();
+  }
+
+  logLastAt.set(
+    label,
+    now
+  );
+
+  console[level](
+    ...args
+  );
+}
+
+/* =========================================================
+   SHARE TARGET PLAUSIBILITY
+
+   The app has exactly three sections. Anything else, or an id
+   containing control characters, cannot be a real shared item,
+   so it is refused before any KV read.
+========================================================= */
+
+const KNOWN_SHARE_SECTIONS =
+  new Set([
+    "reader",
+    "video",
+    "slideshow"
+  ]);
+
+function isPlausibleShareTarget(
+  section,
+  id
+) {
+  return (
+    KNOWN_SHARE_SECTIONS.has(
+      section
+    ) &&
+    typeof id === "string" &&
+    id.length > 0 &&
+    id.length <= 512 &&
+    !/[\u0000-\u001f\u007f]/.test(
+      id
+    )
   );
 }
 
@@ -516,7 +701,10 @@ function getDirectShareTarget(
     !section ||
     !id ||
     section.length > 40 ||
-    id.length > 512
+    !isPlausibleShareTarget(
+      section,
+      id
+    )
   ) {
     return null;
   }
@@ -535,6 +723,18 @@ async function getDirectShareRecord(
   env,
   target
 ) {
+  /*
+   * Optional switch (plain variable, off by default): once no
+   * legacy share:v1 links are in use any more, setting
+   * DISABLE_LEGACY_SHARE_RECORDS to any value skips this second
+   * KV read for every item that is not in the catalog.
+   */
+  if (
+    env?.DISABLE_LEGACY_SHARE_RECORDS
+  ) {
+    return null;
+  }
+
   const key =
     makeShareRecordKey(
       target.section,
@@ -545,12 +745,14 @@ async function getDirectShareRecord(
 
   try {
     raw =
-      await kvGet(
+      await kvGetGuarded(
         env,
         key
       );
   } catch (error) {
-    console.error(
+    logLimited(
+      "error",
+      "direct-share-kv-read",
       "MMicjMedia direct-share KV read failed:",
       error
     );
@@ -635,12 +837,14 @@ async function getCatalogShareRecord(
 
   try {
     raw =
-      await kvGet(
+      await kvGetGuarded(
         env,
         key
       );
   } catch (error) {
-    console.error(
+    logLimited(
+      "error",
+      "catalog-kv-read",
       "MMicjMedia catalog KV read failed:",
       error
     );
@@ -656,7 +860,9 @@ async function getCatalogShareRecord(
   }
 
   if (!raw) {
-    console.warn(
+    logLimited(
+      "warn",
+      "catalog-item-miss",
       "MMicjMedia catalog item not found:",
       key
     );
@@ -2183,8 +2389,10 @@ async function serveOgImage(
     };
 
     if (
-      !target.section ||
-      !target.id
+      !isPlausibleShareTarget(
+        target.section,
+        target.id
+      )
     ) {
       return new Response(
         "Invalid MMicjMedia OG target.",
@@ -2322,6 +2530,55 @@ async function serveOgImage(
     );
   }
 
+  /*
+   * The Images binding bills every .output() call and, once the
+   * free allowance is used up, throws. A link preview with a plain
+   * (un-badged) thumbnail is far better than a broken one, so any
+   * failure while composing sends the crawler to the thumbnail
+   * itself. The redirect is cached briefly so a burst of crawlers
+   * does not retry the transform each time.
+   */
+  const ogFallbackUrl =
+    baseResponse.url ||
+    thumbnailUrl;
+
+  try {
+    return await composeOgImage(
+      env,
+      baseResponse,
+      logoResponse
+    );
+  } catch (error) {
+    logLimited(
+      "warn",
+      "og-compose-failed",
+      "MMicjMedia OG image composition failed; redirecting to the thumbnail:",
+      error
+    );
+
+    return new Response(
+      null,
+      {
+        status:
+          302,
+
+        headers: {
+          "Location":
+            ogFallbackUrl,
+
+          "Cache-Control":
+            "public, max-age=300"
+        }
+      }
+    );
+  }
+}
+
+async function composeOgImage(
+  env,
+  baseResponse,
+  logoResponse
+) {
   const baseStreams =
     baseResponse.body.tee();
 
@@ -2471,6 +2728,18 @@ async function handlePdfProxy(
     );
   }
 
+  if (
+    !pdfProxyPathAllowed(
+      env,
+      target.pathname
+    )
+  ) {
+    return new Response(
+      "Source path is not allowed.",
+      { status: 403 }
+    );
+  }
+
   /*
    * STREAMING PASS-THROUGH (no Worker-side caching)
    *
@@ -2608,6 +2877,9 @@ async function handleSharePrime(
       }
     );
   }
+
+  /* A prime may create the record an earlier miss was remembered for. */
+  kvMissMemo.clear();
 
   let body;
 
@@ -3538,7 +3810,9 @@ async function handleCatalogSnapshot(
           CATALOG_SNAPSHOT_KEY
         );
     } catch (error) {
-      console.error(
+      logLimited(
+        "error",
+        "snapshot-kv-read",
         "MMicjMedia catalog snapshot KV read failure:",
         error
       );
@@ -4575,6 +4849,9 @@ async function handleCatalogPublishTest(
     /* This isolate serves the new snapshot immediately. */
     catalogSnapshotMemo =
       null;
+
+    /* ...and no longer trusts an earlier "not found". */
+    kvMissMemo.clear();
 
     const snapshotResult = {
       action:
