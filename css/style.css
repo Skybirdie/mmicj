@@ -3212,3 +3212,14 @@ margin:0 !important;
     line-height:1.2;
   }
 }
+
+
+/* READ AGAIN CARD HEIGHT (Reader) - all widths
+   The shelf row had 4px top/bottom padding on desktop, so the card
+   was 12px taller than Watch Again / View Again (10px row padding
+   each side). Same 10px now, so all three cards are the same
+   fraction of their landing height. */
+#viewerLibrary .viewerContinue{
+  padding-top:10px;
+  padding-bottom:10px;
+}

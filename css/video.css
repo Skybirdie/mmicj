@@ -3142,3 +3142,17 @@ and (orientation:landscape){
         line-height:1.2;
     }
 }
+
+
+/* WATCH AGAIN CARD WIDTH (Video) - phones only (<=700px)
+   Cancels the older <=560px pull-out above that stretched the card
+   to the landing's outer edge. The card now sits inside the
+   landing padding (20px at phone widths), the same inset as the
+   Reader and Slideshow continue cards. */
+@media (max-width:700px){
+    #videoLanding .video-landing-media-row{
+        margin-inline:0;
+        width:100%;
+        max-width:100%;
+    }
+}
