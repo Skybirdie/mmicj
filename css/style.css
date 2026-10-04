@@ -3169,3 +3169,35 @@ margin:0 !important;
     padding: 2px 8px;
     line-height: 20px;
 }
+
+/* =========================================================
+   MOBILE LANDING ALIGNMENT (Reader) - phones only (<=700px)
+   Matches Video/Slideshow landings:
+   - Read Again card inset 20px from the landing edges (same width
+     as the other two sections' continue cards)
+   - same 10px top/bottom space between hero and card row
+   - same hero h2 size and secondary text styling
+   ========================================================= */
+@media (max-width:700px){
+  #viewerLibrary .viewerContinue{
+    width:calc(100% - 20px);
+    padding:10px 0;
+  }
+  #viewerLibrary .viewerLibraryHero h2{
+    margin:0;
+    font-size:clamp(25px,5vw,35px);
+    line-height:1.05;
+    -webkit-text-size-adjust:100%;
+    text-size-adjust:100%;
+  }
+  #viewerContinue #srRecentShelf .sr-recent-page{
+    margin-top:0;
+    font-size:12px;
+    font-weight:400;
+    line-height:1.2;
+    opacity:1;
+    color:var(--muted);
+    -webkit-text-size-adjust:100%;
+    text-size-adjust:100%;
+  }
+}

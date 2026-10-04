@@ -1598,3 +1598,36 @@ body.sky-share-mode .slideshow-audio-cue{
         width:calc(100% - 2px + 2 * clamp(20px,4vw,46px));
     }
 }
+
+
+/* =========================================================
+   MOBILE LANDING ALIGNMENT (Slideshow) - phones only (<=700px)
+   View Again card now spans exactly the library section's width
+   (inset 20px, same as the Reader and Video landings). Replaces
+   the old ~11px-inset pull-out; top/bottom 10px is unchanged.
+   ========================================================= */
+@media (max-width:700px){
+    .slideshow-landing .slideshow-landing-media-row{
+        margin-inline:0;
+        width:100%;
+    }
+    .slideshow-landing .slideshow-landing-continue-section{
+        padding-left:0;
+        padding-right:0;
+    }
+    .slideshow-landing .slideshow-landing-hero h2{
+        margin:0;
+        font-size:clamp(25px,5vw,35px);
+        line-height:1.05;
+        -webkit-text-size-adjust:100%;
+        text-size-adjust:100%;
+    }
+    .slideshow-landing .slideshow-landing-recent-subtitle{
+        font-size:12px;
+        font-weight:400;
+        line-height:1.2;
+        color:var(--muted);
+        -webkit-text-size-adjust:100%;
+        text-size-adjust:100%;
+    }
+}

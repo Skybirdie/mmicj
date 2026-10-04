@@ -3100,3 +3100,33 @@ and (orientation:landscape){
         font-size:12px;
     }
 }
+
+
+/* =========================================================
+   MOBILE LANDING ALIGNMENT (Video) - phones only (<=700px)
+   Same continue-card width, hero spacing and text sizes as the
+   Reader and Slideshow landings.
+   ========================================================= */
+@media (max-width:700px){
+    /* Card inset 20px from the landing edges (was 30px: landing
+       padding + 10px row padding). Top/bottom 10px is unchanged. */
+    .video-landing .video-landing-media-row{
+        padding-left:0;
+        padding-right:0;
+    }
+    .video-landing .video-landing-hero-copy h2{
+        margin:0;
+        font-size:clamp(25px,5vw,35px);
+        line-height:1.05;
+        -webkit-text-size-adjust:100%;
+        text-size-adjust:100%;
+    }
+    .video-landing-continue-section .video-landing-recent-subtitle{
+        font-size:12px;
+        font-weight:400;
+        line-height:1.2;
+        color:var(--muted);
+        -webkit-text-size-adjust:100%;
+        text-size-adjust:100%;
+    }
+}
