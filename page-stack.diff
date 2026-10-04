@@ -1,0 +1,669 @@
+diff -u -N -r a/css/reader.css b/css/reader.css
+--- a/css/reader.css	2026-10-04 13:08:06.261530217 +0000
++++ b/css/reader.css	2026-10-04 13:44:28.785847015 +0000
+@@ -1340,4 +1340,72 @@
+     min-width:32px;
+     font-size:13px;
+   }
+-}
+\ No newline at end of file
++}
++
++/* ---------------------------------------------------------
++   BookStack (js/bookStack.js) - optional page-edge stacks on the
++   outer sides of a two-page spread. Purely decorative: sits behind
++   the StPageFlip wrapper, never receives pointer events, and is
++   only created when the "Page edges" setting is on.
++--------------------------------------------------------- */
++
++.skyBookStack{
++position:absolute;
++inset:0;
++pointer-events:none;
++z-index:-1;
++--sky-stack-paper:#fbf8f1;
++--sky-stack-line:#b4ac9a;
++--sky-stack-time:300ms;
++}
++
++/* Single-page mode mounts in #viewerArea (no negative z-index there). */
++.skyBookStack.--in-viewer{
++z-index:0;
++}
++
++html[data-theme="dark"] .skyBookStack{
++--sky-stack-paper:#dcd7cb;
++--sky-stack-line:#8d8778;
++}
++
++.skyBookStackSide{
++position:absolute;
++box-sizing:border-box;
++opacity:0;
++pointer-events:none;
++}
++
++.skyBookStack.--animate .skyBookStackSide{
++transition:
++    left var(--sky-side-time,var(--sky-stack-time)) cubic-bezier(.22,.61,.36,1),
++    width var(--sky-side-time,var(--sky-stack-time)) cubic-bezier(.22,.61,.36,1),
++    opacity min(160ms,var(--sky-side-time,160ms)) linear;
++}
++
++/* Right stack: shaded where it meets the page, paper lines fanning out. */
++.skyBookStackSide.--right{
++background:
++    linear-gradient(to right,rgba(0,0,0,.38),rgba(0,0,0,0) 60%),
++    repeating-linear-gradient(to right,
++        var(--sky-stack-paper) 0,var(--sky-stack-paper) 1px,
++        var(--sky-stack-line) 1px,var(--sky-stack-line) 2px);
++border-radius:0 2px 2px 0;
++box-shadow:1px 0 0 rgba(0,0,0,.28),3px 2px 6px rgba(0,0,0,.18);
++}
++
++.skyBookStackSide.--left{
++background:
++    linear-gradient(to left,rgba(0,0,0,.38),rgba(0,0,0,0) 60%),
++    repeating-linear-gradient(to left,
++        var(--sky-stack-paper) 0,var(--sky-stack-paper) 1px,
++        var(--sky-stack-line) 1px,var(--sky-stack-line) 2px);
++border-radius:2px 0 0 2px;
++box-shadow:-1px 0 0 rgba(0,0,0,.28),-3px 2px 6px rgba(0,0,0,.18);
++}
++
++@media (prefers-reduced-motion:reduce){
++.skyBookStack.--animate .skyBookStackSide{
++    transition:none;
++}
++}
+diff -u -N -r a/index.html b/index.html
+--- a/index.html	2026-10-04 13:08:06.260170068 +0000
++++ b/index.html	2026-10-04 13:44:28.787600948 +0000
+@@ -21,7 +21,7 @@
+ <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
+ <link rel="icon" href="/favicon.ico" type="image/x-icon">
+ <link rel="stylesheet" href="css/style.css?v=1.0.3">
+-<link rel="stylesheet" href="css/reader.css?v=1.1.1">
++<link rel="stylesheet" href="css/reader.css?v=1.1.4">
+ <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.3.289/pdf_viewer.css">
+ 
+ <link rel="stylesheet" href="css/library.css">
+@@ -710,14 +710,15 @@
+ <script src="js/animation.js"></script>
+ <script src="js/audio.js?v=2.1.0"></script>
+ <script src="js/pdfengine.js"></script>
+-<script src="js/sky180flipengine.js?v=1.6.1"></script>
++<script src="js/bookStack.js?v=1.2"></script>
++<script src="js/sky180flipengine.js?v=1.6.4"></script>
+ <script src="js/loadingSequence.js"></script>
+ <script src="js/renderer.js?v=3.2.13"></script>
+ <script src="js/reader.js"></script>
+ <script src="js/navigation.js?v=n2"></script>
+ <script src="js/bookmarkPanel.js"></script>
+ <script src="js/ui.js?v=1.0.1"></script>
+-<script src="js/settingsPanel.js?v=1.0.1"></script>
++<script src="js/settingsPanel.js?v=1.0.2"></script>
+ <script src="js/mediaManager.js"></script>
+ <script src="js/itemShare.js?v=1.0.2"></script>
+ <script src="js/shareManager.js?v=is2"></script>
+diff -u -N -r a/js/settingsPanel.js b/js/settingsPanel.js
+--- a/js/settingsPanel.js	2026-10-04 13:08:06.258806140 +0000
++++ b/js/settingsPanel.js	2026-10-04 13:08:06.263064178 +0000
+@@ -21,6 +21,7 @@
+               <label class="sr-setting-row"><span>Remember reading position</span><input id="srSettingRemember" type="checkbox"></label>
+               <label class="sr-setting-row"><span>Remember zoom</span><input id="srSettingZoom" type="checkbox"></label>
+               <label class="sr-setting-row"><span>Page-turn sound</span><input id="srSettingSound" type="checkbox"></label>
++              <label class="sr-setting-row"><span>Page edges (book thickness)</span><input id="srSettingBookStack" type="checkbox"></label>
+ 
+ <label class="sr-setting-row">
+   <span>Continue media playback in background</span>
+@@ -58,6 +59,12 @@
+             StorageManager.setMuted(!enabled);
+         };
+ 
++        root.querySelector("#srSettingBookStack").onchange=()=>{
++            if(window.BookStack){
++                BookStack.setEnabled(root.querySelector("#srSettingBookStack").checked);
++            }
++        };
++
+         root.querySelector("#srSettingBackgroundMedia").onchange=()=>{
+             if(window.MediaManager){
+                 MediaManager.setBackgroundPlayback(
+@@ -95,6 +102,8 @@
+         el.querySelector("#srSettingSound").checked=window.AudioController?!AudioController.isMuted():state.muted!==true;
+         el.querySelector("#srSettingVolume").value=window.AudioController?AudioController.volume():state.volume;
+ 
++el.querySelector("#srSettingBookStack").checked=window.BookStack?BookStack.isEnabled():false;
++
+ el.querySelector("#srSettingBackgroundMedia").checked =
+     window.MediaManager
+         ? MediaManager.getBackgroundPlayback()
+diff -u -N -r a/js/sky180flipengine.js b/js/sky180flipengine.js
+--- a/js/sky180flipengine.js	2026-10-04 13:08:06.257357600 +0000
++++ b/js/sky180flipengine.js	2026-10-04 13:44:28.784252013 +0000
+@@ -150,6 +150,40 @@
+     flipHost.style.setProperty("--sky180-book-height",`${height}px`);
+ }
+ 
++/*
++ * BookStack is a passive, optional decoration (thin page-edge stacks on
++ * the outer sides of a two-page spread). It never influences paging or
++ * layout, and every call is isolated so a failure cannot affect reading.
++ * animateMs>0 lets the stack thickness ease to its new value.
++ */
++function syncBookStack(spreadIndex=null,animateMs=0,fromSpread=null){
++    try{
++        if(!window.BookStack || typeof window.BookStack.update!=="function") return;
++        if(!flipHost || !flipbook || !engineReady) return;
++        if(typeof flipbook.getBoundsRect!=="function") return;
++
++        if(spreadIndex===null &&
++           typeof flipbook.getPageCollection==="function" &&
++           typeof flipbook.getPageCollection().getCurrentSpreadIndex==="function"){
++            spreadIndex=flipbook.getPageCollection().getCurrentSpreadIndex();
++        }
++
++        window.BookStack.update({
++            host:flipHost,
++            bounds:flipbook.getBoundsRect(),
++            spreadIndex:spreadIndex||0,
++            fromSpread:fromSpread,
++            pageCount:pageCount,
++            singlePage:singlePageMode,
++            twoPageDocument:twoPageDocumentMode,
++            animateMs:animateMs
++        });
++    }
++    catch(error){}
++}
++
++window.addEventListener("skyreader:bookstack-changed",()=>syncBookStack());
++
+ function applyHostAlignment(spreadIndex=null,animate=false,transitionOverride=null){
+     if(!flipHost || !flipbook) return;
+ 
+@@ -523,6 +557,8 @@
+                 false
+             );
+ 
++            syncBookStack();
++
+             /* Reveal only after the final initial position is known. */
+             requestAnimationFrame(()=>{
+                 if(!flipHost || !flipbook) return;
+@@ -635,6 +671,10 @@
+                     settledSpreadIndex===0,
+                     settledSpreadIndex===0 ? 360 : null
+                 );
++
++                /* No-op when the stack already eased to this spread
++                   during the turn; settles it after a dragged turn. */
++                syncBookStack(settledSpreadIndex,300);
+             }
+             flipHost.classList.remove("sky180-cover-reverse","sky180-final-forward");
+             if(flipbook && typeof flipbook.getPageCollection==="function") {
+@@ -677,6 +717,28 @@
+                 if(targetIndex>=0 && targetIndex<collection.getSpread().length){
+                     applyHostAlignment(targetIndex,true);
+                 }
++
++                /* BookStack needs the real turn direction. The flip
++                   controller has no getDirection(); the active
++                   calculation does (1 = backward), as the hover code
++                   above already relies on. Used only by the stack. */
++                let stackTarget=targetIndex;
++                try{
++                    const calc=typeof controller.getCalculation==="function"
++                        ? controller.getCalculation()
++                        : null;
++                    const calcDirection=calc && typeof calc.getDirection==="function"
++                        ? calc.getDirection()
++                        : null;
++                    if(calcDirection===0 || calcDirection===1){
++                        stackTarget=sourceIndex+(calcDirection===1 ? -1 : 1);
++                    }
++                }
++                catch(error){}
++
++                if(stackTarget>=0 && stackTarget<collection.getSpread().length){
++                    syncBookStack(stackTarget,normalFlippingTime,sourceIndex);
++                }
+             }
+ 
+         }
+@@ -802,6 +864,11 @@
+          */
+         const flipTarget=(singlePageMode || twoPageDocumentMode) ? target-1 : target;
+         flipbook.turnToPage(flipTarget);
++
++        /* A direct jump emits no turn states, so the page-edge stack
++           (decorative, optional) is brought in line here; instant, since
++           the pages themselves change instantly. */
++        syncBookStack(null,0);
+     }
+     catch(error){
+         currentPage=previous;
+@@ -845,4 +912,4 @@
+ 
+ 
+ 
+-engine.resize=function(){ /* * IMPORTANT: ResizeObserver can fire immediately after the private * StPageFlip host is appended, while loadFromHTML() is still building * the PageFlip UI. Calling update() during that interval can interrupt * the first initialization and produce the intermittent cold-start * failure where the book does not appear until a second interaction. * * Ignore resize requests until StPageFlip has emitted its init event. * Renderer will call resize again after Renderer.open() awaits the * engine readiness promise. */ if(!flipbook || !engineReady) return; /* * StPageFlip owns the book rectangle. Let it recalculate from the * available viewer size, then re-apply the opening/closing spread alignment. */ flipbook.update(); syncCenterShadowBounds(); if(typeof flipbook.getPageCollection==="function"){ applyHostAlignment( flipbook.getPageCollection().getCurrentSpreadIndex(), false ); } }; engine.page=function(){ return currentPage; }; engine.pages=function(){ return pageCount; }; engine.isSinglePage=function(){ return singlePageMode; }; engine.isTwoPageDocument=function(){ return twoPageDocumentMode; }; engine.busy=function(){ return busy; }; engine.active=function(){ return flipbook!==null; }; engine.close=function(){ openSequence++; if(pendingReadyReject){ try{ pendingReadyReject(new Error("Sky180FlipEngine: open cancelled.")); }catch(error){} pendingReadyReject=null; } if(flipbook){ try{ /* * A failed open can leave a PageFlip instance constructed but * not yet loaded. Its destroy() method assumes the UI exists, * so only destroy after loadFromHTML() has created the UI. */ const ui=typeof flipbook.getUI==="function" ? flipbook.getUI() : null; if(ui && typeof ui.destroy==="function"){ flipbook.destroy(); } } catch(error){ console.warn("[Sky180FlipEngine] destroy failed",error); } } if(flipHost){ flipHost.classList.remove("sky180-is-flipping","sky180-layout-pending","sky180-layout-ready"); } releaseInteractiveGuard(); flipbook=null; flipHost=null; engineReady=false; pageCount=0; currentPage=1; singlePageMode=false; twoPageDocumentMode=false; busy=false; }; engine.destroy=engine.close; engine.on=function(name,callback){ if(Object.prototype.hasOwnProperty.call(handlers,name)){ handlers[name]=callback; } return engine; }; engine.version="1.6.1"; return engine; })();
+\ No newline at end of file
++engine.resize=function(){ /* * IMPORTANT: ResizeObserver can fire immediately after the private * StPageFlip host is appended, while loadFromHTML() is still building * the PageFlip UI. Calling update() during that interval can interrupt * the first initialization and produce the intermittent cold-start * failure where the book does not appear until a second interaction. * * Ignore resize requests until StPageFlip has emitted its init event. * Renderer will call resize again after Renderer.open() awaits the * engine readiness promise. */ if(!flipbook || !engineReady) return; /* * StPageFlip owns the book rectangle. Let it recalculate from the * available viewer size, then re-apply the opening/closing spread alignment. */ flipbook.update(); syncCenterShadowBounds(); if(typeof flipbook.getPageCollection==="function"){ applyHostAlignment( flipbook.getPageCollection().getCurrentSpreadIndex(), false ); } syncBookStack(); }; engine.page=function(){ return currentPage; }; engine.pages=function(){ return pageCount; }; engine.isSinglePage=function(){ return singlePageMode; }; engine.isTwoPageDocument=function(){ return twoPageDocumentMode; }; engine.busy=function(){ return busy; }; engine.active=function(){ return flipbook!==null; }; engine.close=function(){ openSequence++; if(pendingReadyReject){ try{ pendingReadyReject(new Error("Sky180FlipEngine: open cancelled.")); }catch(error){} pendingReadyReject=null; } if(flipbook){ try{ /* * A failed open can leave a PageFlip instance constructed but * not yet loaded. Its destroy() method assumes the UI exists, * so only destroy after loadFromHTML() has created the UI. */ const ui=typeof flipbook.getUI==="function" ? flipbook.getUI() : null; if(ui && typeof ui.destroy==="function"){ flipbook.destroy(); } } catch(error){ console.warn("[Sky180FlipEngine] destroy failed",error); } } if(flipHost){ flipHost.classList.remove("sky180-is-flipping","sky180-layout-pending","sky180-layout-ready"); } releaseInteractiveGuard(); try{ if(window.BookStack) window.BookStack.detach(); }catch(error){} flipbook=null; flipHost=null; engineReady=false; pageCount=0; currentPage=1; singlePageMode=false; twoPageDocumentMode=false; busy=false; }; engine.destroy=engine.close; engine.on=function(name,callback){ if(Object.prototype.hasOwnProperty.call(handlers,name)){ handlers[name]=callback; } return engine; }; engine.version="1.6.4"; return engine; })();
+\ No newline at end of file
+--- /dev/null	2026-10-02 23:14:37.616579503 +0000
++++ b/js/bookStack.js	2026-10-04 13:44:28.778496501 +0000
+@@ -0,0 +1,412 @@
++"use strict";
++
++/*
++=========================================================
++ SkyReader BookStack
++ Version 1.0
++
++ Passive visual layer: draws thin stacks of page edges on the
++ outer left/right sides of a two-page spread so the book looks
++ thick. The left stack grows as pages are turned, the right
++ stack shrinks.
++
++ SAFETY RULES
++ - Never touches StPageFlip, page surfaces, or layout.
++ - The overlay is pointer-events:none and lives as a sibling of
++   .stf__wrapper inside the engine's private host.
++ - Every public method is wrapped in try/catch; a failure here
++   can never block a book from opening or turning.
++ - Off unless enabled (see BookStack.isEnabled()).
++ - Desktop two-page spreads, plus single-page (mobile) mode.
++   Two-page-document mode (a 2-page PDF) never shows a stack.
++ - Single-page mode has no spare room inside the book host (the
++   page fills its width), so it draws the stack in the viewer's own
++   padding gutter (#viewerArea) and never changes layout.
++ - Hidden while the reader is zoomed, panned or rotated.
++
++ Enable / disable (per browser):
++   - Settings panel switch ("Page edges"), or
++   - localStorage "skyreader.bookStack" = "1" / "0", or
++   - URL ?pagestack=1 / ?pagestack=0 (also saves the choice)
++=========================================================
++*/
++
++window.BookStack=(function(){
++
++const api={};
++
++const STORAGE_KEY="skyreader.bookStack";
++const DEFAULT_ENABLED=false;
++
++/* Tunables */
++const MIN_TOTAL_PX=4;     // total stack thickness for a very short book
++const MAX_TOTAL_PX=14;    // total stack thickness for a very long book
++const PX_PER_PAGE=0.14;
++const MIN_SIDE_PX=1.5;    // any side that still has pages shows at least this
++const EDGE_MARGIN_PX=2;   // keep this much clear of the host edge
++const SINGLE_MAX_TOTAL_PX=10;   // single-page mode: both stacks combined
++const SINGLE_EDGE_MARGIN_PX=1;  // single-page mode gutter is small
++const FAST_COLLAPSE_MS=120; // a side that is about to have no real page vanishes this fast
++
++let overlay=null;
++let leftEl=null;
++let rightEl=null;
++let hostRef=null;
++
++function readStored(){
++    try{
++        return window.localStorage.getItem(STORAGE_KEY);
++    }catch(error){
++        return null;
++    }
++}
++
++function writeStored(value){
++    try{
++        window.localStorage.setItem(STORAGE_KEY,value);
++    }catch(error){}
++}
++
++(function applyUrlParam(){
++    try{
++        const value=new URLSearchParams(window.location.search).get("pagestack");
++        if(value==="1"||value==="0") writeStored(value);
++    }catch(error){}
++})();
++
++api.isEnabled=function(){
++    const stored=readStored();
++    if(stored==="1") return true;
++    if(stored==="0") return false;
++    return DEFAULT_ENABLED;
++};
++
++api.setEnabled=function(enabled){
++    writeStored(enabled?"1":"0");
++    if(!enabled) api.detach();
++    /* When enabling, the engine's next sync (or api.refresh from the
++       engine) creates the overlay; nothing to do here. */
++    try{
++        window.dispatchEvent(new CustomEvent("skyreader:bookstack-changed",{detail:{enabled:!!enabled}}));
++    }catch(error){}
++};
++
++/*
++ * Pure geometry. Exported so it can be unit-tested without a DOM.
++ *
++ * Spread numbering matches Sky180FlipEngine for normal two-page books:
++ *   spread 0 = [synthetic, page 1]        (cover)
++ *   spread s = [page 2s, page 2s+1]
++ *   closing spread of an even-length PDF = [last page, synthetic]
++ *
++ * Returns the thickness in px of each side's stack.
++ */
++api.computeThickness=function(pageCount,spreadIndex,availLeft,availRight){
++    pageCount=Math.max(0,Math.floor(Number(pageCount)||0));
++    spreadIndex=Math.max(0,Math.floor(Number(spreadIndex)||0));
++
++    if(pageCount<3) return {left:0,right:0};
++
++    const total=Math.max(MIN_TOTAL_PX,Math.min(MAX_TOTAL_PX,pageCount*PX_PER_PAGE));
++
++    /* Real pages strictly before the left visible page / after the right one. */
++    const leftCount=Math.max(0,2*spreadIndex-1);
++    const rightCount=Math.max(0,pageCount-(2*spreadIndex+1));
++
++    function side(count,avail){
++        if(count<=0) return 0;
++        let px=total*count/pageCount;
++        px=Math.max(MIN_SIDE_PX,px);
++        const room=Math.max(0,(Number(avail)||0)-EDGE_MARGIN_PX);
++        return Math.max(0,Math.min(px,room));
++    }
++
++    return {
++        left:side(leftCount,availLeft),
++        right:side(rightCount,availRight)
++    };
++};
++
++/*
++ * Single-page (mobile) geometry. pageIndex is 0-based: page 1 = 0.
++ * Pages before the visible one stack on the left, pages after it on the
++ * right. Exported for unit tests.
++ */
++api.computeThicknessSingle=function(pageCount,pageIndex,availLeft,availRight){
++    pageCount=Math.max(0,Math.floor(Number(pageCount)||0));
++    pageIndex=Math.max(0,Math.floor(Number(pageIndex)||0));
++
++    if(pageCount<3) return {left:0,right:0};
++
++    const total=Math.max(MIN_TOTAL_PX,Math.min(SINGLE_MAX_TOTAL_PX,pageCount*PX_PER_PAGE));
++    const leftCount=Math.min(pageIndex,pageCount-1);
++    const rightCount=Math.max(0,pageCount-1-pageIndex);
++
++    function side(count,avail){
++        if(count<=0) return 0;
++        const px=Math.max(MIN_SIDE_PX,total*count/pageCount);
++        const room=Math.max(0,(Number(avail)||0)-SINGLE_EDGE_MARGIN_PX);
++        return Math.max(0,Math.min(px,room));
++    }
++
++    return {
++        left:side(leftCount,availLeft),
++        right:side(rightCount,availRight)
++    };
++};
++
++/* True when the reader's #pageContainer is zoomed, panned or rotated.
++   (UI applies translate/rotate/scale there; the stack is only drawn
++   for the untransformed book.) */
++function containerTransformed(container){
++    try{
++        if(!container) return false;
++        const value=window.getComputedStyle(container).transform;
++        if(!value || value==="none") return false;
++        const m=value.match(/matrix(3d)?\(([^)]+)\)/);
++        if(!m) return true;
++        const n=m[2].split(",").map(Number);
++        const ident=m[1]
++            ? [1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]
++            : [1,0,0,1,0,0];
++        if(n.length!==ident.length) return true;
++        for(let k=0;k<ident.length;k++){
++            if(Math.abs(n[k]-ident[k])>0.01) return true;
++        }
++        return false;
++    }catch(error){
++        return false;
++    }
++}
++
++let lastInfo=null;
++let watchedContainer=null;
++let watchTimer=0;
++let mutationObserver=null;
++
++function scheduleRefresh(){
++    if(watchTimer) return;
++    watchTimer=window.requestAnimationFrame(()=>{
++        watchTimer=0;
++        if(lastInfo) api.update(Object.assign({},lastInfo,{animateMs:0,fromSpread:null}));
++    });
++}
++
++/* transitionend bubbles from descendants (including the stack's own width
++   transitions and the host's alignment transition); only the container's
++   own transform transition matters here. */
++function onContainerTransitionEnd(event){
++    if(!event || event.target!==watchedContainer) return;
++    if(event.propertyName && event.propertyName!=="transform") return;
++    scheduleRefresh();
++}
++
++function watchContainer(container){
++    if(watchedContainer===container) return;
++    unwatchContainer();
++    if(!container) return;
++    watchedContainer=container;
++    try{
++        mutationObserver=new MutationObserver(scheduleRefresh);
++        mutationObserver.observe(container,{attributes:true,attributeFilter:["style","class"]});
++        container.addEventListener("transitionend",onContainerTransitionEnd);
++    }catch(error){}
++}
++
++function unwatchContainer(){
++    try{
++        if(mutationObserver) mutationObserver.disconnect();
++        if(watchedContainer) watchedContainer.removeEventListener("transitionend",onContainerTransitionEnd);
++        if(watchTimer) window.cancelAnimationFrame(watchTimer);
++    }catch(error){}
++    mutationObserver=null;
++    watchedContainer=null;
++    watchTimer=0;
++}
++
++function ensureOverlay(mount,inViewer){
++    if(overlay && hostRef===mount && overlay.parentNode===mount) return true;
++
++    removeOverlay();
++
++    try{
++        overlay=document.createElement("div");
++        overlay.className="skyBookStack"+(inViewer?" --in-viewer":"");
++        overlay.setAttribute("aria-hidden","true");
++
++        leftEl=document.createElement("div");
++        leftEl.className="skyBookStackSide --left";
++        rightEl=document.createElement("div");
++        rightEl.className="skyBookStackSide --right";
++
++        overlay.appendChild(leftEl);
++        overlay.appendChild(rightEl);
++
++        /* Desktop: behind the StPageFlip wrapper (StPageFlip inserts its
++           wrapper with insertAdjacentHTML("afterbegin"); ours goes first in
++           DOM order and has a lower z-index regardless). Single-page: first
++           child of #viewerArea; it only occupies the padding gutter. */
++        mount.insertBefore(overlay,mount.firstChild);
++        hostRef=mount;
++        return true;
++    }catch(error){
++        overlay=leftEl=rightEl=hostRef=null;
++        return false;
++    }
++}
++
++function removeOverlay(){
++    try{
++        if(overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
++    }catch(error){}
++    overlay=leftEl=rightEl=hostRef=null;
++}
++
++function hideOverlay(){
++    if(leftEl) leftEl.style.opacity="0";
++    if(rightEl) rightEl.style.opacity="0";
++}
++
++/*
++ * info = {
++ *   host:        the engine's flipHost element
++ *   bounds:      flipbook.getBoundsRect() ({left,top,width,height,pageWidth})
++ *   spreadIndex: spread the stack should represent (current, or target while turning)
++ *   fromSpread:  (optional) spread being turned away from, during a turn
++ *   pageCount:   real PDF page count
++ *   singlePage / twoPageDocument: engine modes (two-page-document: no stack)
++ *   (single-page mode: spreadIndex is the 0-based page index)
++ *   animateMs:   >0 lets the thickness ease over that many ms (during a turn)
++ * }
++ */
++api.update=function(info){
++    try{
++        if(!info || !info.host) return;
++
++        if(!api.isEnabled() || info.twoPageDocument){
++            lastInfo=null;
++            unwatchContainer();
++            api.detach();
++            return;
++        }
++
++        lastInfo=info;
++
++        const host=info.host;
++        const bounds=info.bounds;
++        if(!bounds || !(bounds.height>0) || !(bounds.width>0)) return;
++
++        const single=!!info.singlePage;
++        const container=host.closest?host.closest("#pageContainer"):null;
++        const mount=single ? (host.closest?host.closest("#viewerArea"):null) : host;
++        if(!mount) return;
++
++        const block=host.querySelector(".stf__block");
++        if(!block) return;
++
++        watchContainer(container);
++
++        if(!ensureOverlay(mount,single)) return;
++
++        /* Zoomed / panned / rotated: edges would not line up; hide. */
++        if(containerTransformed(container)){
++            hideOverlay();
++            return;
++        }
++
++        /* Bounds are relative to .stf__block; convert into mount-local
++           coordinates (the mount is the host on desktop, #viewerArea in
++           single-page mode). Rects are safe here because the container
++           is untransformed (checked above); the host's own alignment
++           translate is shared by block and host on desktop. */
++        const mountRect=mount.getBoundingClientRect();
++        const blockRect=block.getBoundingClientRect();
++        const offsetX=blockRect.left-mountRect.left-(mount.clientLeft||0);
++        const offsetY=blockRect.top-mountRect.top-(mount.clientTop||0);
++
++        /* Visible page rectangle in mount coordinates. Desktop: the whole
++           two-page book. Single page (portrait): the right half of the
++           StPageFlip rectangle. */
++        const pageW=Number(bounds.pageWidth)||0;
++        const bookLeft=offsetX+Number(bounds.left)+(single?pageW:0);
++        const bookRight=bookLeft+(single?pageW:Number(bounds.width));
++        const bookTop=offsetY+Number(bounds.top);
++        if(single && !(pageW>0)) return;
++
++        const availLeft=bookLeft;
++        const availRight=mount.clientWidth-bookRight;
++
++        const t=single
++            ? api.computeThicknessSingle(info.pageCount,info.spreadIndex,availLeft,availRight)
++            : api.computeThickness(info.pageCount,info.spreadIndex,availLeft,availRight);
++
++        const ms=Math.max(0,Math.min(1500,Number(info.animateMs)||0));
++        overlay.classList.toggle("--animate",ms>0);
++        if(ms>0) overlay.style.setProperty("--sky-stack-time",ms+"ms");
++
++        /*
++         * The cover's left side (and the closing page's right side, for
++         * even-length books) is an empty synthetic page. A stack must never
++         * sit beside an empty page:
++         *   - turning AWAY from a real page toward an empty side: collapse
++         *     that side's stack almost immediately instead of easing it out
++         *     over the whole turn;
++         *   - turning from an empty side toward a real page: hold that side
++         *     at zero for the whole turn; the engine's settle ("read") call
++         *     then grows it in once the turn has finished.
++         */
++        const pc=Math.max(0,Math.floor(Number(info.pageCount)||0));
++        const to=Math.max(0,Math.floor(Number(info.spreadIndex)||0));
++        const from=(info.fromSpread===undefined||info.fromSpread===null)
++            ? null : Math.max(0,Math.floor(Number(info.fromSpread)||0));
++        const emptyRightSpread=(!single && pc>=3 && pc%2===0) ? pc/2 : -1;
++        const leftEmpty=n=>!single && n===0;
++        const rightEmpty=n=>n===emptyRightSpread;
++
++        let holdLeft=false,holdRight=false;
++        let timeLeft=ms,timeRight=ms;
++
++        if(ms>0 && from!==null && from!==to){
++            if(leftEmpty(from) && !leftEmpty(to)) holdLeft=true;
++            if(rightEmpty(from) && !rightEmpty(to)) holdRight=true;
++            if(leftEmpty(to) && !leftEmpty(from)) timeLeft=FAST_COLLAPSE_MS;
++            if(rightEmpty(to) && !rightEmpty(from)) timeRight=FAST_COLLAPSE_MS;
++        }
++
++        leftEl.style.setProperty("--sky-side-time",timeLeft+"ms");
++        rightEl.style.setProperty("--sky-side-time",timeRight+"ms");
++        if(holdLeft) t.left=0;
++        if(holdRight) t.right=0;
++
++        const top=bookTop+1;
++        const height=Math.max(0,Number(bounds.height)-2);
++
++        leftEl.style.top=top+"px";
++        leftEl.style.height=height+"px";
++        leftEl.style.left=(bookLeft-t.left)+"px";
++        leftEl.style.width=t.left+"px";
++
++        rightEl.style.top=top+"px";
++        rightEl.style.height=height+"px";
++        rightEl.style.left=bookRight+"px";
++        rightEl.style.width=t.right+"px";
++
++        leftEl.style.opacity=t.left>0?"1":"0";
++        rightEl.style.opacity=t.right>0?"1":"0";
++    }catch(error){
++        try{ console.warn("[BookStack] update failed",error); }catch(ignore){}
++        api.detach();
++    }
++};
++
++api.detach=function(){
++    removeOverlay();
++    unwatchContainer();
++    lastInfo=null;
++};
++
++api.version="1.2";
++
++return api;
++
++})();
