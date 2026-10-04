@@ -1341,3 +1341,71 @@ font-style:italic;
     font-size:13px;
   }
 }
+
+/* ---------------------------------------------------------
+   BookStack (js/bookStack.js) - optional page-edge stacks on the
+   outer sides of a two-page spread. Purely decorative: sits behind
+   the StPageFlip wrapper, never receives pointer events, and is
+   only created when the "Page edges" setting is on.
+--------------------------------------------------------- */
+
+.skyBookStack{
+position:absolute;
+inset:0;
+pointer-events:none;
+z-index:-1;
+--sky-stack-paper:#fbf8f1;
+--sky-stack-line:#b4ac9a;
+--sky-stack-time:300ms;
+}
+
+/* Single-page mode mounts in #viewerArea (no negative z-index there). */
+.skyBookStack.--in-viewer{
+z-index:0;
+}
+
+html[data-theme="dark"] .skyBookStack{
+--sky-stack-paper:#dcd7cb;
+--sky-stack-line:#8d8778;
+}
+
+.skyBookStackSide{
+position:absolute;
+box-sizing:border-box;
+opacity:0;
+pointer-events:none;
+}
+
+.skyBookStack.--animate .skyBookStackSide{
+transition:
+    left var(--sky-side-time,var(--sky-stack-time)) cubic-bezier(.22,.61,.36,1),
+    width var(--sky-side-time,var(--sky-stack-time)) cubic-bezier(.22,.61,.36,1),
+    opacity min(160ms,var(--sky-side-time,160ms)) linear;
+}
+
+/* Right stack: shaded where it meets the page, paper lines fanning out. */
+.skyBookStackSide.--right{
+background:
+    linear-gradient(to right,rgba(0,0,0,.38),rgba(0,0,0,0) 60%),
+    repeating-linear-gradient(to right,
+        var(--sky-stack-paper) 0,var(--sky-stack-paper) 1px,
+        var(--sky-stack-line) 1px,var(--sky-stack-line) 2px);
+border-radius:0 2px 2px 0;
+box-shadow:1px 0 0 rgba(0,0,0,.28),3px 2px 6px rgba(0,0,0,.18);
+}
+
+.skyBookStackSide.--left{
+background:
+    linear-gradient(to left,rgba(0,0,0,.38),rgba(0,0,0,0) 60%),
+    repeating-linear-gradient(to left,
+        var(--sky-stack-paper) 0,var(--sky-stack-paper) 1px,
+        var(--sky-stack-line) 1px,var(--sky-stack-line) 2px);
+border-radius:2px 0 0 2px;
+box-shadow:-1px 0 0 rgba(0,0,0,.28),-3px 2px 6px rgba(0,0,0,.18);
+}
+
+@media (prefers-reduced-motion:reduce){
+.skyBookStack.--animate .skyBookStackSide{
+    transition:none;
+}
+}
