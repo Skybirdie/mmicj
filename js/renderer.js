@@ -503,7 +503,20 @@ progress(
         const task=pdfjsLib.getDocument({
             url:pdfUrl,
             enableXfa:false,
-            useSystemFonts:true
+            useSystemFonts:true,
+            /*
+             * Cross-origin PDFs are streamed through the Worker's
+             * /__sky_pdf_proxy, and every byte-range request is one
+             * billed Worker request. pdf.js asks for 64 KiB at a time
+             * by default (about 16 requests per MB); 256 KiB cuts that
+             * up to fourfold while keeping the worst-case wait for a
+             * single chunk small on slow connections. Only the
+             * granularity of the range requests changes - pages are
+             * still fetched on demand, and background auto-fetch of the
+             * rest of the file is deliberately left on.
+             * Next step to try once this is proven: 1048576 (1 MiB).
+             */
+            rangeChunkSize:262144
         });
 
         activeLoadingTask=task;
