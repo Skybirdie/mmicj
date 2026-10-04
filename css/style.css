@@ -3201,3 +3201,14 @@ margin:0 !important;
     text-size-adjust:100%;
   }
 }
+
+
+/* MOBILE HERO SUBTITLE (Reader) - phones only (<=700px)
+   Same size and spacing as the Video hero subtitle. */
+@media (max-width:700px){
+  #viewerLibrary .viewerLibraryHero p{
+    margin:4px 0 0;
+    font-size:14px;
+    line-height:1.2;
+  }
+}

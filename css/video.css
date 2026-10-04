@@ -3130,3 +3130,15 @@ and (orientation:landscape){
         text-size-adjust:100%;
     }
 }
+
+
+/* MOBILE HERO SUBTITLE (Video) - phones only (<=700px)
+   Size is unchanged (14px); spacing/line-height are pinned so the
+   Reader and Slideshow subtitles match it exactly. */
+@media (max-width:700px){
+    .video-landing .video-landing-hero-copy p{
+        margin:4px 0 0;
+        font-size:14px;
+        line-height:1.2;
+    }
+}
