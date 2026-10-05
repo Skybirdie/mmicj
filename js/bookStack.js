@@ -40,7 +40,7 @@ const DEFAULT_ENABLED=true;
 
 /* Tunables */
 const MIN_TOTAL_PX=6;     // total stack thickness for a very short book
-const MAX_TOTAL_PX=18;    // total stack thickness for a very long book
+const MAX_TOTAL_PX=14;    // total stack thickness for a very long book
 const PX_PER_PAGE=0.15;
 const MIN_SIDE_PX=1.5;    // any side that still has pages shows at least this
 const EDGE_MARGIN_PX=2;   // keep this much clear of the host edge
@@ -49,21 +49,54 @@ const SINGLE_EDGE_MARGIN_PX=1;  // single-page mode gutter is small
 /* Individual "leaves" (groups of pages) drawn inside each stack. Each leaf is
    its own element with a hairline edge and a stepped end, so the stack reads
    as separate pages instead of one striped block. */
-const LEAF_PX=2.0;          // target width of one leaf, desktop
+const LEAF_PX=2.5;          // target width of one leaf, desktop
 const LEAF_PX_SINGLE=1.7;   // single-page mode has far less room
 const MAX_LEAVES=10;
 const MIN_TWO_LEAF_PX=3.2;
 /* Perspective: every leaf further from the page is shorter, top and bottom,
-   by LEAF_INSET_RATIO x the leaf's width, so the stack's outline slopes down
-   from the top of the current page and up from its bottom. Larger = steeper.
-   0 turns the perspective off. LEAF_JITTER is a tiny irregularity (px). */
-const LEAF_INSET_RATIO=0.75;
-const LEAF_JITTER=[0,.12,-.08,.15,-.1,.1,-.12,.08,-.05,.12];
+   by LEAF_INSET_RATIO x the leaf's width on average, so the stack's outline
+   slopes down from the top of the current page and up from its bottom.
+   Larger = steeper. 0 turns the perspective off.
+
+   The slope is deliberately a little coarse, like real paper: each leaf's own
+   taper varies (STEP_VAR), consecutive leaves meet with a tiny notch (NOTCH,
+   px), and the bottom edge differs very slightly from the top (BOTTOM_VAR, px).
+   The left and right stacks use the pattern at different offsets so they are
+   not mirror images. LEAF_IRREGULARITY scales all of it:
+   0 = perfectly smooth, 1 = as designed, 2 = exaggerated. */
+const LEAF_INSET_RATIO=1.5;
+const LEAF_IRREGULARITY=2;
+const STEP_VAR=[1,1.45,.65,1.25,.8,1.5,.7,1.15,.9,1.35];
+const NOTCH=[0,.4,-.3,.45,-.35,.35,-.4,.3,-.25,.4];
+const BOTTOM_VAR=[0,-.25,.3,-.2,.35,-.3,.15,.25,-.35,.2];
 const LEAF_TONES=[100,88,96,82,92,85,98,90,86,94]; // % paper vs edge colour
+/* The first and last pages (the covers) are the outermost page of the left
+   and right stacks. They are drawn separately: a bright, crisp page that
+   starts at the height of the furthest leaf and then runs straight out from it
+   (flat top and bottom, it does not keep tapering), and is thicker than a leaf
+   so it juts out sideways a pixel or two further than the pages in front of
+   it. A leaf is about LEAF_PX wide, so COVER_PX = LEAF_PX + 1..2 gives the
+   "juts out" look. */
+let COVER_PX=3.8;             // cover thickness, desktop
+let COVER_PX_SINGLE=2.4;      // single-page mode has far less room
+/* A slight asymmetry that is pleasing to the eye: the front cover (left stack)
+   sticks out a touch less at its bottom, the last page (right stack) a touch
+   less at its top. Pixels; 0 = symmetric. */
+let COVER_LEFT_BOTTOM_TRIM_PX=3;
+let COVER_RIGHT_TOP_TRIM_PX=3;
+/* Horizontal slant of the cover page (how far it juts out sideways). The front
+   cover (left stack) juts out slightly LESS at its bottom edge than at its top
+   edge; the last page (right stack) slightly LESS at its top edge than at its
+   bottom edge. The edge against the leaves stays put; only the outer edge
+   slants. Expressed as a fraction of the cover's own thickness, so it scales
+   in single-page mode too. 0 = straight (no slant); keep it below ~0.6. */
+let COVER_SLANT_RATIO=0.35;
 const FAST_COLLAPSE_MS=120; // a side that is about to have no real page vanishes this fast
 
 let overlay=null;
 let leftEl=null;
+let leftCoverEl=null;
+let rightCoverEl=null;
 let rightEl=null;
 let hostRef=null;
 
@@ -103,6 +136,27 @@ api.setEnabled=function(enabled){
     try{
         window.dispatchEvent(new CustomEvent("skyreader:bookstack-changed",{detail:{enabled:!!enabled}}));
     }catch(error){}
+};
+
+/*
+ * How many real pages sit behind each side of the current view (the outermost
+ * of those is the front cover on the left, the back cover on the right).
+ * Same numbering as computeThickness / computeThicknessSingle. Pure.
+ */
+api.sideCounts=function(pageCount,index,single){
+    pageCount=Math.max(0,Math.floor(Number(pageCount)||0));
+    index=Math.max(0,Math.floor(Number(index)||0));
+    if(pageCount<3) return {left:0,right:0};
+    if(single){
+        return {
+            left:Math.min(index,pageCount-1),
+            right:Math.max(0,pageCount-1-index)
+        };
+    }
+    return {
+        left:Math.max(0,2*index-1),
+        right:Math.max(0,pageCount-(2*index+1))
+    };
 };
 
 /*
@@ -169,6 +223,81 @@ api.computeThicknessSingle=function(pageCount,pageIndex,availLeft,availRight){
     };
 };
 
+/*
+ * Geometry of the leaves of one stack (pure; unit-tested). Leaf 0 touches the
+ * page. For each leaf: topIn/botIn = how far its inner (page-side) edge is
+ * inset from the top/bottom of the stack, topOut/botOut = the same at its outer
+ * edge. A leaf tapers from In to Out; the next leaf starts at the previous
+ * leaf's Out plus a tiny notch, so the outline is a coarse slope, not a smooth
+ * line. side = "left" | "right" (different pattern offset).
+ */
+api.leafGeometry=function(n,leafPx,side){
+    n=Math.max(0,Math.floor(Number(n)||0));
+    const step=(Number(leafPx)||LEAF_PX)*LEAF_INSET_RATIO;
+    const irr=LEAF_IRREGULARITY;
+    const off=(side==="left") ? 3 : 0;
+    const len=STEP_VAR.length;
+    const out=[];
+
+    let topIn=0,botIn=0;
+    for(let k=0;k<n;k++){
+        const i=(k+off)%len;
+        const dropTop=Math.max(0,step*(1+(STEP_VAR[i]-1)*irr));
+        const dropBot=Math.max(0,dropTop+BOTTOM_VAR[i]*irr);
+        const topOut=topIn+dropTop;
+        const botOut=botIn+dropBot;
+        out.push({topIn,botIn,topOut,botOut});
+        topIn=Math.max(0,topOut+NOTCH[i]*irr);
+        botIn=Math.max(0,botOut+NOTCH[(i+5)%len]*irr);
+    }
+    return out;
+};
+
+/*
+ * Where the cover page starts: the outer edge of the furthest leaf, so it runs
+ * straight out from it. Returns {top,bottom} insets in px; {0,0} with no leaves.
+ */
+api.outerInset=function(n,leafPx,side){
+    const g=api.leafGeometry(n,leafPx,side);
+    if(!g.length) return {top:0,bottom:0};
+    const last=g[g.length-1];
+    return {top:last.topOut,bottom:last.botOut};
+};
+
+/*
+ * Top/bottom insets of the cover page on one side: where it starts (the furthest
+ * leaf's outer edge) plus the small asymmetry trim. Pure.
+ */
+api.coverInsets=function(n,leafPx,side){
+    const o=api.outerInset(n,leafPx,side);
+    return {
+        top:o.top+(side==="right" ? COVER_RIGHT_TOP_TRIM_PX : 0),
+        bottom:o.bottom+(side==="left" ? COVER_LEFT_BOTTOM_TRIM_PX : 0)
+    };
+};
+
+/*
+ * Horizontal slant of the cover page, in px: how much narrower the narrow end
+ * is than the wide end. Left cover: narrow at the bottom. Right cover: narrow
+ * at the top. Pure; coverPx is the cover's thickness.
+ */
+api.coverSlantPx=function(coverPx){
+    coverPx=Math.max(0,Number(coverPx)||0);
+    return Math.max(0,Math.min(coverPx*0.6,coverPx*COVER_SLANT_RATIO));
+};
+
+/*
+ * clip-path polygon (px) for the cover board of one side. Left: the outer
+ * (left) edge is pulled in at the bottom. Right: the outer (right) edge is
+ * pulled in at the top. Inner edge against the leaves is untouched. Pure.
+ */
+api.coverShape=function(coverPx,side){
+    const s=api.coverSlantPx(coverPx).toFixed(2)+"px";
+    return (side==="left")
+        ? "polygon(0 0,100% 0,100% 100%,"+s+" 100%)"
+        : "polygon(0 0,calc(100% - "+s+") 0,100% 100%,0 100%)";
+};
+
 /* How many leaves a stack of this thickness shows (0 = nothing drawn). */
 api.leafCount=function(px,leafPx){
     px=Number(px)||0;
@@ -192,31 +321,34 @@ function setLeaves(el,sideName,n,leafPx){
     if(el._leafKey===key) return;
     el._leafKey=key;
 
-    const step=leafPx*LEAF_INSET_RATIO;
+    const geo=api.leafGeometry(n,leafPx,sideName);
 
     while(el.firstChild) el.removeChild(el.firstChild);
 
     for(let k=0;k<n;k++){
+        const g=geo[k];
         const leaf=document.createElement("div");
         leaf.className="skyBookStackLeaf";
 
         const slot=(sideName==="left") ? (n-1-k) : k;
-        const inset=k===0 ? 0 : Math.max(0,k*step+LEAF_JITTER[k%LEAF_JITTER.length]);
 
         leaf.style.left=(slot*100/n)+"%";
         leaf.style.width=(100/n)+"%";
-        leaf.style.top=inset+"px";
-        leaf.style.bottom=inset+"px";
+        leaf.style.top=g.topIn.toFixed(2)+"px";
+        leaf.style.bottom=g.botIn.toFixed(2)+"px";
 
-        /* Taper: across its own width each leaf also slopes by one step,
-           so the outline is a continuous slope (not just a staircase) and a
-           stack with only one or two leaves still shows perspective. The
-           next leaf out starts exactly where this one ends. */
-        if(step>0){
-            const drop=step.toFixed(2)+"px";
-            const clip="polygon(0 0,100% "+drop+",100% calc(100% - "+drop+"),0 100%)";
-            const clipLeft="polygon(0 "+drop+",100% 0,100% 100%,0 calc(100% - "+drop+"))";
-            const shape=(sideName==="left") ? clipLeft : clip;
+        /* Taper: across its own width each leaf also slopes from its inner
+           inset to its outer inset, so the outline is a continuous (but
+           slightly coarse) slope and a stack with only one or two leaves
+           still shows perspective. */
+        const dTop=(g.topOut-g.topIn);
+        const dBot=(g.botOut-g.botIn);
+        if(dTop>0 || dBot>0){
+            const t=dTop.toFixed(2)+"px";
+            const b=dBot.toFixed(2)+"px";
+            const shape=(sideName==="left")
+                ? "polygon(0 "+t+",100% 0,100% 100%,0 calc(100% - "+b+"))"
+                : "polygon(0 0,100% "+t+",100% calc(100% - "+b+"),0 100%)";
             leaf.style.clipPath=shape;
             leaf.style.webkitClipPath=shape;
         }
@@ -349,8 +481,17 @@ function ensureOverlay(mount,inViewer){
         rightEl=document.createElement("div");
         rightEl.className="skyBookStackSide --right";
 
+        leftCoverEl=document.createElement("div");
+        leftCoverEl.className="skyBookStackCover --left";
+        leftCoverEl.appendChild(document.createElement("div")).className="skyBookStackCoverBoard";
+        rightCoverEl=document.createElement("div");
+        rightCoverEl.className="skyBookStackCover --right";
+        rightCoverEl.appendChild(document.createElement("div")).className="skyBookStackCoverBoard";
+
         overlay.appendChild(leftEl);
         overlay.appendChild(rightEl);
+        overlay.appendChild(leftCoverEl);
+        overlay.appendChild(rightCoverEl);
 
         /* Desktop: behind the StPageFlip wrapper (StPageFlip inserts its
            wrapper with insertAdjacentHTML("afterbegin"); ours goes first in
@@ -360,7 +501,7 @@ function ensureOverlay(mount,inViewer){
         hostRef=mount;
         return true;
     }catch(error){
-        overlay=leftEl=rightEl=hostRef=null;
+        overlay=leftEl=rightEl=leftCoverEl=rightCoverEl=hostRef=null;
         return false;
     }
 }
@@ -369,12 +510,14 @@ function removeOverlay(){
     try{
         if(overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
     }catch(error){}
-    overlay=leftEl=rightEl=hostRef=null;
+    overlay=leftEl=rightEl=leftCoverEl=rightCoverEl=hostRef=null;
 }
 
 function hideOverlay(){
     if(leftEl) leftEl.style.opacity="0";
     if(rightEl) rightEl.style.opacity="0";
+    if(leftCoverEl) leftCoverEl.style.opacity="0";
+    if(rightCoverEl) rightCoverEl.style.opacity="0";
 }
 
 /*
@@ -446,12 +589,20 @@ api.update=function(info){
         const bookTop=offsetY+Number(bounds.top);
         if(single && !(pageW>0)) return;
 
-        const availLeft=bookLeft;
-        const availRight=mount.clientWidth-bookRight;
+        const coverPx=single ? COVER_PX_SINGLE : COVER_PX;
+        const counts=api.sideCounts(info.pageCount,info.spreadIndex,single);
+
+        /* Room for the cover board is reserved first; the leaves get the rest. */
+        const availLeft=bookLeft-(counts.left>=1?coverPx:0);
+        const availRight=mount.clientWidth-bookRight-(counts.right>=1?coverPx:0);
 
         const t=single
             ? api.computeThicknessSingle(info.pageCount,info.spreadIndex,availLeft,availRight)
             : api.computeThickness(info.pageCount,info.spreadIndex,availLeft,availRight);
+
+        /* One page behind a side is only the cover itself: no leaves. */
+        if(counts.left<=1) t.left=0;
+        if(counts.right<=1) t.right=0;
 
         const ms=Math.max(0,Math.min(1500,Number(info.animateMs)||0));
         overlay.classList.toggle("--animate",ms>0);
@@ -488,6 +639,8 @@ api.update=function(info){
 
         leftEl.style.setProperty("--sky-side-time",timeLeft+"ms");
         rightEl.style.setProperty("--sky-side-time",timeRight+"ms");
+        leftCoverEl.style.setProperty("--sky-side-time",timeLeft+"ms");
+        rightCoverEl.style.setProperty("--sky-side-time",timeRight+"ms");
         if(holdLeft) t.left=0;
         if(holdRight) t.right=0;
 
@@ -495,8 +648,10 @@ api.update=function(info){
         const height=Math.max(0,Number(bounds.height)-2);
 
         const leafPx=single ? LEAF_PX_SINGLE : LEAF_PX;
-        setLeaves(leftEl,"left",api.leafCount(t.left,leafPx),leafPx);
-        setLeaves(rightEl,"right",api.leafCount(t.right,leafPx),leafPx);
+        const leavesLeft=api.leafCount(t.left,leafPx);
+        const leavesRight=api.leafCount(t.right,leafPx);
+        setLeaves(leftEl,"left",leavesLeft,leafPx);
+        setLeaves(rightEl,"right",leavesRight,leafPx);
 
         leftEl.style.top=top+"px";
         leftEl.style.height=height+"px";
@@ -510,10 +665,79 @@ api.update=function(info){
 
         leftEl.style.opacity=t.left>0?"1":"0";
         rightEl.style.opacity=t.right>0?"1":"0";
+
+        /* Covers: outermost edge of each stack, only while that side really
+           has pages behind it (never beside an empty synthetic page) and
+           there is room for the board. */
+        /* The board starts at the height of the furthest leaf's outer edge
+           and extends straight out from it (flat top and bottom). */
+        const insetLeft=api.coverInsets(leavesLeft,leafPx,"left");
+        const insetRight=api.coverInsets(leavesRight,leafPx,"right");
+
+        const leftCoverX=bookLeft-t.left-coverPx;
+        const rightCoverX=bookRight+t.right;
+        const showLeftCover=counts.left>=1 && !holdLeft && leftCoverX>=0.5;
+        const showRightCover=counts.right>=1 && !holdRight &&
+            (mount.clientWidth-rightCoverX-coverPx)>=0.5;
+
+        function placeCover(el,x,inset,show,side){
+            el.style.top=(top+inset.top)+"px";
+            el.style.height=Math.max(coverPx,height-inset.top-inset.bottom)+"px";
+            el.style.width=coverPx+"px";
+            el.style.left=x+"px";
+            el.style.opacity=show?"1":"0";
+
+            /* Horizontal slant: clip the inner board (the wrapper's drop
+               shadow follows the clipped outline). */
+            const board=el.firstChild;
+            if(board){
+                const shape=api.coverShape(coverPx,side);
+                board.style.clipPath=shape;
+                board.style.webkitClipPath=shape;
+            }
+        }
+
+        placeCover(leftCoverEl,leftCoverX,insetLeft,showLeftCover,"left");
+        placeCover(rightCoverEl,rightCoverX,insetRight,showRightCover,"right");
     }catch(error){
         try{ console.warn("[BookStack] update failed",error); }catch(ignore){}
         api.detach();
     }
+};
+
+/*
+ * Live diagnostics / tuning from the browser console, no file edits or cache
+ * involved:
+ *   BookStack.info()  -> which build is running and the values it is using
+ *   BookStack.tune({coverLeftBottomTrim:6, coverRightTopTrim:6, coverPx:4.5, coverSlantRatio:.5})
+ *                     -> changes them immediately (until the page reloads);
+ *                        copy the values you like into the constants above.
+ */
+api.info=function(){
+    return {
+        version:api.version,
+        enabled:api.isEnabled(),
+        coverLeftBottomTrim:COVER_LEFT_BOTTOM_TRIM_PX,
+        coverRightTopTrim:COVER_RIGHT_TOP_TRIM_PX,
+        coverPx:COVER_PX,
+        coverPxSingle:COVER_PX_SINGLE,
+        coverSlantRatio:COVER_SLANT_RATIO
+    };
+};
+
+api.tune=function(values){
+    try{
+        values=values||{};
+        const num=v=>(typeof v==="number" && isFinite(v) && v>=0) ? v : null;
+        let v;
+        if((v=num(values.coverLeftBottomTrim))!==null) COVER_LEFT_BOTTOM_TRIM_PX=v;
+        if((v=num(values.coverRightTopTrim))!==null) COVER_RIGHT_TOP_TRIM_PX=v;
+        if((v=num(values.coverPx))!==null) COVER_PX=v;
+        if((v=num(values.coverPxSingle))!==null) COVER_PX_SINGLE=v;
+        if((v=num(values.coverSlantRatio))!==null) COVER_SLANT_RATIO=v;
+        if(lastInfo) api.update(Object.assign({},lastInfo,{animateMs:0,fromSpread:null}));
+    }catch(error){}
+    return api.info();
 };
 
 api.detach=function(){
@@ -522,7 +746,7 @@ api.detach=function(){
     lastInfo=null;
 };
 
-api.version="1.5";
+api.version="2.3";
 
 return api;
 
