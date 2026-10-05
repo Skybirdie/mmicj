@@ -36,7 +36,7 @@ window.BookStack=(function(){
 const api={};
 
 const STORAGE_KEY="skyreader.bookStack";
-const DEFAULT_ENABLED=false;
+const DEFAULT_ENABLED=true;
 
 /* Tunables */
 const MIN_TOTAL_PX=6;     // total stack thickness for a very short book
