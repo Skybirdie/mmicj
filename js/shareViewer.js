@@ -2664,25 +2664,67 @@ async function waitForSharedSlideshowReady() {
 
     function stopNonBookMedia() {
 
+        /*
+         * VideoViewer's public API names this closeVideo() (there is no
+         * VideoViewer.close), so the old check never matched and a
+         * playing video / YouTube iframe kept playing after X. closeVideo()
+         * pauses and unloads the <video> and blanks the iframe. The
+         * close() branch is kept in case an older build exposes it.
+         */
         if (
             isVideoShare() &&
-            window.VideoViewer &&
-            typeof VideoViewer.close ===
-                "function"
+            window.VideoViewer
         ) {
 
-            try {
+            const closeVideoFn =
+                typeof VideoViewer.closeVideo ===
+                    "function"
+                    ? VideoViewer.closeVideo
+                    : (
+                        typeof VideoViewer.close ===
+                            "function"
+                            ? VideoViewer.close
+                            : null
+                    );
 
-                VideoViewer.close();
+            if (closeVideoFn) {
 
+                try {
+
+                    closeVideoFn.call(
+                        VideoViewer
+                    );
+
+                }
+                catch (error) {
+
+                    console.warn(
+                        "[SkyMedia Share] Video close cleanup:",
+                        error
+                    );
+                }
             }
-            catch (error) {
+        }
 
-                console.warn(
-                    "[SkyMedia Share] Video close cleanup:",
-                    error
+        /* Safety net: blank any video iframe still in the viewer. */
+        if (isVideoShare()) {
+
+            document
+                .querySelectorAll(
+                    "#videoViewer iframe"
+                )
+                .forEach(
+                    frame => {
+
+                        try {
+                            frame.src =
+                                "about:blank";
+                        }
+                        catch (error) {
+                            /* ignore */
+                        }
+                    }
                 );
-            }
         }
 
 
