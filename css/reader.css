@@ -1354,8 +1354,8 @@ position:absolute;
 inset:0;
 pointer-events:none;
 z-index:-1;
---sky-stack-paper:#fbf8f1;
---sky-stack-line:#b4ac9a;
+--sky-stack-paper:#fdfbf6;
+--sky-stack-line:#a39a86;
 --sky-stack-time:300ms;
 }
 
@@ -1383,25 +1383,41 @@ transition:
     opacity min(160ms,var(--sky-side-time,160ms)) linear;
 }
 
-/* Right stack: shaded where it meets the page, paper lines fanning out. */
-.skyBookStackSide.--right{
-background:
-    linear-gradient(to right,rgba(0,0,0,.38),rgba(0,0,0,0) 60%),
-    repeating-linear-gradient(to right,
-        var(--sky-stack-paper) 0,var(--sky-stack-paper) 1px,
-        var(--sky-stack-line) 1px,var(--sky-stack-line) 2px);
-border-radius:0 2px 2px 0;
-box-shadow:1px 0 0 rgba(0,0,0,.28),3px 2px 6px rgba(0,0,0,.18);
+/* Each side holds individual leaves (js/bookStack.js). The side itself
+   only supplies the silhouette shadow and the shading where it meets the page. */
+.skyBookStackSide{
+filter:drop-shadow(1px 1px 1.5px rgba(0,0,0,.32));
 }
 
-.skyBookStackSide.--left{
-background:
-    linear-gradient(to left,rgba(0,0,0,.38),rgba(0,0,0,0) 60%),
-    repeating-linear-gradient(to left,
-        var(--sky-stack-paper) 0,var(--sky-stack-paper) 1px,
-        var(--sky-stack-line) 1px,var(--sky-stack-line) 2px);
-border-radius:2px 0 0 2px;
-box-shadow:-1px 0 0 rgba(0,0,0,.28),-3px 2px 6px rgba(0,0,0,.18);
+.skyBookStackLeaf{
+position:absolute;
+box-sizing:border-box;
+pointer-events:none;
+}
+
+.skyBookStackSide.--right .skyBookStackLeaf{
+box-shadow:inset -1px 0 0 var(--sky-stack-line);
+border-radius:0 1.5px 1.5px 0;
+}
+
+.skyBookStackSide.--left .skyBookStackLeaf{
+box-shadow:inset 1px 0 0 var(--sky-stack-line);
+border-radius:1.5px 0 0 1.5px;
+}
+
+.skyBookStackSide::after{
+content:"";
+position:absolute;
+inset:0;
+pointer-events:none;
+}
+
+.skyBookStackSide.--right::after{
+background:linear-gradient(to right,rgba(0,0,0,.34),rgba(0,0,0,0) 45%);
+}
+
+.skyBookStackSide.--left::after{
+background:linear-gradient(to left,rgba(0,0,0,.34),rgba(0,0,0,0) 45%);
 }
 
 @media (prefers-reduced-motion:reduce){
