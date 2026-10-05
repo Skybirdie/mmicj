@@ -1357,6 +1357,14 @@ z-index:-1;
 --sky-stack-paper:#fdfbf6;
 --sky-stack-line:#a39a86;
 --sky-stack-time:300ms;
+/* Cover page: sticks out, so it catches a little more light than the leaves
+   (a soft warm off-white, not pure white). -lo = hairline against the leaves,
+   -hi = hairline on the outer edge. */
+--sky-stack-cover:#fffaf0;
+--sky-stack-cover-light:#fffdf6;
+--sky-stack-cover-dark:#e4d9c0;
+--sky-stack-cover-hi:rgba(90,78,58,.20);
+--sky-stack-cover-lo:rgba(70,60,45,.30);
 }
 
 /* Single-page mode mounts in #viewerArea (no negative z-index there). */
@@ -1367,6 +1375,11 @@ z-index:0;
 html[data-theme="dark"] .skyBookStack{
 --sky-stack-paper:#dcd7cb;
 --sky-stack-line:#8d8778;
+--sky-stack-cover:#efe9da;
+--sky-stack-cover-light:#f6f1e3;
+--sky-stack-cover-dark:#c4baa2;
+--sky-stack-cover-hi:rgba(90,78,58,.22);
+--sky-stack-cover-lo:rgba(40,34,24,.38);
 }
 
 .skyBookStackSide{
@@ -1413,15 +1426,66 @@ pointer-events:none;
 }
 
 .skyBookStackSide.--right::after{
-background:linear-gradient(to right,rgba(0,0,0,.34),rgba(0,0,0,0) 45%);
+background:linear-gradient(to right,rgba(0,0,0,.17),rgba(0,0,0,0) 45%);
 }
 
 .skyBookStackSide.--left::after{
-background:linear-gradient(to left,rgba(0,0,0,.34),rgba(0,0,0,0) 45%);
+background:linear-gradient(to left,rgba(0,0,0,.17),rgba(0,0,0,0) 45%);
+}
+
+/* First/last page (cover board): a slightly brighter, crisp page that runs
+   straight out from the furthest leaf (flat top and bottom). No blur:
+   hairlines on both long edges and a hard zero-blur shadow. See
+   js/bookStack.js. */
+.skyBookStackCover{
+position:absolute;
+box-sizing:border-box;
+opacity:0;
+pointer-events:none;
+/* hard (zero-blur) shadow */
+filter:drop-shadow(1px 1px 0 rgba(0,0,0,.4));
+}
+
+.skyBookStackCover.--left{
+filter:drop-shadow(-1px 1px 0 rgba(0,0,0,.4));
+}
+
+.skyBookStackCoverBoard{
+position:absolute;
+inset:0;
+pointer-events:none;
+background-color:var(--sky-stack-cover);
+}
+
+.skyBookStackCover.--right .skyBookStackCoverBoard{
+/* hairlines on top, then a 45deg face gradient: darker at the top,
+   lighter at the bottom (last page). */
+background-image:linear-gradient(to right,
+    var(--sky-stack-cover-lo) 0,var(--sky-stack-cover-lo) 1px,
+    rgba(0,0,0,0) 1px,rgba(0,0,0,0) calc(100% - 1px),
+    var(--sky-stack-cover-hi) calc(100% - 1px),var(--sky-stack-cover-hi) 100%),
+  linear-gradient(45deg,var(--sky-stack-cover-light),var(--sky-stack-cover-dark));
+}
+
+.skyBookStackCover.--left .skyBookStackCoverBoard{
+/* hairlines on top, then a 45deg-family face gradient: lighter at the top,
+   darker at the bottom (front cover). */
+background-image:linear-gradient(to left,
+    var(--sky-stack-cover-lo) 0,var(--sky-stack-cover-lo) 1px,
+    rgba(0,0,0,0) 1px,rgba(0,0,0,0) calc(100% - 1px),
+    var(--sky-stack-cover-hi) calc(100% - 1px),var(--sky-stack-cover-hi) 100%),
+  linear-gradient(135deg,var(--sky-stack-cover-light),var(--sky-stack-cover-dark));
+}
+
+.skyBookStack.--animate .skyBookStackCover{
+transition:
+    left var(--sky-side-time,var(--sky-stack-time)) cubic-bezier(.22,.61,.36,1),
+    opacity min(160ms,var(--sky-side-time,160ms)) linear;
 }
 
 @media (prefers-reduced-motion:reduce){
-.skyBookStack.--animate .skyBookStackSide{
+.skyBookStack.--animate .skyBookStackSide,
+.skyBookStack.--animate .skyBookStackCover{
     transition:none;
 }
 }
