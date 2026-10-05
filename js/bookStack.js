@@ -36,16 +36,30 @@ window.BookStack=(function(){
 const api={};
 
 const STORAGE_KEY="skyreader.bookStack";
-const DEFAULT_ENABLED=true;
+const DEFAULT_ENABLED=false;
 
 /* Tunables */
-const MIN_TOTAL_PX=4;     // total stack thickness for a very short book
-const MAX_TOTAL_PX=14;    // total stack thickness for a very long book
-const PX_PER_PAGE=0.14;
+const MIN_TOTAL_PX=6;     // total stack thickness for a very short book
+const MAX_TOTAL_PX=18;    // total stack thickness for a very long book
+const PX_PER_PAGE=0.15;
 const MIN_SIDE_PX=1.5;    // any side that still has pages shows at least this
 const EDGE_MARGIN_PX=2;   // keep this much clear of the host edge
-const SINGLE_MAX_TOTAL_PX=10;   // single-page mode: both stacks combined
+const SINGLE_MAX_TOTAL_PX=14;   // single-page mode: both stacks combined
 const SINGLE_EDGE_MARGIN_PX=1;  // single-page mode gutter is small
+/* Individual "leaves" (groups of pages) drawn inside each stack. Each leaf is
+   its own element with a hairline edge and a stepped end, so the stack reads
+   as separate pages instead of one striped block. */
+const LEAF_PX=2.0;          // target width of one leaf, desktop
+const LEAF_PX_SINGLE=1.7;   // single-page mode has far less room
+const MAX_LEAVES=10;
+const MIN_TWO_LEAF_PX=3.2;
+/* Perspective: every leaf further from the page is shorter, top and bottom,
+   by LEAF_INSET_RATIO x the leaf's width, so the stack's outline slopes down
+   from the top of the current page and up from its bottom. Larger = steeper.
+   0 turns the perspective off. LEAF_JITTER is a tiny irregularity (px). */
+const LEAF_INSET_RATIO=0.75;
+const LEAF_JITTER=[0,.12,-.08,.15,-.1,.1,-.12,.08,-.05,.12];
+const LEAF_TONES=[100,88,96,82,92,85,98,90,86,94]; // % paper vs edge colour
 const FAST_COLLAPSE_MS=120; // a side that is about to have no real page vanishes this fast
 
 let overlay=null;
@@ -155,6 +169,64 @@ api.computeThicknessSingle=function(pageCount,pageIndex,availLeft,availRight){
     };
 };
 
+/* How many leaves a stack of this thickness shows (0 = nothing drawn). */
+api.leafCount=function(px,leafPx){
+    px=Number(px)||0;
+    leafPx=Number(leafPx)||LEAF_PX;
+    if(px<=0) return 0;
+    const n=Math.round(px/leafPx);
+    /* Once there is room for two hairline-separated leaves, always show two,
+       so even a short book's stack reads as more than one page. */
+    return Math.max(px>=MIN_TWO_LEAF_PX?2:1,Math.min(MAX_LEAVES,n));
+};
+
+/*
+ * (Re)build the leaves of one side. Leaves are positioned in percentages
+ * of the side's width, so they scale smoothly while the width eases during a
+ * page turn; they are only rebuilt when the leaf count changes. Leaf 0 is
+ * the one touching the page: full height, darkest next to the page shadow.
+ */
+function setLeaves(el,sideName,n,leafPx){
+    if(!el || n<=0) return;
+    const key=n+":"+leafPx;
+    if(el._leafKey===key) return;
+    el._leafKey=key;
+
+    const step=leafPx*LEAF_INSET_RATIO;
+
+    while(el.firstChild) el.removeChild(el.firstChild);
+
+    for(let k=0;k<n;k++){
+        const leaf=document.createElement("div");
+        leaf.className="skyBookStackLeaf";
+
+        const slot=(sideName==="left") ? (n-1-k) : k;
+        const inset=k===0 ? 0 : Math.max(0,k*step+LEAF_JITTER[k%LEAF_JITTER.length]);
+
+        leaf.style.left=(slot*100/n)+"%";
+        leaf.style.width=(100/n)+"%";
+        leaf.style.top=inset+"px";
+        leaf.style.bottom=inset+"px";
+
+        /* Taper: across its own width each leaf also slopes by one step,
+           so the outline is a continuous slope (not just a staircase) and a
+           stack with only one or two leaves still shows perspective. The
+           next leaf out starts exactly where this one ends. */
+        if(step>0){
+            const drop=step.toFixed(2)+"px";
+            const clip="polygon(0 0,100% "+drop+",100% calc(100% - "+drop+"),0 100%)";
+            const clipLeft="polygon(0 "+drop+",100% 0,100% 100%,0 calc(100% - "+drop+"))";
+            const shape=(sideName==="left") ? clipLeft : clip;
+            leaf.style.clipPath=shape;
+            leaf.style.webkitClipPath=shape;
+        }
+        leaf.style.background="var(--sky-stack-paper)";
+        leaf.style.background="color-mix(in srgb,var(--sky-stack-paper) "+
+            LEAF_TONES[k%LEAF_TONES.length]+"%,var(--sky-stack-line))";
+        el.appendChild(leaf);
+    }
+}
+
 /* True when the reader's #pageContainer is zoomed, panned or rotated.
    (UI applies translate/rotate/scale there; the stack is only drawn
    for the untransformed book.) */
@@ -183,12 +255,28 @@ let lastInfo=null;
 let watchedContainer=null;
 let watchTimer=0;
 let mutationObserver=null;
+let resizeObserver=null;
+let resizeTargets=[];
 
 function scheduleRefresh(){
     if(watchTimer) return;
     watchTimer=window.requestAnimationFrame(()=>{
         watchTimer=0;
-        if(lastInfo) api.update(Object.assign({},lastInfo,{animateMs:0,fromSpread:null}));
+        if(!lastInfo) return;
+
+        const next=Object.assign({},lastInfo,{animateMs:0,fromSpread:null});
+
+        /* The engine may supply a function returning fresh bounds, so a
+           late layout change is measured again instead of reusing the
+           numbers from the first (possibly pre-layout) update. */
+        try{
+            if(typeof lastInfo.live==="function"){
+                const live=lastInfo.live();
+                if(live && live.bounds) next.bounds=live.bounds;
+            }
+        }catch(error){}
+
+        api.update(next);
     });
 }
 
@@ -213,7 +301,29 @@ function watchContainer(container){
     }catch(error){}
 }
 
+/* Re-measure whenever the host, the book block or the viewer is resized by
+   anything (late layout, toolbar changes, fullscreen, font loading...). The
+   first observe() callback also gives every open a fresh settled measurement. */
+function watchLayout(targets){
+    try{
+        if(typeof window.ResizeObserver!=="function") return;
+        const same=resizeTargets.length===targets.length &&
+            resizeTargets.every((el,i)=>el===targets[i]);
+        if(same) return;
+
+        if(resizeObserver) resizeObserver.disconnect();
+        resizeTargets=targets.slice();
+        resizeObserver=new ResizeObserver(scheduleRefresh);
+        resizeTargets.forEach(el=>{ if(el) resizeObserver.observe(el); });
+    }catch(error){}
+}
+
 function unwatchContainer(){
+    try{
+        if(resizeObserver) resizeObserver.disconnect();
+    }catch(error){}
+    resizeObserver=null;
+    resizeTargets=[];
     try{
         if(mutationObserver) mutationObserver.disconnect();
         if(watchedContainer) watchedContainer.removeEventListener("transitionend",onContainerTransitionEnd);
@@ -277,6 +387,8 @@ function hideOverlay(){
  *   singlePage / twoPageDocument: engine modes (two-page-document: no stack)
  *   (single-page mode: spreadIndex is the 0-based page index)
  *   animateMs:   >0 lets the thickness ease over that many ms (during a turn)
+ *   live:        (optional) function returning {bounds} measured fresh, used
+ *                when the layout changes after the first update
  * }
  */
 api.update=function(info){
@@ -305,6 +417,7 @@ api.update=function(info){
         if(!block) return;
 
         watchContainer(container);
+        watchLayout([host,block,mount]);
 
         if(!ensureOverlay(mount,single)) return;
 
@@ -381,6 +494,10 @@ api.update=function(info){
         const top=bookTop+1;
         const height=Math.max(0,Number(bounds.height)-2);
 
+        const leafPx=single ? LEAF_PX_SINGLE : LEAF_PX;
+        setLeaves(leftEl,"left",api.leafCount(t.left,leafPx),leafPx);
+        setLeaves(rightEl,"right",api.leafCount(t.right,leafPx),leafPx);
+
         leftEl.style.top=top+"px";
         leftEl.style.height=height+"px";
         leftEl.style.left=(bookLeft-t.left)+"px";
@@ -405,7 +522,7 @@ api.detach=function(){
     lastInfo=null;
 };
 
-api.version="1.2";
+api.version="1.5";
 
 return api;
 
