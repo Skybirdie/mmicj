@@ -607,6 +607,93 @@ AppSwitcher marks the active section.
 /* The smallest circle (62px) has no room for a second line. */
 .video-circle-size-3 .video-circle-category{display:none;}
 
+/* Grid labels live in the middle 60% of the circle height (20% padding
+   top and bottom; side padding keeps text inside the chord). Long titles
+   truncate with an ellipsis instead of spilling out of the region. */
+.video-circle-overlay{
+    padding:20% 11%;
+}
+.video-circle-title{
+    display:-webkit-box;
+    -webkit-box-orient:vertical;
+    -webkit-line-clamp:2;
+    line-clamp:2;
+    max-width:100%;
+    min-height:0;
+    overflow:hidden;
+    overflow-wrap:anywhere;
+    text-overflow:ellipsis;
+}
+.video-circle-title:last-child{
+    -webkit-line-clamp:3;
+    line-clamp:3;
+}
+.video-circle-size-1 .video-circle-title,
+.video-circle-size-2 .video-circle-title,
+.video-circle-size-3 .video-circle-title{
+    max-width:100%;
+}
+.video-circle-size-1 .video-circle-title{
+    -webkit-line-clamp:3;
+    line-clamp:3;
+}
+.video-circle-size-1 .video-circle-title:last-child{
+    -webkit-line-clamp:4;
+    line-clamp:4;
+}
+.video-circle-size-3 .video-circle-title,
+.video-circle-size-3 .video-circle-title:last-child{
+    -webkit-line-clamp:2;
+    line-clamp:2;
+}
+/* Smallest circle: a little less side padding so short words don't split. */
+.video-circle-size-3 .video-circle-overlay{
+    padding:20% 8%;
+}
+
+/* Duration bubble: bottom-right of the thumbnail, inset along the
+   45deg diagonal so its rounded corner stays inside the circle. */
+.video-duration-badge{
+    position:absolute;
+    right:15%;
+    bottom:15%;
+    z-index:3;
+    height:16px;
+    padding:0 6px;
+    border-radius:8px;
+    background:rgba(0,0,0,.72);
+    color:#fff;
+    font-size:10px;
+    font-weight:600;
+    line-height:16px;
+    letter-spacing:.2px;
+    white-space:nowrap;
+    font-variant-numeric:tabular-nums;
+    text-shadow:none;
+    pointer-events:none;
+}
+.video-circle-size-1 .video-duration-badge{
+    height:18px;
+    padding:0 7px;
+    border-radius:9px;
+    font-size:11px;
+    line-height:18px;
+}
+.video-circle-size-2 .video-duration-badge{
+    height:14px;
+    padding:0 5px;
+    border-radius:7px;
+    font-size:9px;
+    line-height:14px;
+}
+.video-circle-size-3 .video-duration-badge{
+    height:12px;
+    padding:0 4px;
+    border-radius:6px;
+    font-size:8px;
+    line-height:12px;
+}
+
 
 .video-favorite-control{
     position:absolute;
@@ -635,17 +722,13 @@ AppSwitcher marks the active section.
 /* Keep the standardized 25px favorite inside the circular clipping boundary.
    Larger circles need a deeper inset; the smallest circle keeps its
    previous positioning. */
-.video-circle-size-1 .video-favorite-control{
-    top:20%;
-    right:20%;
-}
-.video-circle-size-2 .video-favorite-control{
-    top:24%;
-    right:24%;
-}
-.video-circle-size-3 .video-favorite-control{
-    top:4px;
-    right:4px;
+/* Pinned to the circle's upper-right (45deg) inner edge at every size.
+   Geometry: a 25px control with a 3px clearance from the rim sits at
+   inset = 14.64% of the circle - 1.54px from the top and right edges,
+   so the heart is never cropped and keeps the same relative spot. */
+.video-circle .video-favorite-control{
+    top:calc(14.64% - 1.54px);
+    right:calc(14.64% - 1.54px);
 }
 
 .video-favorite-control .video-favorite-icon{
