@@ -655,7 +655,7 @@ AppSwitcher marks the active section.
    thumbnail (a translucent light wave behind, the solid brand wave in
    front) with the time centered on the solid layer. Everything is sized
    in percentages of the circle, so one rule fits every circle size.
-   Colors: edit #4b8781 (front) and #9fd0c8 (back) inside the two data
+   Colors: edit #4b8781 (front) and #a1ccc8 (back) inside the two data
    URIs below. */
 .video-duration-badge{
     position:absolute;
@@ -689,10 +689,13 @@ AppSwitcher marks the active section.
 }
 .video-duration-badge::before{
     z-index:-2;
-    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 40' preserveAspectRatio='none'%3E%3Cpath fill='%239fd0c8' fill-opacity='.5' d='M0 12C35 -3 75 -1 105 11S165 25 200 7V40H0Z'/%3E%3C/svg%3E");
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 40' preserveAspectRatio='none'%3E%3Cpath fill='%23a1ccc8' d='M0 12C35 -3 75 -1 105 11S165 25 200 7V40H0Z'/%3E%3C/svg%3E");
 }
 .video-duration-badge::after{
     z-index:-1;
+    /* Soft shadow cast by the front wave onto the back wave for depth.
+       Tune the blur/opacity here (0 -1.5px 3px rgba(...)). */
+    filter:drop-shadow(0 -1.5px 3px rgba(0,45,40,.45));
     background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 40' preserveAspectRatio='none'%3E%3Cpath fill='%234b8781' d='M0 18C40 31 80 27 110 17S170 5 200 15V40H0Z'/%3E%3C/svg%3E");
 }
 .video-circle-size-1 .video-duration-badge{
