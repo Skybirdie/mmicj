@@ -1066,6 +1066,15 @@ function createLandingCircle(video) {
 
     circle.appendChild(image);
 
+    if (
+        window.VideoLibrary &&
+        typeof VideoLibrary.attachDurationBadge === "function"
+    ) {
+
+        VideoLibrary.attachDurationBadge(circle, video);
+
+    }
+
 
     button.appendChild(circle);
 

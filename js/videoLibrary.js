@@ -1752,7 +1752,9 @@ function layoutCircleField() {
     getView,
 
     getIndex,
-    getCount
+    getCount,
+
+    attachDurationBadge
 
 };
 
