@@ -119,7 +119,7 @@ z-index:30;
  * produces the duplicate-image flash we are eliminating. The final page is
  * restored automatically when the state returns to read.
  */
-.sky180FlipHost.sky180-final-forward .sky180Page[data-page]:last-of-type{
+.sky180FlipHost.sky180-final-forward:not(.sky180-single-page) .sky180Page[data-page]:last-of-type{
 opacity:0 !important;
 }
 
