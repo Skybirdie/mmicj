@@ -634,6 +634,8 @@ circle.appendChild(image);
             createFavoriteControl(video)
         );
 
+        attachDurationBadge(circle, video);
+
         card.appendChild(
             circle
         );
@@ -654,6 +656,197 @@ circle.appendChild(image);
 
 
         return card;
+    }
+
+
+    /*
+    =======================================================
+     DURATION BADGE (grid circle + list thumbnail)
+    =======================================================
+     Source order: catalog length (videoLength) when it parses,
+     otherwise a cached value, otherwise a lightweight metadata
+     probe of direct video files. YouTube/Vimeo links cannot be
+     probed, so they simply show no badge. Failures are silent.
+    */
+
+    const DURATION_STORE_KEY = "mmicj.videoDurations.v1";
+    const durationCache = new Map();      /* url -> seconds | null */
+    const durationWaiters = new Map();    /* url -> [callback] */
+    const probeQueue = [];
+    let probesActive = 0;
+    const MAX_PROBES = 2;
+    let durationStoreLoaded = false;
+    let durationObserver = null;
+
+    function loadDurationStore() {
+        if (durationStoreLoaded) return;
+        durationStoreLoaded = true;
+        try {
+            const saved = JSON.parse(
+                localStorage.getItem(DURATION_STORE_KEY) || "{}"
+            );
+            Object.keys(saved).forEach(url => {
+                const sec = Number(saved[url]);
+                if (sec > 0 && isFinite(sec)) durationCache.set(url, sec);
+            });
+        } catch (error) {}
+    }
+
+    function saveDuration(url, seconds) {
+        try {
+            const saved = JSON.parse(
+                localStorage.getItem(DURATION_STORE_KEY) || "{}"
+            );
+            saved[url] = Math.round(seconds);
+            localStorage.setItem(DURATION_STORE_KEY, JSON.stringify(saved));
+        } catch (error) {}
+    }
+
+    function parseLength(value) {
+        if (value === null || value === undefined) return 0;
+        const text = String(value).trim();
+        if (!text) return 0;
+        if (/^\d+(\.\d+)?$/.test(text)) return Math.round(Number(text));
+        const match = text.match(/^(?:(\d+):)?(\d{1,2}):(\d{2})$/);
+        if (!match) return 0;
+        return (Number(match[1] || 0) * 3600) +
+            (Number(match[2]) * 60) +
+            Number(match[3]);
+    }
+
+    function formatDuration(totalSeconds) {
+        const total = Math.max(0, Math.round(totalSeconds));
+        const h = Math.floor(total / 3600);
+        const m = Math.floor((total % 3600) / 60);
+        const sec = total % 60;
+        const two = n => String(n).padStart(2, "0");
+        return h > 0
+            ? two(h) + ":" + two(m) + ":" + two(sec)
+            : two(m) + ":" + two(sec);
+    }
+
+    function isProbeableUrl(url) {
+        if (!url) return false;
+        try {
+            if (window.ContentContract &&
+                ContentContract.isYouTubeUrl &&
+                ContentContract.isYouTubeUrl(url)) return false;
+        } catch (error) {}
+        return !/(youtube\.com|youtu\.be|vimeo\.com)/i.test(url);
+    }
+
+    function pumpProbes() {
+        while (probesActive < MAX_PROBES && probeQueue.length) {
+            const url = probeQueue.shift();
+            probesActive++;
+            probeDuration(url, seconds => {
+                probesActive--;
+                durationCache.set(url, seconds);
+                if (seconds) saveDuration(url, seconds);
+                const waiting = durationWaiters.get(url) || [];
+                durationWaiters.delete(url);
+                waiting.forEach(callback => {
+                    try { callback(seconds); } catch (error) {}
+                });
+                pumpProbes();
+            });
+        }
+    }
+
+    function probeDuration(url, done) {
+        const probe = document.createElement("video");
+        let finished = false;
+        const finish = seconds => {
+            if (finished) return;
+            finished = true;
+            clearTimeout(timer);
+            probe.onloadedmetadata = null;
+            probe.onerror = null;
+            try {
+                probe.removeAttribute("src");
+                probe.load();
+            } catch (error) {}
+            done(seconds);
+        };
+        const timer = setTimeout(() => finish(null), 12000);
+        probe.preload = "metadata";
+        probe.muted = true;
+        probe.setAttribute("playsinline", "");
+        probe.onloadedmetadata = () => finish(
+            isFinite(probe.duration) && probe.duration > 0
+                ? probe.duration
+                : null
+        );
+        probe.onerror = () => finish(null);
+        probe.src = url;
+    }
+
+    function requestDuration(video, callback) {
+        loadDurationStore();
+
+        const fromCatalog = parseLength(video.videoLength);
+        if (fromCatalog > 0) {
+            callback(fromCatalog);
+            return;
+        }
+
+        const url = video.videoUrl || video.video || "";
+        if (!isProbeableUrl(url)) {
+            callback(null);
+            return;
+        }
+        if (durationCache.has(url)) {
+            callback(durationCache.get(url));
+            return;
+        }
+        if (durationWaiters.has(url)) {
+            durationWaiters.get(url).push(callback);
+            return;
+        }
+        durationWaiters.set(url, [callback]);
+        probeQueue.push(url);
+        pumpProbes();
+    }
+
+    function attachDurationBadge(container, video) {
+        const show = seconds => {
+            if (!seconds || container.querySelector(".video-duration-badge")) return;
+            const badge = document.createElement("span");
+            badge.className = "video-duration-badge";
+            badge.textContent = formatDuration(seconds);
+            badge.setAttribute("aria-label", "Duration " + badge.textContent);
+            container.appendChild(badge);
+        };
+
+        loadDurationStore();
+
+        /* Known values (catalog or cache) render immediately. */
+        const known = parseLength(video.videoLength) ||
+            durationCache.get(video.videoUrl || video.video || "");
+        if (known) {
+            show(known);
+            return;
+        }
+        if (!isProbeableUrl(video.videoUrl || video.video || "")) return;
+
+        /* Unknown values are probed only once the card is near view. */
+        if (!("IntersectionObserver" in window)) {
+            requestDuration(video, show);
+            return;
+        }
+        if (!durationObserver) {
+            durationObserver = new IntersectionObserver(entries => {
+                entries.forEach(entry => {
+                    if (!entry.isIntersecting) return;
+                    durationObserver.unobserve(entry.target);
+                    const task = entry.target.__durationTask;
+                    entry.target.__durationTask = null;
+                    if (task) task();
+                });
+            }, { rootMargin: "200px" });
+        }
+        container.__durationTask = () => requestDuration(video, show);
+        durationObserver.observe(container);
     }
 
 
@@ -841,6 +1034,8 @@ thumbnail.appendChild(image);
         thumbnail.appendChild(
             play
         );
+
+        attachDurationBadge(thumbnail, video);
 
 
         /*
