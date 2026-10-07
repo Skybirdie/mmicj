@@ -651,60 +651,51 @@ AppSwitcher marks the active section.
     padding:20% 8%;
 }
 
-/* Duration wave: two flowing layers across the lower part of the
-   thumbnail (a translucent light wave behind, the solid brand wave in
-   front) with the time centered on the solid layer. Everything is sized
-   in percentages of the circle, so one rule fits every circle size.
-   Colors: edit #4b8781 (front) and #9fd0c8 (back) inside the two data
-   URIs below. */
+/* Duration bubble: lower-middle of the thumbnail, just below the
+   label region, with enough bottom inset that its rounded ends stay
+   inside the circle. */
 .video-duration-badge{
     position:absolute;
-    left:0;
-    right:0;
-    bottom:0;
+    left:50%;
+    bottom:7%;
+    transform:translateX(-50%);
     z-index:3;
-    height:26%;
-    display:flex;
-    align-items:flex-end;
-    justify-content:center;
-    padding-bottom:3%;
-    box-sizing:border-box;
+    height:16px;
+    padding:0 6px;
+    border-radius:8px;
+    background:#4b8781;
     color:#fff;
     font-size:10px;
     font-weight:600;
-    line-height:1;
+    line-height:16px;
     letter-spacing:.2px;
     white-space:nowrap;
     font-variant-numeric:tabular-nums;
-    text-shadow:0 1px 2px rgba(0,0,0,.25);
+    text-shadow:none;
     pointer-events:none;
 }
-.video-duration-badge::before,
-.video-duration-badge::after{
-    content:"";
-    position:absolute;
-    inset:0;
-    background-size:100% 100%;
-    background-repeat:no-repeat;
-}
-.video-duration-badge::before{
-    z-index:-2;
-    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 40' preserveAspectRatio='none'%3E%3Cpath fill='%239fd0c8' fill-opacity='.5' d='M0 12C35 -3 75 -1 105 11S165 25 200 7V40H0Z'/%3E%3C/svg%3E");
-}
-.video-duration-badge::after{
-    z-index:-1;
-    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 40' preserveAspectRatio='none'%3E%3Cpath fill='%234b8781' d='M0 18C40 31 80 27 110 17S170 5 200 15V40H0Z'/%3E%3C/svg%3E");
-}
 .video-circle-size-1 .video-duration-badge{
+    bottom:6%;
+    height:18px;
+    padding:0 7px;
+    border-radius:9px;
     font-size:11px;
+    line-height:18px;
 }
 .video-circle-size-2 .video-duration-badge{
+    height:14px;
+    padding:0 5px;
+    border-radius:7px;
     font-size:9px;
+    line-height:14px;
 }
 .video-circle-size-3 .video-duration-badge{
-    height:34%;
-    padding-bottom:3.4%;
+    bottom:10%;
+    height:12px;
+    padding:0 3px;
+    border-radius:6px;
     font-size:8px;
+    line-height:12px;
 }
 
 
