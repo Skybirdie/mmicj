@@ -88,7 +88,7 @@ window.AudioController=(function(){
     audio.emit=emit;
 
     // Strict production mapping: one action, one sound, no fallback substitution.
-    const SELECT_VOLUME_SCALE=0.5;
+    const SELECT_VOLUME_SCALE=0.7;
     audio.register("bookSelect","assets/audio/select.mp3",3,SELECT_VOLUME_SCALE);
     audio.register("pageCurl","assets/audio/pagecurl.mp3",3,1);
     // Page-turn variation: five short preloaded pools. Two players per clip
