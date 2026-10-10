@@ -352,6 +352,11 @@ function openFull(item){
             );
 
             iframe.setAttribute(
+                "referrerpolicy",
+                "strict-origin-when-cross-origin"
+            );
+
+            iframe.setAttribute(
                 "loading",
                 "lazy"
             );

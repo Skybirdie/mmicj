@@ -1333,7 +1333,7 @@ function ensureIframePlayer() {
 
     iframeElement.setAttribute(
         "allow",
-        "autoplay; fullscreen; picture-in-picture"
+        "accelerometer; autoplay; clipboard-write; encrypted-media; fullscreen; gyroscope; picture-in-picture; web-share"
     );
 
 
