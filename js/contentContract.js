@@ -212,13 +212,20 @@ function extractYouTubeId(value) {
 
     const url = string(value);
 
-    // Covers: watch?v=ID, youtu.be/ID, /embed/ID, /shorts/ID,
-    // with or without extra query params/timestamps after the ID.
-    const match = url.match(
-        /(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/
+    // Covers: watch?v=ID (v anywhere in the query), youtu.be/ID,
+    // /embed/ID, /shorts/ID, /live/ID, /v/ID, with or without
+    // extra query params/timestamps after the ID.
+    const path = url.match(
+        /(?:youtube(?:-nocookie)?\.com\/(?:embed\/|shorts\/|live\/|v\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/i
     );
 
-    return match ? match[1] : "";
+    if (path) return path[1];
+
+    const query = url.match(
+        /youtube(?:-nocookie)?\.com\/watch\?(?:[^#]*&)?v=([A-Za-z0-9_-]{11})/i
+    );
+
+    return query ? query[1] : "";
 }
 
 
