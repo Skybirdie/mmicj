@@ -903,7 +903,9 @@ async function renderSlideshow(item,token){
         }
 
         try{
-            if(!window.pdfjsLib){
+            /* No waiting here on purpose: if pdf.js is not fully ready (worker
+               configured) the door falls back to its thumbnail immediately. */
+            if(!(typeof window.pdfjsUsable==="function"?window.pdfjsUsable():window.pdfjsLib)){
                 throw new Error("PDF.js unavailable");
             }
 
@@ -1274,7 +1276,7 @@ cleanupFn=()=>{
             await draw(delta>0?1:-1);
         }
         try{
-            if(!window.pdfjsLib)throw new Error("PDF.js unavailable");
+            if(!(typeof window.pdfjsUsable==="function"?window.pdfjsUsable():window.pdfjsLib))throw new Error("PDF.js unavailable");
             const url=item.raw.pdf||item.raw.media||item.raw.url||item.raw.PDF||""; if(!url)throw new Error("PDF URL missing");
 
             /* See the other pdfjsLib.getDocument() call above in this
