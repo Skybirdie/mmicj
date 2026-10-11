@@ -611,13 +611,13 @@ AppSwitcher marks the active section.
    top and bottom; side padding keeps text inside the chord). Long titles
    truncate with an ellipsis instead of spilling out of the region. */
 .video-circle-overlay{
-    padding:50% 11% 0;
+    padding:40% 11% 10%;
 }
 .video-circle-title{
     display:-webkit-box;
     -webkit-box-orient:vertical;
-    -webkit-line-clamp:2;
-    line-clamp:2;
+    -webkit-line-clamp:1;
+    line-clamp:1;
     max-width:100%;
     min-height:0;
     overflow:hidden;
