@@ -67,9 +67,25 @@ window.pdfjsReady = new Promise(function (resolve) {
  * resolves to true/false and never hangs, so they can fall back to
  * their existing "PDF engine unavailable" handling instead of hanging.
  */
+/*
+ * pdf.js's own module sets globalThis.pdfjsLib the moment pdf.min.mjs is
+ * evaluated - BEFORE the loader below has imported pdf_viewer.mjs and
+ * assigned GlobalWorkerOptions.workerSrc. A bare `if(window.pdfjsLib)` check
+ * therefore passes too early, and getDocument() throws
+ * 'No "GlobalWorkerOptions.workerSrc" specified'. pdfjsUsable() is true only
+ * once the worker is actually configured (reading workerSrc throws if unset).
+ */
+window.pdfjsUsable = function () {
+    if (!window.pdfjsLib) return false;
+    try {
+        return !!window.pdfjsLib.GlobalWorkerOptions.workerSrc;
+    } catch (error) {
+        return false;
+    }
+};
 window.waitForPdfjs = function (timeoutMs) {
     timeoutMs = timeoutMs || 8000;
-    if (window.pdfjsLib) return Promise.resolve(true);
+    if (window.pdfjsUsable()) return Promise.resolve(true);
     return Promise.race([
         window.pdfjsReady.then(function () { return true; }),
         new Promise(function (resolve) {
@@ -101,15 +117,15 @@ const needsLegacy=
 
 async function loadStandard(){
     const lib=await import(CDNJS_BASE+"pdf.min.mjs");
-    const viewer=await import(CDNJS_BASE+"pdf_viewer.mjs");
     lib.GlobalWorkerOptions.workerSrc=CDNJS_BASE+"pdf.worker.min.mjs";
+    const viewer=await import(CDNJS_BASE+"pdf_viewer.mjs");
     return {lib,viewer};
 }
 
 async function loadLegacy(){
     const lib=await import(LEGACY_BASE+"build/pdf.min.mjs");
-    const viewer=await import(LEGACY_BASE+"web/pdf_viewer.mjs");
     lib.GlobalWorkerOptions.workerSrc=LEGACY_BASE+"build/pdf.worker.min.mjs";
+    const viewer=await import(LEGACY_BASE+"web/pdf_viewer.mjs");
     return {lib,viewer};
 }
 
@@ -711,9 +727,9 @@ stroke-linecap="round"/>
 <script src="js/audio.js?v=2.1.0"></script>
 <script src="js/pdfengine.js"></script>
 <script src="js/bookStack.js?v=2.3"></script>
-<script src="js/sky180flipengine.js?v=1.6.6"></script>
+<script src="js/sky180flipengine.js?v=1.6.7"></script>
 <script src="js/loadingSequence.js"></script>
-<script src="js/renderer.js?v=3.2.13"></script>
+<script src="js/renderer.js?v=3.2.14"></script>
 <script src="js/reader.js"></script>
 <script src="js/navigation.js?v=n2"></script>
 <script src="js/bookmarkPanel.js"></script>
@@ -739,7 +755,7 @@ stroke-linecap="round"/>
 <script src="js/zoomController.js"></script>
 <script src="js/slideshowViewer.js?v=4.4.2"></script>
 <script src="js/slideshowUI.js"></script>
-<script src="js/frontMediaRenderer.js?v=4.2.1"></script>
+<script src="js/frontMediaRenderer.js?v=4.2.2"></script>
 <script src="js/frontPage.js?v=4.3.1"></script>
 <script src="js/frontShare.js?v=2.1.3"></script>
 <script src="js/releaseNotification.js?v=1.1.0"></script>
