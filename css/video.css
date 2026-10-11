@@ -555,7 +555,7 @@ AppSwitcher marks the active section.
         linear-gradient(
             to bottom,
             rgba(0,0,0,.04),
-            rgba(0,0,0,.70)
+            rgba(0,0,0,.30)
         );
 
 }
@@ -573,11 +573,11 @@ AppSwitcher marks the active section.
 /* Scale the title with the three circle sizes while keeping it legible. */
 .video-circle-size-1 .video-circle-title{
     max-width:78%;
-    font-size:18px;
+    font-size:13px;
 }
 .video-circle-size-2 .video-circle-title{
     max-width:80%;
-    font-size:14px;
+    font-size:12px;
 }
 .video-circle-size-3 .video-circle-title{
     max-width:80%;
@@ -611,7 +611,7 @@ AppSwitcher marks the active section.
    top and bottom; side padding keeps text inside the chord). Long titles
    truncate with an ellipsis instead of spilling out of the region. */
 .video-circle-overlay{
-    padding:20% 11%;
+    padding:50% 11% 0;
 }
 .video-circle-title{
     display:-webkit-box;
@@ -625,8 +625,8 @@ AppSwitcher marks the active section.
     text-overflow:ellipsis;
 }
 .video-circle-title:last-child{
-    -webkit-line-clamp:3;
-    line-clamp:3;
+    -webkit-line-clamp:1;
+    line-clamp:1;
 }
 .video-circle-size-1 .video-circle-title,
 .video-circle-size-2 .video-circle-title,
@@ -634,12 +634,12 @@ AppSwitcher marks the active section.
     max-width:100%;
 }
 .video-circle-size-1 .video-circle-title{
-    -webkit-line-clamp:3;
-    line-clamp:3;
+    -webkit-line-clamp:1;
+    line-clamp:1;
 }
 .video-circle-size-1 .video-circle-title:last-child{
-    -webkit-line-clamp:4;
-    line-clamp:4;
+    -webkit-line-clamp:1;
+    line-clamp:1;
 }
 .video-circle-size-3 .video-circle-title,
 .video-circle-size-3 .video-circle-title:last-child{
