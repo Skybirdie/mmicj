@@ -47,18 +47,28 @@
   /*
    * ASSETS
    *
-   * run_worker_first stays false. Requests that match a file
+   * run_worker_first is NOT true. Requests that match a file
    * in this directory are served straight from Cloudflare's
    * asset layer and never invoke the Worker, so they are free
    * and unlimited. Setting it to true would route every
    * stylesheet, script, image and audio file through the
    * Worker and bill each one.
+   *
+   * The one exception is the base URL itself ("/"). It must pass
+   * through the Worker so the link-preview tags (the Front Page
+   * centerpiece thumbnail, or assets/base-logo.jpg) can be added
+   * to the page. The pattern is exact: it does not match
+   * /index.html, /assets/..., /js/... or any other file. Costs one
+   * Worker request per load of the base URL.
+   *
+   * To switch the dynamic base preview off again, set this back
+   * to false (the page then serves with no preview tags).
    */
 
   "assets": {
     "directory": ".",
     "binding": "ASSETS",
-    "run_worker_first": false
+    "run_worker_first": ["/"]
   },
 
   "kv_namespaces": [

@@ -40,6 +40,87 @@ const OG_IMAGE_PATH =
   "/__sky_og_image";
 
 /* =========================================================
+   BASE URL PREVIEW  ( https://<this worker>/ )
+
+   The base URL's link card uses the thumbnail of the item that
+   is currently the Front Page centerpiece (see resolveDoors() in
+   js/frontPage.js), badged with the logo exactly like the
+   per-item /s/<section>/<id> cards.
+
+   When there is no usable centerpiece item (no snapshot yet,
+   nothing visible, no absolute thumbnail, or the thumbnail cannot
+   be loaded) the card uses assets/base-logo.jpg instead.
+========================================================= */
+
+const BASE_LOGO_PATH =
+  "/assets/base-logo.jpg";
+
+/* Pixel size of assets/base-logo.jpg (it is square). Only used for
+   the og:image:width / og:image:height hints. */
+const BASE_LOGO_SIZE =
+  1500;
+
+const BASE_PREVIEW_TITLE =
+  "Meditation Mornings in Christ Jesus";
+
+/* Item release dates (YYYYMMDDHHmm) are compared against "now" in
+   this time zone, because the browser compares them against the
+   viewer's local clock. Change it if releases are scheduled in
+   another zone. */
+const BASE_PREVIEW_TIMEZONE =
+  "America/Port_of_Spain";
+
+/* Same seven-category fallback as DEFAULT_CATEGORIES in
+   js/frontPage.js. A frontPage.categories list of exactly seven
+   values inside the catalog snapshot overrides it, as in the app. */
+const BASE_PREVIEW_CATEGORIES = [
+  "Book Club",
+  "Affirmations",
+  "Feed My Sheep",
+  "BYOB",
+  "Sayings",
+  "Meditation",
+  "Testimonies"
+];
+
+/* The chosen centerpiece is remembered per isolate for this long,
+   so a burst of visits / crawlers costs no extra KV reads. */
+const BASE_PREVIEW_MEMORY_TTL_MS =
+  60000;
+
+/* =========================================================
+   COMPOSED OG IMAGE STORE (KV)
+
+   The Images binding bills every compose, and workers.dev has no
+   edge cache for Worker-made responses, so each finished preview
+   image is kept in KV and served from there afterwards.
+
+   The key is derived from the thumbnail URL (plus the logo and a
+   format version), so a changed thumbnail finds no stored copy and
+   is composed again, while an unchanged one costs a KV read only.
+   Applies to item links and the base link alike.
+
+   - Bump OG_CACHE_VERSION to force every preview to be rebuilt
+     (e.g. after changing the logo badge position or size).
+   - Copies expire after OG_CACHE_TTL_SECONDS, which also clears
+     out the copies of thumbnails that were replaced.
+   - A thumbnail replaced IN PLACE (same URL, new picture) is not
+     noticed until that expiry or a version bump.
+========================================================= */
+
+const OG_CACHE_PREFIX =
+  "og:v1:";
+
+const OG_CACHE_VERSION =
+  "1";
+
+const OG_CACHE_TTL_SECONDS =
+  60 * 60 * 24 * 30;
+
+const OG_CACHE_CONTROL =
+  "public, max-age=86400, stale-while-revalidate=604800";
+
+/* =========================================================
    PDF RANGE PROXY
 
    Book PDFs are hosted on the Glide GCS bucket — a different
@@ -2252,9 +2333,125 @@ async function serveCatalogShare(
    OG IMAGE
 ========================================================= */
 
+async function ogCacheKey(
+  thumbnailUrl
+) {
+  return (
+    OG_CACHE_PREFIX +
+    (
+      await sha256Hex(
+        OG_CACHE_VERSION +
+        "\n" +
+        thumbnailUrl +
+        "\n" +
+        OG_LOGO
+      )
+    ).slice(
+      0,
+      40
+    )
+  );
+}
+
+/* A previously composed image, as a Response, or null. Never throws. */
+async function readStoredOgImage(
+  env,
+  cacheKey
+) {
+  try {
+    const bytes =
+      await env.MEDIA_KV.get(
+        cacheKey,
+        {
+          type:
+            "arrayBuffer",
+
+          /* The key changes whenever the picture should, so the
+             stored bytes never go stale. */
+          cacheTtl:
+            3600
+        }
+      );
+
+    if (
+      !bytes ||
+      !bytes.byteLength
+    ) {
+      return null;
+    }
+
+    return new Response(
+      bytes,
+      {
+        status:
+          200,
+
+        headers: {
+          "Content-Type":
+            "image/webp",
+
+          "Cache-Control":
+            OG_CACHE_CONTROL
+        }
+      }
+    );
+  } catch (error) {
+    logLimited(
+      "warn",
+      "og-store-read",
+      "MMicjMedia stored OG image read failed; composing instead:",
+      error
+    );
+
+    return null;
+  }
+}
+
+/* Saves a composed image. Never throws, never delays the response
+   when waitUntil is available. */
+function storeOgImage(
+  env,
+  ctx,
+  cacheKey,
+  bytes
+) {
+  const write =
+    env.MEDIA_KV.put(
+      cacheKey,
+      bytes,
+      {
+        expirationTtl:
+          OG_CACHE_TTL_SECONDS
+      }
+    ).catch(
+      error =>
+        logLimited(
+          "warn",
+          "og-store-write",
+          "MMicjMedia OG image could not be stored:",
+          error
+        )
+    );
+
+  if (
+    ctx &&
+    typeof ctx.waitUntil ===
+      "function"
+  ) {
+    ctx.waitUntil(
+      write
+    );
+
+    return undefined;
+  }
+
+  return write;
+}
+
 async function serveOgImage(
   request,
-  env
+  env,
+  ctx
 ) {
   if (!env.IMAGES) {
     return new Response(
@@ -2460,6 +2657,21 @@ async function serveOgImage(
       OG_DEFAULT_THUMBNAIL;
   }
 
+  const cacheKey =
+    await ogCacheKey(
+      thumbnailUrl
+    );
+
+  const stored =
+    await readStoredOgImage(
+      env,
+      cacheKey
+    );
+
+  if (stored) {
+    return stored;
+  }
+
   const OG_SOURCE_FETCH = {
     cf: {
       cacheTtl:
@@ -2469,6 +2681,9 @@ async function serveOgImage(
         true
     }
   };
+
+  let usedFallbackThumbnail =
+    false;
 
   let baseResponse =
     await fetch(
@@ -2484,6 +2699,9 @@ async function serveOgImage(
       thumbnailUrl !==
       OG_DEFAULT_THUMBNAIL
     ) {
+      usedFallbackThumbnail =
+        true;
+
       baseResponse =
         await fetch(
           OG_DEFAULT_THUMBNAIL,
@@ -2543,11 +2761,54 @@ async function serveOgImage(
     thumbnailUrl;
 
   try {
-    return await composeOgImage(
-      env,
-      baseResponse,
-      logoResponse
-    );
+    const composed =
+      await composeOgImage(
+        env,
+        baseResponse,
+        logoResponse
+      );
+
+    /* Keep it for next time, but never pin the stand-in picture
+       used when the real thumbnail could not be loaded: it would
+       outlive the outage. */
+    if (
+      composed.ok &&
+      !usedFallbackThumbnail
+    ) {
+      try {
+        const bytes =
+          await composed
+            .clone()
+            .arrayBuffer();
+
+        if (
+          bytes.byteLength
+        ) {
+          const pending =
+            storeOgImage(
+              env,
+              ctx,
+              cacheKey,
+              bytes
+            );
+
+          if (
+            pending
+          ) {
+            await pending;
+          }
+        }
+      } catch (error) {
+        logLimited(
+          "warn",
+          "og-store",
+          "MMicjMedia OG image store step failed:",
+          error
+        );
+      }
+    }
+
+    return composed;
   } catch (error) {
     logLimited(
       "warn",
@@ -2670,7 +2931,7 @@ async function composeOgImage(
     {
       headers: {
         "Cache-Control":
-          "public, max-age=86400, stale-while-revalidate=604800"
+          OG_CACHE_CONTROL
       }
     }
   );
@@ -4987,6 +5248,673 @@ if (storedCount > 0) {
 }
 
 /* =========================================================
+   BASE URL PREVIEW (handlers)
+========================================================= */
+
+let basePreviewMemo =
+  null;
+
+/* "now" as YYYYMMDDHHmm in BASE_PREVIEW_TIMEZONE. */
+function baseNowKey(
+  date = new Date()
+) {
+  const parts =
+    new Intl.DateTimeFormat(
+      "en-CA",
+      {
+        timeZone:
+          BASE_PREVIEW_TIMEZONE,
+
+        year:
+          "numeric",
+
+        month:
+          "2-digit",
+
+        day:
+          "2-digit",
+
+        hour:
+          "2-digit",
+
+        minute:
+          "2-digit",
+
+        hourCycle:
+          "h23"
+      }
+    ).formatToParts(
+      date
+    );
+
+  const p = {};
+
+  for (
+    const part of
+    parts
+  ) {
+    p[part.type] =
+      part.value;
+  }
+
+  return (
+    p.year +
+    p.month +
+    p.day +
+    p.hour +
+    p.minute
+  );
+}
+
+/* Same rules as SkyDate.key() / SkyDate.validKey() in
+   js/dateVisibility.js. Returns "" for a missing or invalid date. */
+function baseDateKey(
+  value
+) {
+  let d =
+    String(
+      value ?? ""
+    )
+      .trim()
+      .replace(
+        /[^0-9]/g,
+        ""
+      );
+
+  if (
+    /^\d{8}$/.test(
+      d
+    )
+  ) {
+    d += "0000";
+  }
+
+  if (
+    !/^\d{12}$/.test(
+      d
+    )
+  ) {
+    return "";
+  }
+
+  const y =
+    Number(d.slice(0, 4));
+
+  const mo =
+    Number(d.slice(4, 6));
+
+  const day =
+    Number(d.slice(6, 8));
+
+  const h =
+    Number(d.slice(8, 10));
+
+  const mi =
+    Number(d.slice(10, 12));
+
+  if (
+    mo < 1 ||
+    mo > 12 ||
+    day < 1 ||
+    h > 23 ||
+    mi > 59
+  ) {
+    return "";
+  }
+
+  const daysInMonth =
+    new Date(
+      Date.UTC(
+        y,
+        mo,
+        0
+      )
+    ).getUTCDate();
+
+  return day > daysInMonth
+    ? ""
+    : d;
+}
+
+/*
+ * Mirrors resolveDoors() in js/frontPage.js: the newest visible item
+ * of each of the seven categories, and of those seven the newest one
+ * is the centerpiece. Ties go to the earlier item, as in the app.
+ */
+function pickBaseCenterpiece(
+  snapshot,
+  nowKey
+) {
+  const items =
+    Array.isArray(
+      snapshot?.content
+    )
+      ? snapshot.content
+      : [];
+
+  const configured =
+    Array.isArray(
+      snapshot?.frontPage?.categories
+    )
+      ? snapshot.frontPage.categories
+          .map(
+            value =>
+              cleanString(
+                value
+              )
+          )
+          .filter(
+            Boolean
+          )
+      : [];
+
+  const categories =
+    configured.length === 7
+      ? configured
+      : BASE_PREVIEW_CATEGORIES;
+
+  const visible =
+    [];
+
+  for (
+    const item of
+    items
+  ) {
+    const category =
+      cleanString(
+        item?.category
+      ).toLowerCase();
+
+    const date =
+      baseDateKey(
+        item?.date
+      );
+
+    if (
+      !category ||
+      !date ||
+      date > nowKey
+    ) {
+      continue;
+    }
+
+    visible.push({
+      item,
+      category,
+      date
+    });
+  }
+
+  let best =
+    null;
+
+  for (
+    const name of
+    categories
+  ) {
+    const wanted =
+      name.toLowerCase();
+
+    let categoryBest =
+      null;
+
+    for (
+      const entry of
+      visible
+    ) {
+      if (
+        entry.category ===
+          wanted &&
+        (
+          !categoryBest ||
+          entry.date >
+            categoryBest.date
+        )
+      ) {
+        categoryBest =
+          entry;
+      }
+    }
+
+    if (
+      categoryBest &&
+      (
+        !best ||
+        categoryBest.date >
+          best.date
+      )
+    ) {
+      best =
+        categoryBest;
+    }
+  }
+
+  return best
+    ? best.item
+    : null;
+}
+
+/* The catalog snapshot text, through the same per-isolate memory the
+   /__sky_catalog route uses (so the two share one KV read a minute). */
+async function getCatalogSnapshotText(
+  env
+) {
+  const now =
+    Date.now();
+
+  if (
+    catalogSnapshotMemo &&
+    now -
+      catalogSnapshotMemo.at <
+      CATALOG_SNAPSHOT_MEMORY_TTL_MS
+  ) {
+    return catalogSnapshotMemo.value;
+  }
+
+  try {
+    const stored =
+      await env.MEDIA_KV.getWithMetadata(
+        CATALOG_SNAPSHOT_KEY
+      );
+
+    if (
+      !stored ||
+      stored.value === null
+    ) {
+      return catalogSnapshotMemo
+        ? catalogSnapshotMemo.value
+        : null;
+    }
+
+    const hash =
+      stored.metadata?.hash
+        ? String(
+            stored.metadata.hash
+          )
+        : await sha256Hex(
+            stored.value
+          );
+
+    catalogSnapshotMemo = {
+      value:
+        stored.value,
+
+      etag:
+        '"' +
+        hash.slice(
+          0,
+          32
+        ) +
+        '"',
+
+      at:
+        now
+    };
+
+    return stored.value;
+  } catch (error) {
+    logLimited(
+      "error",
+      "base-preview-snapshot-kv",
+      "MMicjMedia base preview snapshot KV read failure:",
+      error
+    );
+
+    return catalogSnapshotMemo
+      ? catalogSnapshotMemo.value
+      : null;
+  }
+}
+
+/* The current Front Page centerpiece item, or null. Never throws. */
+async function getBaseCenterpiece(
+  env
+) {
+  const now =
+    Date.now();
+
+  if (
+    basePreviewMemo &&
+    now -
+      basePreviewMemo.at <
+      BASE_PREVIEW_MEMORY_TTL_MS
+  ) {
+    return basePreviewMemo.item;
+  }
+
+  let item =
+    null;
+
+  try {
+    const text =
+      await getCatalogSnapshotText(
+        env
+      );
+
+    if (text) {
+      item =
+        pickBaseCenterpiece(
+          JSON.parse(
+            text
+          ),
+          baseNowKey()
+        );
+    }
+  } catch (error) {
+    logLimited(
+      "warn",
+      "base-preview-pick",
+      "MMicjMedia base preview could not choose a centerpiece:",
+      error
+    );
+  }
+
+  basePreviewMemo = {
+    item,
+    at:
+      now
+  };
+
+  return item;
+}
+
+function buildBaseOgTags(
+  origin,
+  item
+) {
+  const section =
+    item
+      ? sectionFromItem(
+          item
+        )
+      : "";
+
+  const id =
+    item
+      ? cleanString(
+          item.id
+        )
+      : "";
+
+  const thumbnail =
+    item
+      ? cleanMediaUrl(
+          item.thumbnail
+        )
+      : "";
+
+  let imageUrl;
+  let width;
+  let height;
+
+  /* Only an absolute http(s) thumbnail can be composed by the OG
+     image route; anything else goes straight to the fallback. */
+  if (
+    section &&
+    isPlausibleShareTarget(
+      section,
+      id
+    ) &&
+    /^https?:\/\//i.test(
+      thumbnail
+    )
+  ) {
+    const image =
+      new URL(
+        OG_IMAGE_PATH,
+        origin
+      );
+
+    image.searchParams.set(
+      "section",
+      section
+    );
+
+    image.searchParams.set(
+      "id",
+      id
+    );
+
+    image.searchParams.set(
+      "base",
+      "1"
+    );
+
+    imageUrl =
+      image.toString();
+
+    width =
+      1200;
+
+    height =
+      630;
+  } else {
+    imageUrl =
+      origin +
+      BASE_LOGO_PATH;
+
+    width =
+      BASE_LOGO_SIZE;
+
+    height =
+      BASE_LOGO_SIZE;
+  }
+
+  const pageUrl =
+    origin +
+    "/";
+
+  return (
+    `<meta property="og:type" content="website">` +
+    `<meta property="og:title" content="${escapeHtml(BASE_PREVIEW_TITLE)}">` +
+    `<meta property="og:site_name" content="${escapeHtml(OG_SITE_NAME)}">` +
+    `<meta property="og:url" content="${escapeHtml(pageUrl)}">` +
+    `<meta property="og:image" content="${escapeHtml(imageUrl)}">` +
+    `<meta property="og:image:width" content="${width}">` +
+    `<meta property="og:image:height" content="${height}">` +
+    `<meta name="twitter:card" content="summary_large_image">`
+  );
+}
+
+/*
+ * GET / : the normal application page with the preview tags added.
+ *
+ * Any failure serves the plain page exactly as before this existed,
+ * and links carrying a Glide contract (?contractz=, ?contract=, ?k=)
+ * are passed straight through untouched.
+ */
+async function serveBasePage(
+  request,
+  env
+) {
+  const url =
+    new URL(
+      request.url
+    );
+
+  if (
+    url.searchParams.has(
+      "contractz"
+    ) ||
+    url.searchParams.has(
+      "contract"
+    ) ||
+    url.searchParams.has(
+      "k"
+    )
+  ) {
+    return env.ASSETS.fetch(
+      request
+    );
+  }
+
+  try {
+    let assetResponse =
+      null;
+
+    for (
+      const path of
+      [
+        "/index.html",
+        "/"
+      ]
+    ) {
+      const candidate =
+        await env.ASSETS.fetch(
+          new Request(
+            new URL(
+              path,
+              url.origin
+            ).toString(),
+            {
+              method:
+                "GET"
+            }
+          )
+        );
+
+      if (
+        candidate.ok
+      ) {
+        assetResponse =
+          candidate;
+
+        break;
+      }
+    }
+
+    if (
+      !assetResponse
+    ) {
+      return env.ASSETS.fetch(
+        request
+      );
+    }
+
+    const item =
+      await getBaseCenterpiece(
+        env
+      );
+
+    const tags =
+      buildBaseOgTags(
+        url.origin,
+        item
+      );
+
+    const transformed =
+      new HTMLRewriter()
+        .on(
+          "head",
+          {
+            element(
+              element
+            ) {
+              element.append(
+                tags,
+                {
+                  html:
+                    true
+                }
+              );
+            }
+          }
+        )
+        .transform(
+          assetResponse
+        );
+
+    return new Response(
+      transformed.body,
+      {
+        status:
+          200,
+
+        headers: {
+          "content-type":
+            "text/html; charset=UTF-8",
+
+          "cache-control":
+            "public, max-age=0, must-revalidate"
+        }
+      }
+    );
+  } catch (error) {
+    logLimited(
+      "error",
+      "base-page",
+      "MMicjMedia base page preview failed; serving the plain page:",
+      error
+    );
+
+    return env.ASSETS.fetch(
+      request
+    );
+  }
+}
+
+/*
+ * The base URL's preview image: the existing OG image route, except
+ * that any failure sends the crawler to assets/base-logo.jpg instead
+ * of an error page or the Glide default thumbnail.
+ */
+async function serveBaseOgImage(
+  request,
+  env,
+  ctx
+) {
+  const fallback =
+    new Response(
+      null,
+      {
+        status:
+          302,
+
+        headers: {
+          "Location":
+            new URL(
+              BASE_LOGO_PATH,
+              request.url
+            ).toString(),
+
+          "Cache-Control":
+            "public, max-age=300"
+        }
+      }
+    );
+
+  try {
+    const response =
+      await serveOgImage(
+        request,
+        env,
+        ctx
+      );
+
+    return (
+      response.ok ||
+      (
+        response.status >=
+          300 &&
+        response.status <
+          400
+      )
+    )
+      ? response
+      : fallback;
+  } catch (error) {
+    logLimited(
+      "warn",
+      "base-og-image",
+      "MMicjMedia base preview image failed; using the base logo:",
+      error
+    );
+
+    return fallback;
+  }
+}
+
+/* =========================================================
    WORKER
 ========================================================= */
 
@@ -5010,7 +5938,42 @@ export default {
       url.pathname ===
       OG_IMAGE_PATH
     ) {
+      if (
+        url.searchParams.get(
+          "base"
+        ) === "1"
+      ) {
+        return serveBaseOgImage(
+          request,
+          env,
+          ctx
+        );
+      }
+
       return serveOgImage(
+        request,
+        env,
+        ctx
+      );
+    }
+
+    /* -----------------------------------------------------
+       Base URL (needs run_worker_first: ["/"] in
+       wrangler.jsonc, otherwise the asset layer answers
+       "/" before the Worker is ever invoked)
+    ----------------------------------------------------- */
+
+    if (
+      url.pathname ===
+        "/" &&
+      (
+        request.method ===
+          "GET" ||
+        request.method ===
+          "HEAD"
+      )
+    ) {
+      return serveBasePage(
         request,
         env
       );
