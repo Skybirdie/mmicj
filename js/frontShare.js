@@ -1,5 +1,5 @@
 /* =========================================================
-   Front Page share button + share panel  (js/frontShare.js  v2.1.0)
+   Front Page share button + share panel  (js/frontShare.js  v2.2.0)
 
    A plain "share this link" button that lives on the Front Page only,
    with its own share panel that resembles the browser's share sheet.
@@ -32,6 +32,15 @@
         then opens Instagram so it can be pasted into a message or story.
      5. Closing the native sheet, or the panel, does nothing else.
 
+   Link card
+     SHARE_URL is the app's own base URL. When that link is pasted or
+     shared, the Worker serves it with preview tags (see serveBasePage
+     in worker.js): the Front Page centerpiece item's thumbnail with the
+     logo badge, or assets/base-logo.jpg when there is none. The
+     browser's own share command shares the page address, so it gets the
+     same card whenever the app is opened directly at that address.
+     (Inside Glide's iframe the browser shares Glide's address instead.)
+
    The button itself is markup inside #frontPage (index.html) and the
    panel is created inside #frontPage too, so both are shown and hidden
    by the Front Page's own app-section-active / app-section-hidden state.
@@ -39,10 +48,10 @@
 (function(){
     "use strict";
 
-    const SHARE_URL   = "https://meditationmornings.glide.page";
+    const SHARE_URL   = "https://mmicj.meditation-mornings-icj.workers.dev/";
     const SHARE_TITLE = "Meditation Mornings";
     const SHARE_TEXT  = "Meditation Mornings in Christ Jesus";
-    const SHARE_LOGO  = "assets/logo.png";
+    const SHARE_LOGO  = "assets/base-logo.jpg";
 
     /* Same image and on-screen time as the app's other share links
        (see LINK_COPIED_* in shareManager.js). Its own element, so this
@@ -273,6 +282,29 @@
     ];
 
     /* ---------------------------------------------------------
+       Centerpiece thumbnail
+
+       The Front Page centerpiece is the newest visible item
+       (FrontPage.resolveDoors). The Worker applies the same rule
+       when it builds the base URL's link card, so the panel
+       preview and the card agree. Returns "" when unavailable or
+       when it is only the app's generic placeholder.
+       --------------------------------------------------------- */
+    function centerpieceThumbnail(){
+        try{
+            if(!window.FrontPage || typeof FrontPage.resolveDoors !== "function") return "";
+            const doors = FrontPage.resolveDoors();
+            const thumb = doors && doors.center && doors.center.item
+                ? String(doors.center.item.thumbnail || "").trim()
+                : "";
+            if(!thumb || /(^|\/)default-thumbnail\.png(\?|$)/.test(thumb)) return "";
+            return thumb;
+        }catch(_){
+            return "";
+        }
+    }
+
+    /* ---------------------------------------------------------
        Panel
        --------------------------------------------------------- */
     function buildPanel(){
@@ -318,11 +350,19 @@
         const preview = document.createElement("div");
         preview.className = "frontSharePreview";
 
+        /* Same picture the link card will show: the Front Page
+           centerpiece item's thumbnail, else assets/base-logo.jpg. */
         const logo = document.createElement("img");
-        logo.src = SHARE_LOGO;
         logo.alt = "";
         logo.draggable = false;
-        logo.addEventListener("error", ()=>{ logo.style.visibility = "hidden"; });
+        logo.addEventListener("error", ()=>{
+            if(logo.getAttribute("src") !== SHARE_LOGO){
+                logo.src = SHARE_LOGO;
+            }else{
+                logo.style.visibility = "hidden";
+            }
+        });
+        logo.src = centerpieceThumbnail() || SHARE_LOGO;
 
         const meta = document.createElement("div");
         meta.className = "frontSharePreviewText";
@@ -429,6 +469,16 @@
 
     function openPanel(){
         if(!panel && !buildPanel()) return;
+
+        /* The centerpiece can change while the app stays open. */
+        const previewImg = panel.querySelector(".frontSharePreview img");
+        if(previewImg){
+            const next = centerpieceThumbnail() || SHARE_LOGO;
+            if(previewImg.getAttribute("src") !== next){
+                previewImg.style.visibility = "";
+                previewImg.src = next;
+            }
+        }
 
         panel.classList.add("is-open");
         panel.setAttribute("aria-hidden", "false");
