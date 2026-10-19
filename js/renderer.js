@@ -107,6 +107,13 @@ function progress(percent,text){
 /* Must match PDF_PROXY_PATH in worker.js. */
 const PDF_PROXY_PATH="/__sky_pdf_proxy";
 
+/* ONLY these hosts are routed through the Worker proxy (they are the ones that
+   hide Accept-Ranges / Content-Length from the browser). Must stay inside
+   PDF_PROXY_ALLOWED_HOSTS in worker.js. Every other cross-origin PDF, notably the
+   R2 bucket's own domain whose CORS rule exposes those headers, is read DIRECTLY
+   by PDF.js: no Worker request at all, and R2 reads only. */
+const PDF_PROXY_HOSTS=["storage.googleapis.com"];
+
 async function resolvePdfUrl(value){
     const raw=String(value||"").trim();
     if(!raw) throw new Error("Book is missing a PDF URL.");
@@ -126,7 +133,8 @@ async function resolvePdfUrl(value){
     if(/^(?:https?:)/i.test(raw)){
         try{
             const parsed=new URL(raw);
-            if(parsed.origin!==window.location.origin){
+            if(parsed.origin!==window.location.origin
+                && PDF_PROXY_HOSTS.includes(parsed.hostname)){
                 return window.location.origin+PDF_PROXY_PATH+"?src="+encodeURIComponent(raw);
             }
         }catch(error){

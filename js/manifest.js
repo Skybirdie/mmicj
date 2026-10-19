@@ -9,8 +9,10 @@
 
  Source priority:
    1. Glide contract (?contractz= / ?contract= / injected global)
-   2. Catalog snapshot published by the Worker (/__sky_catalog)
-   3. content.json
+   2. Published catalog in R2 (catalog/published.json), written by
+      the admin portal. Controlled by Manifest.published.mode.
+   3. Catalog snapshot published by the Worker (/__sky_catalog)
+   4. content.json
 
  A usable Glide contract is used exactly as before and the
  snapshot is never requested. The snapshot is only asked for when
@@ -149,6 +151,141 @@ window.Manifest = {
         }
     },
 
+    /*
+    -------------------------------------------------------
+     Published catalog in R2 (written by the admin portal)
+
+     One public file, read straight from the bucket's custom
+     domain: no Worker request and no KV read. Same shape as
+     content.json: { version, content: [...], frontPage, keep }.
+     The portal stores it with Cache-Control max-age=300, so the
+     browser and Cloudflare's cache absorb repeat opens.
+
+     mode:
+       "off"   never used (the app behaves exactly as before)
+       "pilot" used only when the address has ?catalog=r2
+               (e.g. https://mmicj.com/?catalog=r2) - for testing
+       "on"    used whenever there is no usable Glide contract
+
+     If the file cannot be read, or holds no items, the next
+     source (snapshot, then content.json) is used automatically.
+     The last good copy is kept in localStorage as an outage
+     fallback, same as the snapshot.
+    -------------------------------------------------------
+    */
+
+    published: {
+        mode: "pilot",
+        url: "https://media.mmicj.com/catalog/published.json",
+        storageKey: "skymedia-published-catalog-v1",
+        timeoutMs: 8000,
+
+        enabled() {
+            if (this.mode === "on") return true;
+            if (this.mode !== "pilot") return false;
+
+            try {
+                return new URLSearchParams(window.location.search)
+                    .get("catalog") === "r2";
+            } catch (error) {
+                return false;
+            }
+        },
+
+        _valid(data) {
+            return !!(
+                data &&
+                typeof data === "object" &&
+                Array.isArray(data.content) &&
+                data.content.length
+            );
+        },
+
+        _readCache() {
+            try {
+                const saved = JSON.parse(
+                    localStorage.getItem(this.storageKey) || "null"
+                );
+
+                return saved && this._valid(saved.data)
+                    ? saved
+                    : null;
+            } catch (error) {
+                return null;
+            }
+        },
+
+        _writeCache(data) {
+            try {
+                localStorage.setItem(
+                    this.storageKey,
+                    JSON.stringify({ savedAt: Date.now(), data })
+                );
+            } catch (error) {
+                /* Storage blocked or full: the cache is optional. */
+            }
+        },
+
+        async load() {
+            const controller =
+                typeof AbortController === "function"
+                    ? new AbortController()
+                    : null;
+
+            const timer = controller
+                ? setTimeout(() => controller.abort(), this.timeoutMs)
+                : null;
+
+            try {
+                const response = await fetch(
+                    this.url,
+                    controller ? { signal: controller.signal } : undefined
+                );
+
+                if (!response.ok) {
+                    throw new Error(
+                        "Published catalog request failed (" +
+                        response.status +
+                        ")."
+                    );
+                }
+
+                const data = await response.json();
+
+                if (!this._valid(data)) {
+                    throw new Error(
+                        "Published catalog contained no items."
+                    );
+                }
+
+                this._writeCache(data);
+
+                return data;
+
+            } catch (error) {
+                const cached = this._readCache();
+
+                if (cached) {
+                    console.warn(
+                        "[Manifest] Published catalog unavailable; using the copy saved on " +
+                        new Date(cached.savedAt).toISOString() +
+                        ".",
+                        error
+                    );
+
+                    return cached.data;
+                }
+
+                throw error;
+
+            } finally {
+                if (timer) {
+                    clearTimeout(timer);
+                }
+            }
+        }
+    },
+
     _data: null,
     _sourceLabel: "",
 
@@ -163,6 +300,10 @@ window.Manifest = {
 
         if (GlideContract.available()) {
             sources.push(["Glide contract", () => GlideContract.load()]);
+        }
+
+        if (this.published.enabled()) {
+            sources.push(["published catalog (R2)", () => this.published.load()]);
         }
 
         sources.push(["catalog snapshot", () => this.snapshot.load()]);

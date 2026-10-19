@@ -358,6 +358,20 @@ window.GlideContract = (function () {
         }
 
         /*
+         One quoted CSV cell PER ITEM:  {""id"":""a""}","{""id"":""b""}
+         (no outer quotes at the very start/end). Glue the items
+         back into plain {...},{...} text and un-double the quotes.
+        */
+        if (/\}\s*"\s*,\s*"\s*\{/.test(normalized)) {
+
+            normalized = normalized
+                .replace(/^\s*"/, "")
+                .replace(/"\s*$/, "")
+                .replace(/\}\s*"\s*,\s*"\s*\{/g, "},{")
+                .replace(/""/g, '"');
+        }
+
+        /*
          Remove outer quoted-string wrapping sometimes
          introduced by Glide.
         */
@@ -376,6 +390,26 @@ window.GlideContract = (function () {
         }
 
         normalized = normalized.trim();
+
+        /*
+         Already valid JSON after un-wrapping? Use it as is.
+         The unquoted-key conversion below must NOT run on valid JSON:
+         it would rewrite ", https://..." inside a slideshow's
+         comma-separated media list as if "https" were a key.
+        */
+        {
+            const direct =
+                parseJsonText(normalized) ||
+                (
+                    normalized.startsWith("{")
+                        ? parseJsonText("[" + normalized + "]")
+                        : null
+                );
+
+            if (direct) {
+                return direct;
+            }
+        }
 
         /*
          Convert:
