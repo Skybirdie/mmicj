@@ -23,6 +23,8 @@
 <link rel="stylesheet" href="css/style.css?v=1.0.3">
 <link rel="stylesheet" href="css/reader.css?v=1.2.0">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.3.289/pdf_viewer.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/assets/icons/apple-touch-icon.png">
 
 <link rel="stylesheet" href="css/library.css">
 <link rel="stylesheet" href="css/video.css?v=1.0.7">
@@ -1708,5 +1710,14 @@ document.addEventListener("DOMContentLoaded", function(){
     }
 });
 </script>
+
+<script>
+if ("serviceWorker" in navigator) {
+    window.addEventListener("load", function () {
+        navigator.serviceWorker.register("/sw.js").catch(function () {});
+    });
+}
+</script>
+
 </body>
 </html>
