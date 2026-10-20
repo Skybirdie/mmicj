@@ -37,9 +37,10 @@
      shared, the Worker serves it with preview tags (see serveBasePage
      in worker.js): the Front Page centerpiece item's thumbnail with the
      logo badge, or assets/base-logo.jpg when there is none. The
-     browser's own share command shares the page address, so it gets the
-     same card whenever the app is opened directly at that address.
-     (Inside Glide's iframe the browser shares Glide's address instead.)
+     browser's own share command is separate: js/browserAddress.js keeps
+     the address bar on the open item or section, and the Worker gives
+     that link the item's own card (or the base logo). This button and
+     its panel are unchanged and still share the plain base URL.
 
    The button itself is markup inside #frontPage (index.html) and the
    panel is created inside #frontPage too, so both are shown and hidden

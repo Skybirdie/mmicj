@@ -304,6 +304,123 @@ function show(id, options = {}) {
     }
 
 
+    /*
+    -------------------------------------------------------
+     Opening the item named by a link (?item=<section>/<id>,
+     written by js/browserAddress.js).
+
+     Uses the same hand-off a Front Page door uses
+     (FrontPage.openItem): resolve the item in the section's own
+     library, show the section, then select it on the next frame.
+
+     The libraries only hold released items, so an item that is
+     unreleased, removed, or in the wrong section is simply not
+     found and the visitor stays on the section the link named.
+    -------------------------------------------------------
+    */
+    function parseRequestedItem(value) {
+
+        const text = String(value || "").trim();
+        const cut = text.indexOf("/");
+
+        if (cut < 1) {
+            return null;
+        }
+
+        const key = text.slice(0, cut).toLowerCase();
+        const id = text.slice(cut + 1);
+
+        const section =
+            key === "reader" || key === "book" || key === "books" ? "reader" :
+            key === "video" || key === "videos" ? "video" :
+            key === "slideshow" || key === "slideshows" ? "slideshow" :
+            "";
+
+        return section && id && id.length <= 512
+            ? { section, id }
+            : null;
+    }
+
+    function findLibraryItem(target) {
+
+        const same = candidate =>
+            String(candidate && candidate.id !== undefined && candidate.id !== null
+                ? candidate.id
+                : "") === String(target.id);
+
+        if (target.section === "reader") {
+            return window.SkyReader && Array.isArray(SkyReader.library)
+                ? SkyReader.library.find(same) || null
+                : null;
+        }
+
+        if (target.section === "video") {
+            return window.VideoLibrary && typeof VideoLibrary.getVideos === "function"
+                ? VideoLibrary.getVideos().find(same) || null
+                : null;
+        }
+
+        if (target.section === "slideshow") {
+            return window.SlideshowLibrary && typeof SlideshowLibrary.getSlideshows === "function"
+                ? SlideshowLibrary.getSlideshows().find(same) || null
+                : null;
+        }
+
+        return null;
+    }
+
+    function openRequestedItem(target) {
+
+        if (!target) {
+            return;
+        }
+
+        try {
+
+            const found = findLibraryItem(target);
+
+            if (!found) {
+                return;
+            }
+
+            if (current !== target.section) {
+                show(target.section);
+            }
+
+            requestAnimationFrame(() => {
+
+                try {
+
+                    if (target.section === "reader") {
+                        if (window.Library && typeof Library.select === "function") {
+                            Library.select(found, 1);
+                        }
+                    }
+                    else if (target.section === "video") {
+                        if (window.VideoLibrary && typeof VideoLibrary.select === "function") {
+                            VideoLibrary.select(found.id);
+                        }
+                    }
+                    else if (target.section === "slideshow") {
+                        if (window.SlideshowLibrary && typeof SlideshowLibrary.select === "function") {
+                            SlideshowLibrary.select(found.id);
+                        }
+                    }
+
+                }
+                catch (error) {
+                    console.warn("[AppSwitcher] Unable to open linked item.", error);
+                }
+
+            });
+
+        }
+        catch (error) {
+            console.warn("[AppSwitcher] Unable to open linked item.", error);
+        }
+    }
+
+
     function init() {
     if (initialized) {
         return true;
@@ -335,6 +452,7 @@ function show(id, options = {}) {
      * through AppSwitcher.show().
      */
     let initialSection = "front";
+    let requestedItem = null;
 
     try {
         const navigationEntry = performance.getEntriesByType("navigation")[0];
@@ -349,12 +467,46 @@ function show(id, options = {}) {
                 initialSection = saved;
             }
         }
+        else if (
+            navigationEntry &&
+            navigationEntry.type === "navigate"
+        ) {
+            /*
+             * A link produced by js/browserAddress.js (/?view=video&item=...)
+             * opens on the section it names and, when it names an item,
+             * opens that item. Share and contract links are not state
+             * links and are ignored here.
+             */
+            const params = new URLSearchParams(window.location.search);
+
+            const requested =
+                String(params.get("view") || "").trim().toLowerCase();
+
+            if (
+                window.location.pathname === "/" &&
+                !params.has("contractz") &&
+                !params.has("contract") &&
+                !params.has("k")
+            ) {
+                if (requested && rootFor(requested)) {
+                    initialSection = requested;
+                }
+
+                requestedItem = parseRequestedItem(params.get("item"));
+            }
+        }
     }
     catch (error) {
         initialSection = "front";
     }
 
     show(initialSection, { skipSave: false });
+
+    /*
+     * init() runs after every library has loaded (see index.html), so
+     * a requested item can be looked up and opened right here.
+     */
+    openRequestedItem(requestedItem);
 
     return true;
 }
