@@ -175,7 +175,7 @@ window.Manifest = {
     */
 
     published: {
-        mode: "pilot",
+        mode: "on",
         url: "https://media.mmicj.com/catalog/published.json",
         storageKey: "skymedia-published-catalog-v1",
         timeoutMs: 8000,
