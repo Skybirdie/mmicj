@@ -349,31 +349,6 @@ function show(id, options = {}) {
                 initialSection = saved;
             }
         }
-        else if (
-            navigationEntry &&
-            navigationEntry.type === "navigate"
-        ) {
-            /*
-             * A link produced by js/browserAddress.js (/?view=video, ...)
-             * opens on the section it names. Share and contract links are
-             * not state links and are ignored here.
-             */
-            const params = new URLSearchParams(window.location.search);
-
-            const requested =
-                String(params.get("view") || "").trim().toLowerCase();
-
-            if (
-                window.location.pathname === "/" &&
-                !params.has("contractz") &&
-                !params.has("contract") &&
-                !params.has("k") &&
-                requested &&
-                rootFor(requested)
-            ) {
-                initialSection = requested;
-            }
-        }
     }
     catch (error) {
         initialSection = "front";
