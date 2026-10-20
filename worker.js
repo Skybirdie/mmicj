@@ -50,6 +50,11 @@ const OG_IMAGE_PATH =
    When there is no usable centerpiece item (no snapshot yet,
    nothing visible, no absolute thumbnail, or the thumbnail cannot
    be loaded) the card uses assets/base-logo.jpg instead.
+
+   That applies to the bare base URL only. A state link
+   (/?view=<section>&item=<section>/<id>, kept in the browser's
+   address bar by js/browserAddress.js) gets the open item's own
+   card instead; see BASE_STATE_VIEWS below.
 ========================================================= */
 
 const BASE_LOGO_PATH =
@@ -5254,6 +5259,12 @@ if (storedCount > 0) {
 let basePreviewMemo =
   null;
 
+/* The parsed catalog snapshot, kept for as long as the snapshot text
+   is unchanged, so looking up the item a state link points at does
+   not re-parse the whole catalog on every request. */
+let baseParsedMemo =
+  null;
+
 /* "now" as YYYYMMDDHHmm in BASE_PREVIEW_TIMEZONE. */
 function baseNowKey(
   date = new Date()
@@ -5618,9 +5629,155 @@ async function getBaseCenterpiece(
   return item;
 }
 
+/*
+ * STATE LINKS  ( /?view=<section>[&item=<section>/<id>] )
+ *
+ * The app keeps the browser's address bar in step with what is
+ * open (js/browserAddress.js), so the browser's own share command
+ * shares a link that reflects the open item or section. For such a
+ * link the card shows that item's own thumbnail and title, or the
+ * base logo when no item is open (or it cannot be found).
+ *
+ * The bare base URL (no parameters) is unchanged: it keeps the
+ * Front Page centerpiece card used by the in-app Front Page share.
+ */
+const BASE_STATE_VIEWS =
+  new Set([
+    "front",
+    "reader",
+    "video",
+    "slideshow"
+  ]);
+
+/* "video/abc" -> { section: "video", id: "abc" }, or null. */
+function parseBaseStateItem(
+  value
+) {
+  const text =
+    String(
+      value || ""
+    ).trim();
+
+  const cut =
+    text.indexOf(
+      "/"
+    );
+
+  if (
+    cut < 1
+  ) {
+    return null;
+  }
+
+  const section =
+    normalizeSection(
+      text.slice(
+        0,
+        cut
+      )
+    );
+
+  const id =
+    text.slice(
+      cut + 1
+    );
+
+  return isPlausibleShareTarget(
+    section,
+    id
+  )
+    ? {
+        section,
+        id
+      }
+    : null;
+}
+
+/* The catalog item with this section and id, from the snapshot the
+   base preview already reads. Never throws; null when not found. */
+async function getBaseSnapshotItem(
+  env,
+  target
+) {
+  try {
+    const text =
+      await getCatalogSnapshotText(
+        env
+      );
+
+    if (!text) {
+      return null;
+    }
+
+    if (
+      !baseParsedMemo ||
+      baseParsedMemo.text !==
+        text
+    ) {
+      const parsed =
+        JSON.parse(
+          text
+        );
+
+      baseParsedMemo = {
+        text,
+
+        items:
+          Array.isArray(
+            parsed?.content
+          )
+            ? parsed.content
+            : []
+      };
+    }
+
+    for (
+      const item of
+      baseParsedMemo.items
+    ) {
+      if (
+        cleanString(
+          item?.id
+        ) ===
+          target.id &&
+        sectionFromItem(
+          item
+        ) ===
+          target.section
+      ) {
+        /* The app only holds released items, so an unreleased or
+           undated one cannot be opened from a link; it gets no card
+           either (same rule as the Front Page centerpiece). */
+        const released =
+          baseDateKey(
+            item.date
+          );
+
+        return released &&
+          released <=
+            baseNowKey()
+          ? item
+          : null;
+      }
+    }
+
+    return null;
+  } catch (error) {
+    logLimited(
+      "warn",
+      "base-state-item",
+      "MMicjMedia base preview could not look up the item:",
+      error
+    );
+
+    return null;
+  }
+}
+
 function buildBaseOgTags(
   origin,
-  item
+  item,
+  options = {}
 ) {
   const section =
     item
@@ -5701,12 +5858,19 @@ function buildBaseOgTags(
   }
 
   const pageUrl =
-    origin +
-    "/";
+    options.pageUrl ||
+    (
+      origin +
+      "/"
+    );
+
+  const title =
+    options.title ||
+    BASE_PREVIEW_TITLE;
 
   return (
     `<meta property="og:type" content="website">` +
-    `<meta property="og:title" content="${escapeHtml(BASE_PREVIEW_TITLE)}">` +
+    `<meta property="og:title" content="${escapeHtml(title)}">` +
     `<meta property="og:site_name" content="${escapeHtml(OG_SITE_NAME)}">` +
     `<meta property="og:url" content="${escapeHtml(pageUrl)}">` +
     `<meta property="og:image" content="${escapeHtml(imageUrl)}">` +
@@ -5791,22 +5955,97 @@ async function serveBasePage(
       );
     }
 
-    const item =
-      await getBaseCenterpiece(
-        env
+    /* Link-preview crawlers can arrive over plain http (a pasted
+       "mmicj.com" is treated as http://). The preview image and
+       page address must always be https. */
+    const origin =
+      url.origin.replace(
+        /^http:/i,
+        "https:"
       );
 
-    const tags =
-      buildBaseOgTags(
-        /* Link-preview crawlers can arrive over plain http (a pasted
-           "mmicj.com" is treated as http://). The preview image and
-           page address must always be https. */
-        url.origin.replace(
-          /^http:/i,
-          "https:"
-        ),
-        item
+    const view =
+      normalizeSection(
+        url.searchParams.get(
+          "view"
+        )
       );
+
+    const stateItem =
+      parseBaseStateItem(
+        url.searchParams.get(
+          "item"
+        )
+      );
+
+    let tags;
+
+    if (
+      BASE_STATE_VIEWS.has(
+        view
+      ) ||
+      stateItem
+    ) {
+      /* State link: the open item's own card, else the base logo. */
+      const item =
+        stateItem
+          ? await getBaseSnapshotItem(
+              env,
+              stateItem
+            )
+          : null;
+
+      const pageUrl =
+        new URL(
+          "/",
+          origin
+        );
+
+      if (
+        BASE_STATE_VIEWS.has(
+          view
+        )
+      ) {
+        pageUrl.searchParams.set(
+          "view",
+          view
+        );
+      }
+
+      if (
+        item
+      ) {
+        pageUrl.searchParams.set(
+          "item",
+          stateItem.section +
+            "/" +
+            stateItem.id
+        );
+      }
+
+      tags =
+        buildBaseOgTags(
+          origin,
+          item,
+          {
+            pageUrl:
+              pageUrl.toString(),
+
+            title:
+              cleanString(
+                item?.title
+              )
+          }
+        );
+    } else {
+      tags =
+        buildBaseOgTags(
+          origin,
+          await getBaseCenterpiece(
+            env
+          )
+        );
+    }
 
     const transformed =
       new HTMLRewriter()
