@@ -1,21 +1,25 @@
 /* =========================================================
-   Browser address  (js/browserAddress.js  v1.0.0)
+   Browser address  (js/browserAddress.js  v1.1.0)
 
    Keeps the address bar in step with what is open, so the
    browser's own share command (and "copy link") shares a link
    that reflects the open item or section:
 
-       /?view=<front|reader|video|slideshow>
+       /                                  (Front Page: the general link)
+       /?view=<reader|video|slideshow>
        /?view=<section>&item=<section>/<id>
 
-   The Worker turns such a link into its preview card (see
-   serveBasePage in worker.js): the open item's own thumbnail and
-   title, or assets/base-logo.jpg when no item is open.
+   The Front Page keeps the plain app address, so the browser's share
+   there is the same general link as the Front Page share button, with
+   the same poster card. For the other sections the Worker turns the
+   link into its preview card (see serveBasePage in worker.js): the
+   open item's own thumbnail and title, or assets/base-logo.jpg when no
+   item is open.
 
    Deliberately small and passive
      - It only READS state from the existing viewers
        (AppSwitcher.current, Reader.book, VideoViewer.getCurrentVideo,
-       SlideshowViewer.getCurrent, FrontMediaRenderer.getCurrent).
+       SlideshowViewer.getCurrent).
        No viewer, library or share code was changed for it.
      - It uses history.replaceState, never pushState, so the Back
        button and the page's history are untouched.
@@ -96,13 +100,6 @@
                     ? SlideshowViewer.getCurrent()
                     : null;
             }
-            if(view === "front"){
-                /* The Front Page shows its own item (the centerpiece, or the
-                   door the person picked) in FrontMediaRenderer. */
-                return window.FrontMediaRenderer && typeof FrontMediaRenderer.getCurrent === "function"
-                    ? FrontMediaRenderer.getCurrent()
-                    : null;
-            }
         }catch(_){
             /* fall through */
         }
@@ -114,6 +111,11 @@
            which avoids reporting its pre-start default section. */
         const view = clean(document.documentElement.dataset.activeApp).toLowerCase();
         if(VIEWS.indexOf(view) < 0) return null;
+
+        /* The Front Page is the general link: no view, no item. */
+        if(view === "front"){
+            return { view: "", item: "" };
+        }
 
         const item = activeItem(view);
         const id = clean(item && item.id);
@@ -133,11 +135,15 @@
         if(!state) return;
 
         const url = new URL(window.location.href);
-        const sameView = url.searchParams.get("view") === state.view;
+        const sameView = (url.searchParams.get("view") || "") === state.view;
         const sameItem = (url.searchParams.get("item") || "") === state.item;
         if(sameView && sameItem) return;
 
-        url.searchParams.set("view", state.view);
+        if(state.view){
+            url.searchParams.set("view", state.view);
+        }else{
+            url.searchParams.delete("view");
+        }
         if(state.item){
             url.searchParams.set("item", state.item);
         }else{

@@ -42,16 +42,11 @@ const OG_IMAGE_PATH =
 /* =========================================================
    BASE URL PREVIEW  ( https://<this worker>/ )
 
-   The base URL's link card uses the thumbnail of the item that
-   is currently the Front Page centerpiece (see resolveDoors() in
-   js/frontPage.js), badged with the logo exactly like the
-   per-item /s/<section>/<id> cards.
+   The general app link's card is assets/mmicj-poster.png (square),
+   or assets/base-logo.jpg when the poster is missing or unusable;
+   see GENERAL LINK CARD below.
 
-   When there is no usable centerpiece item (no snapshot yet,
-   nothing visible, no absolute thumbnail, or the thumbnail cannot
-   be loaded) the card uses assets/base-logo.jpg instead.
-
-   That applies to the bare base URL only. A state link
+   A state link
    (/?view=<section>&item=<section>/<id>, kept in the browser's
    address bar by js/browserAddress.js) gets the open item's own
    card instead; see BASE_STATE_VIEWS below.
@@ -88,8 +83,8 @@ const BASE_PREVIEW_CATEGORIES = [
   "Testimonies"
 ];
 
-/* The chosen centerpiece is remembered per isolate for this long,
-   so a burst of visits / crawlers costs no extra KV reads. */
+/* The poster check and the catalog snapshot are remembered per isolate
+   for this long, so a burst of visits / crawlers costs no extra reads. */
 const BASE_PREVIEW_MEMORY_TTL_MS =
   60000;
 
@@ -5256,9 +5251,6 @@ if (storedCount > 0) {
    BASE URL PREVIEW (handlers)
 ========================================================= */
 
-let basePreviewMemo =
-  null;
-
 /* The parsed catalog snapshot, kept for as long as the snapshot text
    is unchanged, so looking up the item a state link points at does
    not re-parse the whole catalog on every request. */
@@ -5387,124 +5379,6 @@ function baseDateKey(
     : d;
 }
 
-/*
- * Mirrors resolveDoors() in js/frontPage.js: the newest visible item
- * of each of the seven categories, and of those seven the newest one
- * is the centerpiece. Ties go to the earlier item, as in the app.
- */
-function pickBaseCenterpiece(
-  snapshot,
-  nowKey
-) {
-  const items =
-    Array.isArray(
-      snapshot?.content
-    )
-      ? snapshot.content
-      : [];
-
-  const configured =
-    Array.isArray(
-      snapshot?.frontPage?.categories
-    )
-      ? snapshot.frontPage.categories
-          .map(
-            value =>
-              cleanString(
-                value
-              )
-          )
-          .filter(
-            Boolean
-          )
-      : [];
-
-  const categories =
-    configured.length === 7
-      ? configured
-      : BASE_PREVIEW_CATEGORIES;
-
-  const visible =
-    [];
-
-  for (
-    const item of
-    items
-  ) {
-    const category =
-      cleanString(
-        item?.category
-      ).toLowerCase();
-
-    const date =
-      baseDateKey(
-        item?.date
-      );
-
-    if (
-      !category ||
-      !date ||
-      date > nowKey
-    ) {
-      continue;
-    }
-
-    visible.push({
-      item,
-      category,
-      date
-    });
-  }
-
-  let best =
-    null;
-
-  for (
-    const name of
-    categories
-  ) {
-    const wanted =
-      name.toLowerCase();
-
-    let categoryBest =
-      null;
-
-    for (
-      const entry of
-      visible
-    ) {
-      if (
-        entry.category ===
-          wanted &&
-        (
-          !categoryBest ||
-          entry.date >
-            categoryBest.date
-        )
-      ) {
-        categoryBest =
-          entry;
-      }
-    }
-
-    if (
-      categoryBest &&
-      (
-        !best ||
-        categoryBest.date >
-          best.date
-      )
-    ) {
-      best =
-        categoryBest;
-    }
-  }
-
-  return best
-    ? best.item
-    : null;
-}
-
 /* The catalog snapshot text, through the same per-isolate memory the
    /__sky_catalog route uses (so the two share one KV read a minute). */
 async function getCatalogSnapshotText(
@@ -5577,56 +5451,276 @@ async function getCatalogSnapshotText(
   }
 }
 
-/* The current Front Page centerpiece item, or null. Never throws. */
-async function getBaseCenterpiece(
-  env
+/*
+ * GENERAL LINK CARD  ( https://mmicj.com , https://www.mmicj.com )
+ *
+ * The plain app link (also what the browser's own share command
+ * gives while the Front Page is showing, and what the Front Page
+ * share button shares) previews as assets/mmicj-poster.png, a
+ * square image. If that file is missing or is not a usable PNG the
+ * card falls back to assets/base-logo.jpg.
+ *
+ * The poster's real size is read from its PNG header so the
+ * og:image width/height hints are always right, and the image URL
+ * carries a version taken from the file's ETag so replacing the
+ * file makes link-preview crawlers fetch the new picture.
+ */
+const BASE_POSTER_PATH =
+  "/assets/mmicj-poster.png";
+
+const BASE_POSTER_MIN_SIZE =
+  200;
+
+const BASE_POSTER_MAX_SIZE =
+  8192;
+
+let basePosterMemo =
+  null;
+
+/* { width, height } from a PNG's first 24 bytes, or null. */
+function readPngSize(
+  bytes
+) {
+  if (
+    !bytes ||
+    bytes.length < 24
+  ) {
+    return null;
+  }
+
+  const signature =
+    [137, 80, 78, 71, 13, 10, 26, 10];
+
+  for (
+    let i = 0;
+    i < 8;
+    i++
+  ) {
+    if (
+      bytes[i] !==
+        signature[i]
+    ) {
+      return null;
+    }
+  }
+
+  /* The first chunk must be IHDR. */
+  if (
+    String.fromCharCode(
+      bytes[12],
+      bytes[13],
+      bytes[14],
+      bytes[15]
+    ) !==
+      "IHDR"
+  ) {
+    return null;
+  }
+
+  const view =
+    new DataView(
+      bytes.buffer,
+      bytes.byteOffset,
+      bytes.byteLength
+    );
+
+  const width =
+    view.getUint32(
+      16
+    );
+
+  const height =
+    view.getUint32(
+      20
+    );
+
+  return width >=
+      BASE_POSTER_MIN_SIZE &&
+    height >=
+      BASE_POSTER_MIN_SIZE &&
+    width <=
+      BASE_POSTER_MAX_SIZE &&
+    height <=
+      BASE_POSTER_MAX_SIZE
+    ? {
+        width,
+        height
+      }
+    : null;
+}
+
+/* Reads only the first bytes of the response body. */
+async function readHeadBytes(
+  response,
+  count
+) {
+  const reader =
+    response.body
+      ? response.body.getReader()
+      : null;
+
+  if (!reader) {
+    return new Uint8Array(
+      0
+    );
+  }
+
+  let bytes =
+    new Uint8Array(
+      0
+    );
+
+  try {
+    while (
+      bytes.length <
+      count
+    ) {
+      const {
+        done,
+        value
+      } =
+        await reader.read();
+
+      if (
+        done ||
+        !value
+      ) {
+        break;
+      }
+
+      const merged =
+        new Uint8Array(
+          bytes.length +
+            value.length
+        );
+
+      merged.set(
+        bytes
+      );
+
+      merged.set(
+        value,
+        bytes.length
+      );
+
+      bytes =
+        merged;
+    }
+  } finally {
+    try {
+      await reader.cancel();
+    } catch (_) {
+      /* already finished */
+    }
+  }
+
+  return bytes;
+}
+
+/* { path, width, height } for the poster, or null when it is not
+   there or not a usable PNG. Never throws; remembered briefly so a
+   burst of crawlers costs one asset read. */
+async function getBasePoster(
+  env,
+  origin
 ) {
   const now =
     Date.now();
 
   if (
-    basePreviewMemo &&
+    basePosterMemo &&
     now -
-      basePreviewMemo.at <
+      basePosterMemo.at <
       BASE_PREVIEW_MEMORY_TTL_MS
   ) {
-    return basePreviewMemo.item;
+    return basePosterMemo.poster;
   }
 
-  let item =
+  let poster =
     null;
 
   try {
-    const text =
-      await getCatalogSnapshotText(
-        env
+    const response =
+      await env.ASSETS.fetch(
+        new Request(
+          new URL(
+            BASE_POSTER_PATH,
+            origin
+          )
+        )
       );
 
-    if (text) {
-      item =
-        pickBaseCenterpiece(
-          JSON.parse(
-            text
-          ),
-          baseNowKey()
+    if (
+      response.ok &&
+      /image\/png/i.test(
+        response.headers.get(
+          "content-type"
+        ) || ""
+      )
+    ) {
+      const size =
+        readPngSize(
+          await readHeadBytes(
+            response,
+            24
+          )
         );
+
+      if (size) {
+        const version =
+          String(
+            response.headers.get(
+              "etag"
+            ) || ""
+          )
+            .replace(
+              /[^A-Za-z0-9]/g,
+              ""
+            )
+            .slice(
+              0,
+              16
+            ) ||
+          (
+            size.width +
+            "x" +
+            size.height
+          );
+
+        poster = {
+          path:
+            BASE_POSTER_PATH +
+            "?v=" +
+            version,
+
+          width:
+            size.width,
+
+          height:
+            size.height
+        };
+      }
+    } else if (
+      response.body
+    ) {
+      await response.body.cancel();
     }
   } catch (error) {
     logLimited(
       "warn",
-      "base-preview-pick",
-      "MMicjMedia base preview could not choose a centerpiece:",
+      "base-poster",
+      "MMicjMedia base preview could not read the poster:",
       error
     );
   }
 
-  basePreviewMemo = {
-    item,
+  basePosterMemo = {
+    poster,
     at:
       now
   };
 
-  return item;
+  return poster;
 }
 
 /*
@@ -5638,8 +5732,8 @@ async function getBaseCenterpiece(
  * link the card shows that item's own thumbnail and title, or the
  * base logo when no item is open (or it cannot be found).
  *
- * The bare base URL (no parameters) is unchanged: it keeps the
- * Front Page centerpiece card used by the in-app Front Page share.
+ * The plain app link (no parameters, or ?view=front with no item)
+ * is the general link: see GENERAL LINK CARD above.
  */
 const BASE_STATE_VIEWS =
   new Set([
@@ -5747,7 +5841,7 @@ async function getBaseSnapshotItem(
       ) {
         /* The app only holds released items, so an unreleased or
            undated one cannot be opened from a link; it gets no card
-           either (same rule as the Front Page centerpiece). */
+           either (a release date on or before now). */
         const released =
           baseDateKey(
             item.date
@@ -5845,6 +5939,16 @@ function buildBaseOgTags(
 
     height =
       630;
+  } else if (
+    options.poster
+  ) {
+    imageUrl =
+      origin +
+      options.poster.path;
+    width =
+      options.poster.width;
+    height =
+      options.poster.height;
   } else {
     imageUrl =
       origin +
@@ -5876,7 +5980,7 @@ function buildBaseOgTags(
     `<meta property="og:image" content="${escapeHtml(imageUrl)}">` +
     `<meta property="og:image:width" content="${width}">` +
     `<meta property="og:image:height" content="${height}">` +
-    `<meta name="twitter:card" content="summary_large_image">`
+    `<meta name="twitter:card" content="${options.poster && !item ? "summary" : "summary_large_image"}">`
   );
 }
 
@@ -5981,8 +6085,12 @@ async function serveBasePage(
     let tags;
 
     if (
-      BASE_STATE_VIEWS.has(
-        view
+      (
+        BASE_STATE_VIEWS.has(
+          view
+        ) &&
+        view !==
+          "front"
       ) ||
       stateItem
     ) {
@@ -6038,12 +6146,18 @@ async function serveBasePage(
           }
         );
     } else {
+      /* The general link: the poster, else the base logo. */
       tags =
         buildBaseOgTags(
           origin,
-          await getBaseCenterpiece(
-            env
-          )
+          null,
+          {
+            poster:
+              await getBasePoster(
+                env,
+                origin
+              )
+          }
         );
     }
 

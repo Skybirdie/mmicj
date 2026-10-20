@@ -55,9 +55,9 @@
    * Worker and bill each one.
    *
    * The one exception is the base URL itself ("/"). It must pass
-   * through the Worker so the link-preview tags (the Front Page
-   * centerpiece thumbnail, or assets/base-logo.jpg) can be added
-   * to the page. The pattern is exact: it does not match
+   * through the Worker so the link-preview tags (assets/mmicj-poster.png,
+   * or assets/base-logo.jpg when the poster is missing; or the open
+   * item's own card for a ?view=/?item= link) can be added to the page. The pattern is exact: it does not match
    * /index.html, /assets/..., /js/... or any other file. Costs one
    * Worker request per load of the base URL.
    *
