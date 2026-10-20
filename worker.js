@@ -21,7 +21,7 @@ const CONTRACT_PREFIX = "sr2.";
 const KEY_LENGTH = 16;
 
 const SKYMEDIA_BASE_URL =
-  "https://mmicj.meditation-mornings-icj.workers.dev";
+  "https://mmicj.com";
 
 /* =========================================================
    Open Graph / Social Preview
