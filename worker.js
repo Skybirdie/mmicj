@@ -5798,7 +5798,13 @@ async function serveBasePage(
 
     const tags =
       buildBaseOgTags(
-        url.origin,
+        /* Link-preview crawlers can arrive over plain http (a pasted
+           "mmicj.com" is treated as http://). The preview image and
+           page address must always be https. */
+        url.origin.replace(
+          /^http:/i,
+          "https:"
+        ),
         item
       );
 
