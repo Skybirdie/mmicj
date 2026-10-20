@@ -48,7 +48,7 @@
 (function(){
     "use strict";
 
-    const SHARE_URL   = "https://mmicj.meditation-mornings-icj.workers.dev/";
+    const SHARE_URL   = "https://mmicj.com";
     const SHARE_TITLE = "Meditation Mornings";
     const SHARE_TEXT  = "Meditation Mornings in Christ Jesus";
     const SHARE_LOGO  = "assets/base-logo.jpg";
