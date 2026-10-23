@@ -42,11 +42,16 @@ const OG_IMAGE_PATH =
 /* =========================================================
    BASE URL PREVIEW  ( https://<this worker>/ )
 
-   The general app link's card is assets/mmicj-poster.png (square),
-   or assets/base-logo.jpg when the poster is missing or unusable;
-   see GENERAL LINK CARD below.
+   The base URL's link card uses the thumbnail of the item that
+   is currently the Front Page centerpiece (see resolveDoors() in
+   js/frontPage.js), badged with the logo exactly like the
+   per-item /s/<section>/<id> cards.
 
-   A state link
+   When there is no usable centerpiece item (no snapshot yet,
+   nothing visible, no absolute thumbnail, or the thumbnail cannot
+   be loaded) the card uses assets/base-logo.jpg instead.
+
+   That applies to the bare base URL only. A state link
    (/?view=<section>&item=<section>/<id>, kept in the browser's
    address bar by js/browserAddress.js) gets the open item's own
    card instead; see BASE_STATE_VIEWS below.
@@ -83,8 +88,8 @@ const BASE_PREVIEW_CATEGORIES = [
   "Testimonies"
 ];
 
-/* The poster check and the catalog snapshot are remembered per isolate
-   for this long, so a burst of visits / crawlers costs no extra reads. */
+/* The chosen centerpiece is remembered per isolate for this long,
+   so a burst of visits / crawlers costs no extra KV reads. */
 const BASE_PREVIEW_MEMORY_TTL_MS =
   60000;
 
@@ -2226,16 +2231,7 @@ async function serveDirectShare(
     );
 
   if (!record) {
-    return new Response(
-      "MMicjMedia shared item was not found.",
-      {
-        status:
-          404,
-
-        headers:
-          textHeaders()
-      }
-    );
+    return friendlyResponse("unavailable", request, "MMicjMedia shared item was not found.");
   }
 
   const html =
@@ -3709,16 +3705,7 @@ async function handleShortShare(
   }
 
   if (!payload) {
-    return new Response(
-      "MMicjMedia publication not found.",
-      {
-        status:
-          404,
-
-        headers:
-          textHeaders()
-      }
-    );
+    return friendlyResponse("unavailable", request, "MMicjMedia publication not found.");
   }
 
   if (
@@ -5251,6 +5238,9 @@ if (storedCount > 0) {
    BASE URL PREVIEW (handlers)
 ========================================================= */
 
+let basePreviewMemo =
+  null;
+
 /* The parsed catalog snapshot, kept for as long as the snapshot text
    is unchanged, so looking up the item a state link points at does
    not re-parse the whole catalog on every request. */
@@ -5379,6 +5369,124 @@ function baseDateKey(
     : d;
 }
 
+/*
+ * Mirrors resolveDoors() in js/frontPage.js: the newest visible item
+ * of each of the seven categories, and of those seven the newest one
+ * is the centerpiece. Ties go to the earlier item, as in the app.
+ */
+function pickBaseCenterpiece(
+  snapshot,
+  nowKey
+) {
+  const items =
+    Array.isArray(
+      snapshot?.content
+    )
+      ? snapshot.content
+      : [];
+
+  const configured =
+    Array.isArray(
+      snapshot?.frontPage?.categories
+    )
+      ? snapshot.frontPage.categories
+          .map(
+            value =>
+              cleanString(
+                value
+              )
+          )
+          .filter(
+            Boolean
+          )
+      : [];
+
+  const categories =
+    configured.length === 7
+      ? configured
+      : BASE_PREVIEW_CATEGORIES;
+
+  const visible =
+    [];
+
+  for (
+    const item of
+    items
+  ) {
+    const category =
+      cleanString(
+        item?.category
+      ).toLowerCase();
+
+    const date =
+      baseDateKey(
+        item?.date
+      );
+
+    if (
+      !category ||
+      !date ||
+      date > nowKey
+    ) {
+      continue;
+    }
+
+    visible.push({
+      item,
+      category,
+      date
+    });
+  }
+
+  let best =
+    null;
+
+  for (
+    const name of
+    categories
+  ) {
+    const wanted =
+      name.toLowerCase();
+
+    let categoryBest =
+      null;
+
+    for (
+      const entry of
+      visible
+    ) {
+      if (
+        entry.category ===
+          wanted &&
+        (
+          !categoryBest ||
+          entry.date >
+            categoryBest.date
+        )
+      ) {
+        categoryBest =
+          entry;
+      }
+    }
+
+    if (
+      categoryBest &&
+      (
+        !best ||
+        categoryBest.date >
+          best.date
+      )
+    ) {
+      best =
+        categoryBest;
+    }
+  }
+
+  return best
+    ? best.item
+    : null;
+}
+
 /* The catalog snapshot text, through the same per-isolate memory the
    /__sky_catalog route uses (so the two share one KV read a minute). */
 async function getCatalogSnapshotText(
@@ -5451,276 +5559,56 @@ async function getCatalogSnapshotText(
   }
 }
 
-/*
- * GENERAL LINK CARD  ( https://mmicj.com , https://www.mmicj.com )
- *
- * The plain app link (also what the browser's own share command
- * gives while the Front Page is showing, and what the Front Page
- * share button shares) previews as assets/mmicj-poster.png, a
- * square image. If that file is missing or is not a usable PNG the
- * card falls back to assets/base-logo.jpg.
- *
- * The poster's real size is read from its PNG header so the
- * og:image width/height hints are always right, and the image URL
- * carries a version taken from the file's ETag so replacing the
- * file makes link-preview crawlers fetch the new picture.
- */
-const BASE_POSTER_PATH =
-  "/assets/mmicj-poster.png";
-
-const BASE_POSTER_MIN_SIZE =
-  200;
-
-const BASE_POSTER_MAX_SIZE =
-  8192;
-
-let basePosterMemo =
-  null;
-
-/* { width, height } from a PNG's first 24 bytes, or null. */
-function readPngSize(
-  bytes
-) {
-  if (
-    !bytes ||
-    bytes.length < 24
-  ) {
-    return null;
-  }
-
-  const signature =
-    [137, 80, 78, 71, 13, 10, 26, 10];
-
-  for (
-    let i = 0;
-    i < 8;
-    i++
-  ) {
-    if (
-      bytes[i] !==
-        signature[i]
-    ) {
-      return null;
-    }
-  }
-
-  /* The first chunk must be IHDR. */
-  if (
-    String.fromCharCode(
-      bytes[12],
-      bytes[13],
-      bytes[14],
-      bytes[15]
-    ) !==
-      "IHDR"
-  ) {
-    return null;
-  }
-
-  const view =
-    new DataView(
-      bytes.buffer,
-      bytes.byteOffset,
-      bytes.byteLength
-    );
-
-  const width =
-    view.getUint32(
-      16
-    );
-
-  const height =
-    view.getUint32(
-      20
-    );
-
-  return width >=
-      BASE_POSTER_MIN_SIZE &&
-    height >=
-      BASE_POSTER_MIN_SIZE &&
-    width <=
-      BASE_POSTER_MAX_SIZE &&
-    height <=
-      BASE_POSTER_MAX_SIZE
-    ? {
-        width,
-        height
-      }
-    : null;
-}
-
-/* Reads only the first bytes of the response body. */
-async function readHeadBytes(
-  response,
-  count
-) {
-  const reader =
-    response.body
-      ? response.body.getReader()
-      : null;
-
-  if (!reader) {
-    return new Uint8Array(
-      0
-    );
-  }
-
-  let bytes =
-    new Uint8Array(
-      0
-    );
-
-  try {
-    while (
-      bytes.length <
-      count
-    ) {
-      const {
-        done,
-        value
-      } =
-        await reader.read();
-
-      if (
-        done ||
-        !value
-      ) {
-        break;
-      }
-
-      const merged =
-        new Uint8Array(
-          bytes.length +
-            value.length
-        );
-
-      merged.set(
-        bytes
-      );
-
-      merged.set(
-        value,
-        bytes.length
-      );
-
-      bytes =
-        merged;
-    }
-  } finally {
-    try {
-      await reader.cancel();
-    } catch (_) {
-      /* already finished */
-    }
-  }
-
-  return bytes;
-}
-
-/* { path, width, height } for the poster, or null when it is not
-   there or not a usable PNG. Never throws; remembered briefly so a
-   burst of crawlers costs one asset read. */
-async function getBasePoster(
-  env,
-  origin
+/* The current Front Page centerpiece item, or null. Never throws. */
+async function getBaseCenterpiece(
+  env
 ) {
   const now =
     Date.now();
 
   if (
-    basePosterMemo &&
+    basePreviewMemo &&
     now -
-      basePosterMemo.at <
+      basePreviewMemo.at <
       BASE_PREVIEW_MEMORY_TTL_MS
   ) {
-    return basePosterMemo.poster;
+    return basePreviewMemo.item;
   }
 
-  let poster =
+  let item =
     null;
 
   try {
-    const response =
-      await env.ASSETS.fetch(
-        new Request(
-          new URL(
-            BASE_POSTER_PATH,
-            origin
-          )
-        )
+    const text =
+      await getCatalogSnapshotText(
+        env
       );
 
-    if (
-      response.ok &&
-      /image\/png/i.test(
-        response.headers.get(
-          "content-type"
-        ) || ""
-      )
-    ) {
-      const size =
-        readPngSize(
-          await readHeadBytes(
-            response,
-            24
-          )
+    if (text) {
+      item =
+        pickBaseCenterpiece(
+          JSON.parse(
+            text
+          ),
+          baseNowKey()
         );
-
-      if (size) {
-        const version =
-          String(
-            response.headers.get(
-              "etag"
-            ) || ""
-          )
-            .replace(
-              /[^A-Za-z0-9]/g,
-              ""
-            )
-            .slice(
-              0,
-              16
-            ) ||
-          (
-            size.width +
-            "x" +
-            size.height
-          );
-
-        poster = {
-          path:
-            BASE_POSTER_PATH +
-            "?v=" +
-            version,
-
-          width:
-            size.width,
-
-          height:
-            size.height
-        };
-      }
-    } else if (
-      response.body
-    ) {
-      await response.body.cancel();
     }
   } catch (error) {
     logLimited(
       "warn",
-      "base-poster",
-      "MMicjMedia base preview could not read the poster:",
+      "base-preview-pick",
+      "MMicjMedia base preview could not choose a centerpiece:",
       error
     );
   }
 
-  basePosterMemo = {
-    poster,
+  basePreviewMemo = {
+    item,
     at:
       now
   };
 
-  return poster;
+  return item;
 }
 
 /*
@@ -5732,8 +5620,8 @@ async function getBasePoster(
  * link the card shows that item's own thumbnail and title, or the
  * base logo when no item is open (or it cannot be found).
  *
- * The plain app link (no parameters, or ?view=front with no item)
- * is the general link: see GENERAL LINK CARD above.
+ * The bare base URL (no parameters) is unchanged: it keeps the
+ * Front Page centerpiece card used by the in-app Front Page share.
  */
 const BASE_STATE_VIEWS =
   new Set([
@@ -5839,19 +5727,7 @@ async function getBaseSnapshotItem(
         ) ===
           target.section
       ) {
-        /* The app only holds released items, so an unreleased or
-           undated one cannot be opened from a link; it gets no card
-           either (a release date on or before now). */
-        const released =
-          baseDateKey(
-            item.date
-          );
-
-        return released &&
-          released <=
-            baseNowKey()
-          ? item
-          : null;
+        return item;
       }
     }
 
@@ -5939,16 +5815,6 @@ function buildBaseOgTags(
 
     height =
       630;
-  } else if (
-    options.poster
-  ) {
-    imageUrl =
-      origin +
-      options.poster.path;
-    width =
-      options.poster.width;
-    height =
-      options.poster.height;
   } else {
     imageUrl =
       origin +
@@ -5980,7 +5846,7 @@ function buildBaseOgTags(
     `<meta property="og:image" content="${escapeHtml(imageUrl)}">` +
     `<meta property="og:image:width" content="${width}">` +
     `<meta property="og:image:height" content="${height}">` +
-    `<meta name="twitter:card" content="${options.poster && !item ? "summary" : "summary_large_image"}">`
+    `<meta name="twitter:card" content="summary_large_image">`
   );
 }
 
@@ -6085,12 +5951,8 @@ async function serveBasePage(
     let tags;
 
     if (
-      (
-        BASE_STATE_VIEWS.has(
-          view
-        ) &&
-        view !==
-          "front"
+      BASE_STATE_VIEWS.has(
+        view
       ) ||
       stateItem
     ) {
@@ -6146,18 +6008,12 @@ async function serveBasePage(
           }
         );
     } else {
-      /* The general link: the poster, else the base logo. */
       tags =
         buildBaseOgTags(
           origin,
-          null,
-          {
-            poster:
-              await getBasePoster(
-                env,
-                origin
-              )
-          }
+          await getBaseCenterpiece(
+            env
+          )
         );
     }
 
@@ -6277,7 +6133,111 @@ async function serveBaseOgImage(
    WORKER
 ========================================================= */
 
-export default {
+/* =========================================================
+   FRIENDLY ERROR PAGES
+
+   People who land on a page that cannot be shown (a share link whose
+   item was removed, a Worker error, or maintenance mode) see a short
+   picture page instead of a line of plain text. Anything that is not a
+   page load (scripts, fetches, images, crawlers' API calls) still gets
+   the same short plain-text answer and the same status code as before.
+
+   Pictures: /assets/errors/{unavailable,error,maintenance}.webp (static
+   files: free, never counted as Worker requests). The words are in the
+   picture; the <h1>/<p> are for screen readers (class "sr"). If your
+   final artwork has no words, remove class="sr" in friendlyHtml().
+
+   MAINTENANCE MODE: add a plain variable  MAINTENANCE = 1  to the
+   mmicj Worker (Settings -> Variables and Secrets) and Deploy: the base
+   address and share links answer with the maintenance page and a 503
+   until you delete the variable (or set it to 0). Static files such as
+   /index.html and the PDF/OG endpoints are not affected.
+========================================================= */
+
+const FRIENDLY_PAGES = {
+  unavailable: {
+    status: 404,
+    image: "unavailable",
+    alt: "Link no longer available. This item was moved or removed.",
+    title: "Link no longer available",
+    line: "This item was moved or removed.",
+    retry: false
+  },
+  error: {
+    status: 500,
+    image: "error",
+    alt: "Something went wrong. It\u2019s on our side. Please try again in a moment.",
+    title: "Something went wrong",
+    line: "It\u2019s on our side. Please try again in a moment.",
+    retry: true
+  },
+  maintenance: {
+    status: 503,
+    image: "maintenance",
+    alt: "Be right back. We\u2019re tending the garden. Back shortly.",
+    title: "Be right back",
+    line: "We\u2019re tending the garden. Back shortly.",
+    retry: true
+  }
+};
+
+function wantsHtml(request) {
+  if (request.method !== "GET" && request.method !== "HEAD") return false;
+  const accept = request.headers.get("accept") || "";
+  const dest = request.headers.get("sec-fetch-dest") || "document";
+  return accept.includes("text/html") && (dest === "document" || dest === "iframe");
+}
+
+function friendlyHtml(page) {
+  return `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
+<title>${page.title} \u00b7 MMicj</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root{--page:#f3fbfa;--ink:#107740;--btn:#107740;--btn-ink:#fff;--btn2:#d9efed}
+@media (prefers-color-scheme:dark){:root{--page:#0e2a1f;--ink:#d9efed;--btn:#36b84c;--btn-ink:#0e2a1f;--btn2:#17402f}}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%}
+body{display:grid;place-items:center;min-height:100vh;padding:24px;background:var(--page);color:var(--ink);font:500 16px/1.5 Montserrat,Poppins,system-ui,-apple-system,"Segoe UI",sans-serif;text-align:center}
+main{width:min(100%,560px)}img{display:block;width:100%;height:auto;aspect-ratio:4/3;border-radius:28px}
+.sr{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+h1{margin:20px 0 4px;font-size:1.6rem}p{margin:0 0 4px}.actions{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin-top:24px}
+.btn{display:inline-block;padding:12px 22px;border:0;border-radius:999px;background:var(--btn);color:var(--btn-ink);font:700 16px/1.2 Montserrat,Poppins,system-ui,sans-serif;text-decoration:none;cursor:pointer}
+.btn.alt{background:var(--btn2);color:var(--ink)}.btn:focus-visible{outline:3px solid #e3be09;outline-offset:3px}
+</style></head><body><main>
+<img src="/assets/errors/${page.image}.webp" width="1200" height="900" alt="${page.alt}">
+<h1 class="sr">${page.title}</h1><p class="sr">${page.line}</p>
+<div class="actions">${page.retry ? '<button type="button" class="btn" onclick="location.reload()">Try again</button><a class="btn alt" href="/">Go to MMicj</a>' : '<a class="btn" href="/">Go to MMicj</a>'}</div>
+</main></body></html>`;
+}
+
+function friendlyResponse(kind, request, plainText) {
+  const page = FRIENDLY_PAGES[kind];
+  const headers = {
+    "cache-control": "no-store, no-cache, must-revalidate",
+    "pragma": "no-cache"
+  };
+  if (kind === "maintenance") headers["retry-after"] = "600";
+
+  if (!request || !wantsHtml(request)) {
+    return new Response(plainText || page.title, {
+      status: page.status,
+      headers: { ...headers, "content-type": "text/plain; charset=UTF-8" }
+    });
+  }
+  return new Response(friendlyHtml(page), {
+    status: page.status,
+    headers: { ...headers, "content-type": "text/html; charset=UTF-8" }
+  });
+}
+
+function maintenanceOn(env) {
+  const v = env && env.MAINTENANCE;
+  if (v === undefined || v === null) return false;
+  return !["", "0", "false", "off", "no"].includes(String(v).trim().toLowerCase());
+}
+
+const workerHandlers = {
 
   async fetch(
     request,
@@ -6517,16 +6477,7 @@ export default {
       }
 
       if (!payload) {
-        return new Response(
-          "MMicjMedia publication not found.",
-          {
-            status:
-              404,
-
-            headers:
-              textHeaders()
-          }
-        );
+        return friendlyResponse("unavailable", request, "MMicjMedia publication not found.");
       }
 
       return serveWithContract(
@@ -6581,5 +6532,25 @@ export default {
     return env.ASSETS.fetch(
       request
     );
+  }
+};
+
+/* The public entry point: maintenance switch first, then the normal handler,
+   and any error the handler throws becomes a friendly page (with the real
+   status) instead of Cloudflare's own Worker-error page. */
+export default {
+  async fetch(request, env, ctx) {
+    try {
+      if (maintenanceOn(env)) {
+        const path = new URL(request.url).pathname;
+        if (path === "/" || path.startsWith(SHARE_PATH_PREFIX)) {
+          return friendlyResponse("maintenance", request, "MMicj is briefly down for maintenance. Please try again shortly.");
+        }
+      }
+      return await workerHandlers.fetch(request, env, ctx);
+    } catch (error) {
+      console.error("MMicjMedia unhandled Worker error:", error);
+      return friendlyResponse("error", request, "MMicj: something went wrong on our side. Please try again in a moment.");
+    }
   }
 };

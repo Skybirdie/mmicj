@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>You’re offline · MMicj</title>
+<!--
+  OFFLINE PAGE. sw.js stores this file and assets/errors/offline.webp on the device the first time the app is opened, and shows
+  it whenever a page load fails because there is no connection. It must work with NO network, so it has no external fonts
+  or scripts beyond the few lines below. The picture carries the message; the <h1>/<p> are for screen readers (class "sr").
+  If your final artwork has no words, delete class="sr" from them.
+  If you change this file or offline.webp, change OFFLINE_VERSION in sw.js so devices fetch the new copy.
+-->
+<style>
+  :root{--page:#f3fbfa;--ink:#107740;--btn:#107740;--btn-ink:#fff}
+  @media (prefers-color-scheme:dark){:root{--page:#0e2a1f;--ink:#d9efed;--btn:#36b84c;--btn-ink:#0e2a1f}}
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%}
+  body{display:grid;place-items:center;min-height:100vh;padding:24px;background:var(--page);color:var(--ink);
+       font:500 16px/1.5 Montserrat,Poppins,system-ui,-apple-system,"Segoe UI",sans-serif;text-align:center}
+  main{width:min(100%,560px)}
+  img{display:block;width:100%;height:auto;aspect-ratio:4/3;border-radius:28px}
+  .sr{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  h1{margin:20px 0 4px;font-size:1.6rem}
+  p{margin:0 0 4px}
+  .actions{margin-top:24px}
+  button{padding:12px 22px;border:0;border-radius:999px;background:var(--btn);color:var(--btn-ink);font:700 16px/1.2 Montserrat,Poppins,system-ui,sans-serif;cursor:pointer}
+  button:focus-visible{outline:3px solid #e3be09;outline-offset:3px}
+</style>
+</head>
+<body>
+<main>
+  <img src="/assets/errors/offline.webp" width="1200" height="900" alt="You’re offline. Check your connection and try again.">
+  <h1 class="sr">You’re offline</h1>
+  <p class="sr">Check your connection and try again.</p>
+  <div class="actions"><button type="button" id="retry">Try again</button></div>
+</main>
+<script>
+  document.getElementById("retry").onclick = function () { location.reload(); };
+  window.addEventListener("online", function () { location.reload(); });   /* the moment the connection returns */
+</script>
+</body>
+</html>

@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Page not found · MMicj</title>
+<!--
+  404 PAGE. Cloudflare serves this file, with a real 404 status, for any address that matches no file
+  (wrangler.jsonc: "not_found_handling": "404-page"). It can appear at any depth (/a/b/c), so every link below is absolute.
+  The picture carries the message. The <h1> and <p> are kept for screen readers and search engines only (class "sr").
+  If your final artwork has NO words in it, delete  class="sr"  from the <h1> and the <p> and the text will show.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root{--page:#f3fbfa;--ink:#107740;--btn:#107740;--btn-ink:#fff;--btn2:#d9efed}
+  @media (prefers-color-scheme:dark){:root{--page:#0e2a1f;--ink:#d9efed;--btn:#36b84c;--btn-ink:#0e2a1f;--btn2:#17402f}}
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%}
+  body{display:grid;place-items:center;min-height:100vh;padding:24px;background:var(--page);color:var(--ink);
+       font:500 16px/1.5 Montserrat,Poppins,system-ui,-apple-system,"Segoe UI",sans-serif;text-align:center}
+  main{width:min(100%,560px)}
+  img{display:block;width:100%;height:auto;aspect-ratio:4/3;border-radius:28px}
+  .sr{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  h1{margin:20px 0 4px;font-size:1.6rem}
+  p{margin:0 0 4px}
+  .actions{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin-top:24px}
+  a.btn{display:inline-block;padding:12px 22px;border-radius:999px;background:var(--btn);color:var(--btn-ink);
+        font-weight:700;text-decoration:none}
+  a.btn.alt{background:var(--btn2);color:var(--ink)}
+  a.btn:focus-visible{outline:3px solid #e3be09;outline-offset:3px}
+</style>
+</head>
+<body>
+<main>
+  <img src="/assets/errors/404.webp" width="1200" height="900" alt="404. Page not found. This path doesn’t lead anywhere yet.">
+  <h1 class="sr">Page not found</h1>
+  <p class="sr">This path doesn’t lead anywhere yet.</p>
+  <div class="actions">
+    <a class="btn" href="/">Go to MMicj</a>
+  </div>
+</main>
+</body>
+</html>
