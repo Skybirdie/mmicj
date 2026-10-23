@@ -2211,6 +2211,9 @@ html[data-theme="dark"] #readerPanel #toolbar .iconButton{
   padding:12px 42px 12px 14px;
   flex-direction:column;
 }
+/* the picture shown with an error: assets/errors/{load-failed,media-failed,offline}.webp (chosen in ui.js) */
+.productionErrorImg{display:block;width:min(300px,100%);height:auto;aspect-ratio:4/3;align-self:center;border-radius:14px;margin:2px 0 4px;}
+.productionErrorImg[hidden]{display:none!important;}
 .productionErrorInner strong{font-size:14px;}
 .productionErrorInner span{font-size:13px;line-height:1.4;word-break:break-word;}
 #productionErrorClose{
