@@ -121,7 +121,7 @@ window.FrontPage = (function () {
             cleanUrl(item.cover) ||
             cleanUrl(item.slides?.[0]?.image) ||
             cleanUrl(Array.isArray(item.media) ? item.media[0] : item.media) ||
-            "assets/default-thumbnail.png";
+            "assets/errors/thumbnail.webp";
 
         return {
             id: String(item.id || "").trim(),
@@ -293,7 +293,7 @@ window.FrontPage = (function () {
             img.draggable = false;
 
             img.onerror = () => {
-                img.src = "assets/default-thumbnail.png";
+                img.src = "assets/errors/thumbnail.webp";
             };
 
             button.appendChild(img);

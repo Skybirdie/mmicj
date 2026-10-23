@@ -288,7 +288,7 @@ img.className = "slideshow-landing-recent-thumbnail";
 img.loading = "lazy";
 img.alt = recentItem.title || "";
 
-const fallbackThumbnail = "assets/default-thumbnail.png";
+const fallbackThumbnail = "assets/errors/thumbnail.webp";
 
 img.src =
     recentItem.thumbnail ||
@@ -324,7 +324,7 @@ img.className = "slideshow-landing-card-thumbnail";
 img.loading = "lazy";
 img.alt = item.title || "";
 
-const fallbackThumbnail = "assets/default-thumbnail.png";
+const fallbackThumbnail = "assets/errors/thumbnail.webp";
 
 img.src =
     item.thumbnail ||

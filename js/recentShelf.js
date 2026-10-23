@@ -100,7 +100,7 @@ function createCard(book,entry){
 
     thumbnail.loading="lazy";
 
-    const fallbackThumbnail="assets/default-thumbnail.png";
+    const fallbackThumbnail="assets/errors/thumbnail.webp";
 
     thumbnail.src=
         book.thumbnail ||

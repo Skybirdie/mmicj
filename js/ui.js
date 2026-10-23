@@ -149,6 +149,7 @@ dom.productionError=document.getElementById("productionError");
 dom.productionErrorTitle=document.getElementById("productionErrorTitle");
 dom.productionErrorText=document.getElementById("productionErrorText");
 dom.productionErrorClose=document.getElementById("productionErrorClose");
+dom.productionErrorImg=document.getElementById("productionErrorImg");
 
 dom.progress=
 
@@ -254,17 +255,34 @@ function clearProductionError(){
     if(!dom.productionError)return;
     dom.productionError.hidden=true;
     if(dom.productionErrorText)dom.productionErrorText.textContent="";
+    if(dom.productionErrorImg){dom.productionErrorImg.hidden=true;dom.productionErrorImg.removeAttribute("src");}
 }
 
-function showProductionError(error,title="MMicj could not complete that action."){
+/* Which picture goes with an error (files in assets/errors/). No connection always wins; opening a book or media item
+   that fails gets "media-failed"; everything else (the library could not load, the app could not start) gets "load-failed". */
+function errorPictureFor(title,kind){
+    if(typeof navigator!=="undefined" && navigator.onLine===false)return {name:"offline",alt:"You\u2019re offline. Check your connection and try again."};
+    const media=kind==="media" || /open this|publication/i.test(String(title||""));
+    return media ? {name:"media-failed",alt:"This item won\u2019t open. Try again, or choose another."}
+                 : {name:"load-failed",alt:"Can\u2019t load the library. Please refresh in a moment."};
+}
+
+function showProductionError(error,title="MMicj could not complete that action.",kind){
     if(!dom.productionError)return;
     const message=error instanceof Error ? error.message : String(error||"Unknown error.");
     if(dom.productionErrorTitle)dom.productionErrorTitle.textContent=title||"MMicj could not complete that action.";
     if(dom.productionErrorText)dom.productionErrorText.textContent=message;
+    if(dom.productionErrorImg){
+        const pic=errorPictureFor(title,kind);
+        dom.productionErrorImg.onerror=()=>{dom.productionErrorImg.hidden=true;};   /* no picture file? the text alone is fine */
+        dom.productionErrorImg.alt=pic.alt;
+        dom.productionErrorImg.src="assets/errors/"+pic.name+".webp";
+        dom.productionErrorImg.hidden=false;
+    }
     dom.productionError.hidden=false;
 }
 
-ui.showError=function(error,title){ showProductionError(error,title); };
+ui.showError=function(error,title,kind){ showProductionError(error,title,kind); };
 ui.clearError=function(){ clearProductionError(); };
 
 /*-------------------------------------------------------
@@ -2236,7 +2254,7 @@ Reader.on(
 
 (error)=>{
     hideLoading();
-    showProductionError(error,"Unable to open this publication.");
+    showProductionError(error,"Unable to open this publication.","media");
 }
 
 );

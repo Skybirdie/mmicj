@@ -353,7 +353,7 @@ image.loading="lazy";
 
 image.src=book.thumbnail;
 image.alt=book.title||"";
-const fallbackThumbnail="assets/default-thumbnail.png";
+const fallbackThumbnail="assets/errors/thumbnail.webp";
 image.addEventListener("error",()=>{
     if(image.dataset.fallbackApplied==="true"){
         thumbnail.classList.add("thumbnailFallback");
@@ -456,7 +456,7 @@ thumbWrap.className="listThumb";
 
 const image=document.createElement("img");
 image.loading="lazy";
-image.src=book.thumbnail||"assets/default-thumbnail.png";
+image.src=book.thumbnail||"assets/errors/thumbnail.webp";
 image.alt=book.title||"";
 image.addEventListener("error",()=>{
     if(image.dataset.fallbackApplied==="true"){
@@ -464,7 +464,7 @@ image.addEventListener("error",()=>{
         return;
     }
     image.dataset.fallbackApplied="true";
-    image.src="assets/default-thumbnail.png";
+    image.src="assets/errors/thumbnail.webp";
 });
 thumbWrap.appendChild(image);
 

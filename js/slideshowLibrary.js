@@ -168,7 +168,7 @@ function card(item) {
         document.createElement("img");
 
     const fallbackThumbnail =
-        "assets/default-thumbnail.png";
+        "assets/errors/thumbnail.webp";
 
     img.src =
         item.thumbnail ||

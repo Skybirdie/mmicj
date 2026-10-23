@@ -1056,7 +1056,7 @@ function createLandingCircle(video) {
         document.createElement("img");
 
     image.src =
-        video.thumbnail || "assets/default-thumbnail.png";
+        video.thumbnail || "assets/errors/thumbnail.webp";
 
     image.alt =
         video.title || "";

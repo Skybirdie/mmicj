@@ -519,7 +519,7 @@ card.classList.add(
             "video-circle";
 
 
-        const fallbackThumbnail = "assets/default-thumbnail.png";
+        const fallbackThumbnail = "assets/errors/thumbnail.webp";
 
 const image =
     document.createElement("img");
@@ -986,7 +986,7 @@ circle.appendChild(image);
             "video-list-thumbnail";
 
 
-        const fallbackThumbnail = "assets/default-thumbnail.png";
+        const fallbackThumbnail = "assets/errors/thumbnail.webp";
 
 const image =
     document.createElement("img");

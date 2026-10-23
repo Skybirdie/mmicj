@@ -314,7 +314,7 @@ function openFull(item){
         const thumbnailUrl=
             resolveThumbnail(raw.thumbnail) ||
             resolveThumbnail(item.thumbnail) ||
-            "assets/default-thumbnail.png";
+            "assets/errors/thumbnail.webp";
 
         /*
          * IMPORTANT:
@@ -953,7 +953,7 @@ update();
             img.className="front-media-fallback";
             img.src=
                 item.thumbnail ||
-                "assets/default-thumbnail.png";
+                "assets/errors/thumbnail.webp";
             img.alt=item.title||"";
 
             ui.content.appendChild(img);
@@ -1298,7 +1298,7 @@ await new Promise(resolve=>{
 if(token!==generation)return;
 
 await draw();
-        }catch(e){console.error("[FrontMediaRenderer] PDF preview failed",e);ui.content.innerHTML="";const img=document.createElement("img");img.className="front-media-fallback";img.src=item.thumbnail||"assets/default-thumbnail.png";img.alt=item.title||"";ui.content.appendChild(img);ui.status.textContent="PDF preview unavailable";}
+        }catch(e){console.error("[FrontMediaRenderer] PDF preview failed",e);ui.content.innerHTML="";const img=document.createElement("img");img.className="front-media-fallback";img.src=item.thumbnail||"assets/errors/thumbnail.webp";img.alt=item.title||"";ui.content.appendChild(img);ui.status.textContent="PDF preview unavailable";}
         watchContentResize(ui.content,()=>{
     if(pdf && !busy){
         draw();
@@ -1390,7 +1390,7 @@ function watchContentResize(content, redraw){
         if(item.section==="video")renderVideo(item,token);
         else if(item.section==="slideshow")renderSlideshow(item,token);
         else if(item.section==="reader")renderPdf(item,token);
-        else {const ui=shell(item,"unknown");const img=document.createElement("img");img.className="front-media-fallback";img.src=item.thumbnail||"assets/default-thumbnail.png";img.alt=item.title||"";ui.content.appendChild(img);addOpenControl(ui.controlsRight,item);}
+        else {const ui=shell(item,"unknown");const img=document.createElement("img");img.className="front-media-fallback";img.src=item.thumbnail||"assets/errors/thumbnail.webp";img.alt=item.title||"";ui.content.appendChild(img);addOpenControl(ui.controlsRight,item);}
     }
     function init(element){host=element||document.getElementById("frontMediaHost");return !!host;
     }
