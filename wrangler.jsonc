@@ -54,12 +54,11 @@
    * stylesheet, script, image and audio file through the
    * Worker and bill each one.
    *
-   * The one exception is the base URL itself ("/"). It must pass
-   * through the Worker so the link-preview tags (assets/mmicj-poster.png,
-   * or assets/base-logo.jpg when the poster is missing; or the open
-   * item's own card for a ?view=/?item= link) can be added to the page. The pattern is exact: it does not match
-   * /index.html, /assets/..., /js/... or any other file. Costs one
-   * Worker request per load of the base URL.
+   * Only these routes always run the Worker: "/" (the base URL, so the link-preview
+   * tags can be added), "/s/*" (share links) and "/__sky_*" (the Worker's own
+   * endpoints). Everything else is served from the asset layer, and an address that
+   * matches no file gets 404.html without invoking the Worker. If you add a new
+   * Worker route, add its path to run_worker_first as well.
    *
    * To switch the dynamic base preview off again, set this back
    * to false (the page then serves with no preview tags).
