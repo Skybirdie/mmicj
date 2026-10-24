@@ -6181,11 +6181,21 @@ const FRIENDLY_PAGES = {
   }
 };
 
+/* A page load asks for text/html. Scripts, styles, images, fetch() calls and the like never do, so that alone is the test.
+   The Sec-Fetch-Dest header is only used to rule OUT things that are plainly not pages: some browsers change it to "empty"
+   when the service worker forwards a page load, and an older version of this check then wrongly showed plain text. */
+const NON_PAGE_DESTINATIONS = new Set([
+  "script", "style", "image", "font", "audio", "video", "track", "manifest",
+  "worker", "sharedworker", "serviceworker", "audioworklet", "paintworklet",
+  "object", "embed", "report", "xslt"
+]);
+
 function wantsHtml(request) {
   if (request.method !== "GET" && request.method !== "HEAD") return false;
   const accept = request.headers.get("accept") || "";
-  const dest = request.headers.get("sec-fetch-dest") || "document";
-  return accept.includes("text/html") && (dest === "document" || dest === "iframe");
+  if (!accept.includes("text/html")) return false;
+  const dest = (request.headers.get("sec-fetch-dest") || "").toLowerCase();
+  return !NON_PAGE_DESTINATIONS.has(dest);
 }
 
 function friendlyHtml(page) {

@@ -29,6 +29,12 @@ r=await call("/s/book/ghost-1"); t=await r.text();
 check("same address without Accept: html -> the same plain text as before",r.status===404 && t==="MMicjMedia shared item was not found." && /text\/plain/.test(r.headers.get("content-type")||""));
 r=await call("/s/book/ghost-1",mkEnv(),{headers:{accept:"text/html","sec-fetch-dest":"script"}}); t=await r.text();
 check("a script/image request is never given a page",r.status===404 && !t.includes("<html"));
+r=await call("/s/book/ghost-1",mkEnv(),{headers:{accept:"text/html,application/xhtml+xml","sec-fetch-dest":"empty","sec-fetch-mode":"same-origin"}}); t=await r.text();
+check("a page load forwarded by the service worker (Sec-Fetch-Dest: empty) still gets the picture page",r.status===404 && t.includes("unavailable.webp"));
+r=await call("/s/book/ghost-1",mkEnv(),{headers:{accept:"text/html","sec-fetch-dest":"document","sec-fetch-mode":"navigate"}}); t=await r.text();
+check("an ordinary page load (Sec-Fetch-Dest: document) gets the picture page",r.status===404 && t.includes("unavailable.webp"));
+r=await call("/s/book/ghost-1",mkEnv(),{headers:{accept:"*/*","sec-fetch-dest":"empty"}}); t=await r.text();
+check("fetch() with Accept: */* is never given a page",r.status===404 && t==="MMicjMedia shared item was not found.");
 
 /* ---- maintenance switch ---- */
 r=await call("/",mkEnv({MAINTENANCE:"1"}),PAGE); t=await r.text();
