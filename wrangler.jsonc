@@ -65,10 +65,11 @@
    * to false (the page then serves with no preview tags).
    */
 
-  "assets": {
+    "assets": {
     "directory": ".",
     "binding": "ASSETS",
-    "run_worker_first": ["/"]
+    "not_found_handling": "404-page",
+    "run_worker_first": ["/", "/s/*", "/__sky_*"]
   },
 
   "kv_namespaces": [
