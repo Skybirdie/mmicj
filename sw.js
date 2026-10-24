@@ -15,7 +15,7 @@
    IF YOU CHANGE offline.html OR offline.webp: change OFFLINE_VERSION
    below. Browsers then install the new worker and fetch the new copies.
    ========================================================= */
-const OFFLINE_VERSION = "1";
+const OFFLINE_VERSION = "1.0.1";
 const OFFLINE_CACHE = "mmicj-offline-v" + OFFLINE_VERSION;
 const OFFLINE_PAGE = "/offline.html";
 const OFFLINE_IMAGE = "/assets/errors/offline.webp";
