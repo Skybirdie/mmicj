@@ -3742,7 +3742,7 @@ body.sky-share-mode .sky-share-menu-panel {
 
     border: 1px solid var(--sky-share-menu-border);
     border-radius: 16px;
-    background: var(--sky-share-menu-bg);
+    background: color-mix(in srgb, var(--sky-share-menu-bg) 30%, transparent);
     color: var(--sky-share-menu-text);
     box-shadow: var(--sky-share-menu-shadow);
     backdrop-filter: blur(16px);
