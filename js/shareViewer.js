@@ -122,8 +122,24 @@ window.ShareViewer = (function () {
 
     const BOOK_TOUCH_THRESHOLD = 48;
 
-    const GLIDE_MEDIA_URL =
-        "https://meditationmornings.glide.page/dl/media";
+    /* The app no longer hands visitors back to Glide. Share Mode links
+       now lead into the main app, which is served from the same origin
+       as the share page itself. */
+    const FRONT_PAGE_URL = "/";
+
+    /* Entries of the share-page app switcher menu (see createShareMenu).
+       The hrefs are the same state links js/browserAddress.js writes and
+       js/appSwitcher.js reads, so each one is a normal page navigation. */
+    const SHARE_MENU_LINKS = [
+        { label: "The 7 Arms",      href: "/",                  icon: "icon-radial" },
+        { label: "Books",           href: "/?view=reader",      icon: "icon-open-book" },
+        { label: "Videos",          href: "/?view=video",       icon: "icon-video" },
+        { label: "Images/Graphics", href: "/?view=slideshow",   icon: "icon-slideshow" }
+    ];
+
+    /* How long Share Mode waits for the hand-off to the front page before
+       it falls back to the old closed-state panel. */
+    const LIBRARY_HANDOFF_FALLBACK_MS = 8000;
 
 /* Standalone Share Mode loading sequence. */
 const SHARE_LOADING_INTERVAL = 2500;
@@ -1002,15 +1018,7 @@ function stopShareLoading() {
 
 
     goLink.href =
-        GLIDE_MEDIA_URL;
-
-
-    goLink.target =
-        "_blank";
-
-
-    goLink.rel =
-        "noopener noreferrer";
+        FRONT_PAGE_URL;
 
 
     goLink.className =
@@ -1409,22 +1417,18 @@ function stopShareLoading() {
             );
 
 
+        /*
+         * The Open button is now the app switcher menu button.
+         * createShareMenu() returns the button (still carrying the
+         * .sky-share-open-button class so the existing positioning and
+         * closed-state rules keep applying), the menu panel and a
+         * transparent scrim that catches outside taps.
+         */
+        const menu =
+            createShareMenu();
+
         const openButton =
-            createElement(
-                "a",
-                "sky-share-open-button",
-                "Open Meditation Mornings"
-            );
-
-
-        openButton.href =
-            GLIDE_MEDIA_URL;
-
-        openButton.target =
-            "_blank";
-
-        openButton.rel =
-            "noopener noreferrer";
+            menu.button;
 
 
         const closeButton =
@@ -1452,6 +1456,14 @@ function stopShareLoading() {
             close
         );
 
+
+        actions.appendChild(
+            menu.scrim
+        );
+
+        actions.appendChild(
+            menu.panel
+        );
 
         actions.appendChild(
             openButton
@@ -4080,6 +4092,418 @@ async function waitForSharedSlideshowReady() {
 
 
     /* =====================================================
+       APP SWITCHER MENU
+       -----------------------------------------------------
+       The bottom-right button opens a small menu that opens
+       upward (the front page menu opens downward) with four
+       destinations in the main app: The 7 Arms (front page),
+       Books, Videos and Images/Graphics.
+
+       The entries are plain links to the state links the main
+       app already understands (/, /?view=reader, ...), so no
+       main-app code is involved and the viewer itself is not
+       touched. Share Mode does not run AppSwitcher, which is
+       why the menu is built here instead of reusing it.
+
+       A transparent scrim sits behind the panel while it is
+       open, so the tap that dismisses the menu cannot also
+       turn a page or toggle playback underneath it.
+    ===================================================== */
+
+    const SVG_NS =
+        "http://www.w3.org/2000/svg";
+
+    let shareMenu = null;
+
+    let shareMenuEscapeBound = false;
+
+    let leavingForLibrary = false;
+
+    let libraryFallbackTimer = 0;
+
+
+    function createMenuIcon(symbolId) {
+
+        const svg =
+            document.createElementNS(
+                SVG_NS,
+                "svg"
+            );
+
+        svg.setAttribute(
+            "class",
+            "icon"
+        );
+
+        svg.setAttribute(
+            "aria-hidden",
+            "true"
+        );
+
+        const use =
+            document.createElementNS(
+                SVG_NS,
+                "use"
+            );
+
+        use.setAttribute(
+            "href",
+            "#" + symbolId
+        );
+
+        svg.appendChild(use);
+
+        return svg;
+    }
+
+
+    function setShareMenuOpen(open) {
+
+        if (!shareMenu) {
+            return;
+        }
+
+        const next =
+            !!open;
+
+        if (shareMenu.open === next) {
+            return;
+        }
+
+        shareMenu.open =
+            next;
+
+        shareMenu.button.setAttribute(
+            "aria-expanded",
+            next ? "true" : "false"
+        );
+
+        shareMenu.button.setAttribute(
+            "aria-label",
+            next
+                ? "Close media navigation"
+                : "Open media navigation"
+        );
+
+        shareMenu.panel.classList.toggle(
+            "is-open",
+            next
+        );
+
+        shareMenu.scrim.classList.toggle(
+            "is-open",
+            next
+        );
+    }
+
+
+    function createShareMenu() {
+
+        const button =
+            createElement(
+                "button",
+                "sky-share-open-button"
+            );
+
+        button.type =
+            "button";
+
+        button.id =
+            "skyShareMenuButton";
+
+        button.setAttribute(
+            "aria-label",
+            "Open media navigation"
+        );
+
+        button.setAttribute(
+            "aria-haspopup",
+            "true"
+        );
+
+        button.setAttribute(
+            "aria-expanded",
+            "false"
+        );
+
+        button.setAttribute(
+            "aria-controls",
+            "skyShareMenuPanel"
+        );
+
+        button.appendChild(
+            createMenuIcon("icon-menu")
+        );
+
+
+        const panel =
+            createElement(
+                "nav",
+                "sky-share-menu-panel"
+            );
+
+        panel.id =
+            "skyShareMenuPanel";
+
+        panel.setAttribute(
+            "aria-label",
+            "Media section navigation"
+        );
+
+        SHARE_MENU_LINKS.forEach(
+            entry => {
+
+                const link =
+                    createElement(
+                        "a",
+                        "sky-share-menu-link"
+                    );
+
+                link.href =
+                    entry.href;
+
+                link.appendChild(
+                    createMenuIcon(entry.icon)
+                );
+
+                link.appendChild(
+                    createElement(
+                        "span",
+                        "",
+                        entry.label
+                    )
+                );
+
+                panel.appendChild(link);
+            }
+        );
+
+
+        const scrim =
+            createElement(
+                "div",
+                "sky-share-menu-scrim"
+            );
+
+        scrim.setAttribute(
+            "aria-hidden",
+            "true"
+        );
+
+
+        shareMenu = {
+            button,
+            panel,
+            scrim,
+            open: false
+        };
+
+
+        button.addEventListener(
+            "click",
+            event => {
+
+                event.preventDefault();
+
+                event.stopPropagation();
+
+                const opening =
+                    !shareMenu.open;
+
+                setShareMenuOpen(opening);
+
+                if (opening) {
+
+                    const first =
+                        panel.querySelector(
+                            ".sky-share-menu-link"
+                        );
+
+                    if (first) {
+
+                        try {
+                            first.focus({
+                                preventScroll: true
+                            });
+                        }
+                        catch (error) {
+                            first.focus();
+                        }
+                    }
+                }
+            }
+        );
+
+        scrim.addEventListener(
+            "click",
+            event => {
+
+                event.preventDefault();
+
+                event.stopPropagation();
+
+                setShareMenuOpen(false);
+            }
+        );
+
+        panel.addEventListener(
+            "click",
+            event => {
+
+                /* Let the link navigate; just fold the menu away. */
+                if (
+                    event.target &&
+                    event.target.closest &&
+                    event.target.closest(
+                        ".sky-share-menu-link"
+                    )
+                ) {
+                    setShareMenuOpen(false);
+                }
+            }
+        );
+
+
+        /*
+         * Escape closes the menu first. This listener runs in the
+         * capture phase, ahead of bindEscape(), and stops the event
+         * so that the same key press does not also close the shared
+         * item and leave the page.
+         */
+        if (!shareMenuEscapeBound) {
+
+            shareMenuEscapeBound =
+                true;
+
+            document.addEventListener(
+                "keydown",
+                event => {
+
+                    if (
+                        event.key !== "Escape" ||
+                        !shareMenu ||
+                        !shareMenu.open
+                    ) {
+                        return;
+                    }
+
+                    event.preventDefault();
+
+                    event.stopPropagation();
+
+                    event.stopImmediatePropagation();
+
+                    setShareMenuOpen(false);
+
+                    try {
+                        shareMenu.button.focus({
+                            preventScroll: true
+                        });
+                    }
+                    catch (error) {
+                        shareMenu.button.focus();
+                    }
+                },
+                true
+            );
+        }
+
+        return shareMenu;
+    }
+
+
+    /* =====================================================
+       HAND-OFF TO THE MAIN APP
+       -----------------------------------------------------
+       Closing the shared item no longer shows the Go panel.
+       After the normal close cleanup (which stops playback),
+       the visitor is taken straight to the front page.
+
+       If the navigation has not happened after
+       LIBRARY_HANDOFF_FALLBACK_MS (offline, blocked, ...),
+       the old closed-state panel is shown instead; its Go
+       link now also points at the front page.
+
+       Back from the front page: the browser may restore this
+       page from its back/forward cache in the half-closed
+       state, so a restored page reloads the share link, which
+       is the same as Replay.
+    ===================================================== */
+
+    function leaveForLibrary() {
+
+        setShareMenuOpen(false);
+
+        if (leavingForLibrary) {
+            return;
+        }
+
+        leavingForLibrary =
+            true;
+
+        libraryFallbackTimer =
+            window.setTimeout(
+                () => {
+
+                    libraryFallbackTimer =
+                        0;
+
+                    leavingForLibrary =
+                        false;
+
+                    showClosedPanel();
+                },
+                LIBRARY_HANDOFF_FALLBACK_MS
+            );
+
+        try {
+            window.location.assign(
+                FRONT_PAGE_URL
+            );
+        }
+        catch (error) {
+
+            console.warn(
+                "[SkyMedia Share] Front page hand-off failed:",
+                error
+            );
+
+            window.clearTimeout(
+                libraryFallbackTimer
+            );
+
+            libraryFallbackTimer =
+                0;
+
+            leavingForLibrary =
+                false;
+
+            showClosedPanel();
+        }
+    }
+
+
+    function bindLibraryHandoff() {
+
+        window.addEventListener(
+            "pageshow",
+            event => {
+
+                if (!event.persisted) {
+                    return;
+                }
+
+                setShareMenuOpen(false);
+
+                if (leavingForLibrary) {
+                    window.location.reload();
+                }
+            }
+        );
+    }
+
+
+    /* =====================================================
        CLOSED STATE: MOBILE CHROME (LOGO / OPEN BUTTON)
        -----------------------------------------------------
        On mobile, once the go-button-mobile artwork is showing,
@@ -4278,6 +4702,8 @@ async function waitForSharedSlideshowReady() {
         if (!shell) {
             return;
         }
+
+        setShareMenuOpen(false);
 
 
         shell.classList.add(
@@ -4643,7 +5069,7 @@ async function waitForSharedSlideshowReady() {
             hideSharedItemSurfaces();
 
 
-            showClosedPanel();
+            leaveForLibrary();
 
         }
         catch (error) {
@@ -6473,6 +6899,8 @@ async function prepareVideo(item) {
         bindEscape();
 
         bindFullscreenChange();
+
+        bindLibraryHandoff();
 
 
         /*

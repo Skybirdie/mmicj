@@ -1,0 +1,867 @@
+--- a/js/shareViewer.js	2026-10-24 05:20:00.000000000 +0000
++++ b/js/shareViewer.js	2026-10-28 21:54:28.467122524 +0000
+@@ -122,8 +122,24 @@
+ 
+     const BOOK_TOUCH_THRESHOLD = 48;
+ 
+-    const GLIDE_MEDIA_URL =
+-        "https://meditationmornings.glide.page/dl/media";
++    /* The app no longer hands visitors back to Glide. Share Mode links
++       now lead into the main app, which is served from the same origin
++       as the share page itself. */
++    const FRONT_PAGE_URL = "/";
++
++    /* Entries of the share-page app switcher menu (see createShareMenu).
++       The hrefs are the same state links js/browserAddress.js writes and
++       js/appSwitcher.js reads, so each one is a normal page navigation. */
++    const SHARE_MENU_LINKS = [
++        { label: "The 7 Arms",      href: "/",                  icon: "icon-radial" },
++        { label: "Books",           href: "/?view=reader",      icon: "icon-open-book" },
++        { label: "Videos",          href: "/?view=video",       icon: "icon-video" },
++        { label: "Images/Graphics", href: "/?view=slideshow",   icon: "icon-slideshow" }
++    ];
++
++    /* How long Share Mode waits for the hand-off to the front page before
++       it falls back to the old closed-state panel. */
++    const LIBRARY_HANDOFF_FALLBACK_MS = 8000;
+ 
+ /* Standalone Share Mode loading sequence. */
+ const SHARE_LOADING_INTERVAL = 2500;
+@@ -1002,15 +1018,7 @@
+ 
+ 
+     goLink.href =
+-        GLIDE_MEDIA_URL;
+-
+-
+-    goLink.target =
+-        "_blank";
+-
+-
+-    goLink.rel =
+-        "noopener noreferrer";
++        FRONT_PAGE_URL;
+ 
+ 
+     goLink.className =
+@@ -1409,22 +1417,18 @@
+             );
+ 
+ 
+-        const openButton =
+-            createElement(
+-                "a",
+-                "sky-share-open-button",
+-                "Open Meditation Mornings"
+-            );
+-
+-
+-        openButton.href =
+-            GLIDE_MEDIA_URL;
+-
+-        openButton.target =
+-            "_blank";
++        /*
++         * The Open button is now the app switcher menu button.
++         * createShareMenu() returns the button (still carrying the
++         * .sky-share-open-button class so the existing positioning and
++         * closed-state rules keep applying), the menu panel and a
++         * transparent scrim that catches outside taps.
++         */
++        const menu =
++            createShareMenu();
+ 
+-        openButton.rel =
+-            "noopener noreferrer";
++        const openButton =
++            menu.button;
+ 
+ 
+         const closeButton =
+@@ -1454,6 +1458,14 @@
+ 
+ 
+         actions.appendChild(
++            menu.scrim
++        );
++
++        actions.appendChild(
++            menu.panel
++        );
++
++        actions.appendChild(
+             openButton
+         );
+ 
+@@ -4080,6 +4092,418 @@
+ 
+ 
+     /* =====================================================
++       APP SWITCHER MENU
++       -----------------------------------------------------
++       The bottom-right button opens a small menu that opens
++       upward (the front page menu opens downward) with four
++       destinations in the main app: The 7 Arms (front page),
++       Books, Videos and Images/Graphics.
++
++       The entries are plain links to the state links the main
++       app already understands (/, /?view=reader, ...), so no
++       main-app code is involved and the viewer itself is not
++       touched. Share Mode does not run AppSwitcher, which is
++       why the menu is built here instead of reusing it.
++
++       A transparent scrim sits behind the panel while it is
++       open, so the tap that dismisses the menu cannot also
++       turn a page or toggle playback underneath it.
++    ===================================================== */
++
++    const SVG_NS =
++        "http://www.w3.org/2000/svg";
++
++    let shareMenu = null;
++
++    let shareMenuEscapeBound = false;
++
++    let leavingForLibrary = false;
++
++    let libraryFallbackTimer = 0;
++
++
++    function createMenuIcon(symbolId) {
++
++        const svg =
++            document.createElementNS(
++                SVG_NS,
++                "svg"
++            );
++
++        svg.setAttribute(
++            "class",
++            "icon"
++        );
++
++        svg.setAttribute(
++            "aria-hidden",
++            "true"
++        );
++
++        const use =
++            document.createElementNS(
++                SVG_NS,
++                "use"
++            );
++
++        use.setAttribute(
++            "href",
++            "#" + symbolId
++        );
++
++        svg.appendChild(use);
++
++        return svg;
++    }
++
++
++    function setShareMenuOpen(open) {
++
++        if (!shareMenu) {
++            return;
++        }
++
++        const next =
++            !!open;
++
++        if (shareMenu.open === next) {
++            return;
++        }
++
++        shareMenu.open =
++            next;
++
++        shareMenu.button.setAttribute(
++            "aria-expanded",
++            next ? "true" : "false"
++        );
++
++        shareMenu.button.setAttribute(
++            "aria-label",
++            next
++                ? "Close media navigation"
++                : "Open media navigation"
++        );
++
++        shareMenu.panel.classList.toggle(
++            "is-open",
++            next
++        );
++
++        shareMenu.scrim.classList.toggle(
++            "is-open",
++            next
++        );
++    }
++
++
++    function createShareMenu() {
++
++        const button =
++            createElement(
++                "button",
++                "sky-share-open-button"
++            );
++
++        button.type =
++            "button";
++
++        button.id =
++            "skyShareMenuButton";
++
++        button.setAttribute(
++            "aria-label",
++            "Open media navigation"
++        );
++
++        button.setAttribute(
++            "aria-haspopup",
++            "true"
++        );
++
++        button.setAttribute(
++            "aria-expanded",
++            "false"
++        );
++
++        button.setAttribute(
++            "aria-controls",
++            "skyShareMenuPanel"
++        );
++
++        button.appendChild(
++            createMenuIcon("icon-menu")
++        );
++
++
++        const panel =
++            createElement(
++                "nav",
++                "sky-share-menu-panel"
++            );
++
++        panel.id =
++            "skyShareMenuPanel";
++
++        panel.setAttribute(
++            "aria-label",
++            "Media section navigation"
++        );
++
++        SHARE_MENU_LINKS.forEach(
++            entry => {
++
++                const link =
++                    createElement(
++                        "a",
++                        "sky-share-menu-link"
++                    );
++
++                link.href =
++                    entry.href;
++
++                link.appendChild(
++                    createMenuIcon(entry.icon)
++                );
++
++                link.appendChild(
++                    createElement(
++                        "span",
++                        "",
++                        entry.label
++                    )
++                );
++
++                panel.appendChild(link);
++            }
++        );
++
++
++        const scrim =
++            createElement(
++                "div",
++                "sky-share-menu-scrim"
++            );
++
++        scrim.setAttribute(
++            "aria-hidden",
++            "true"
++        );
++
++
++        shareMenu = {
++            button,
++            panel,
++            scrim,
++            open: false
++        };
++
++
++        button.addEventListener(
++            "click",
++            event => {
++
++                event.preventDefault();
++
++                event.stopPropagation();
++
++                const opening =
++                    !shareMenu.open;
++
++                setShareMenuOpen(opening);
++
++                if (opening) {
++
++                    const first =
++                        panel.querySelector(
++                            ".sky-share-menu-link"
++                        );
++
++                    if (first) {
++
++                        try {
++                            first.focus({
++                                preventScroll: true
++                            });
++                        }
++                        catch (error) {
++                            first.focus();
++                        }
++                    }
++                }
++            }
++        );
++
++        scrim.addEventListener(
++            "click",
++            event => {
++
++                event.preventDefault();
++
++                event.stopPropagation();
++
++                setShareMenuOpen(false);
++            }
++        );
++
++        panel.addEventListener(
++            "click",
++            event => {
++
++                /* Let the link navigate; just fold the menu away. */
++                if (
++                    event.target &&
++                    event.target.closest &&
++                    event.target.closest(
++                        ".sky-share-menu-link"
++                    )
++                ) {
++                    setShareMenuOpen(false);
++                }
++            }
++        );
++
++
++        /*
++         * Escape closes the menu first. This listener runs in the
++         * capture phase, ahead of bindEscape(), and stops the event
++         * so that the same key press does not also close the shared
++         * item and leave the page.
++         */
++        if (!shareMenuEscapeBound) {
++
++            shareMenuEscapeBound =
++                true;
++
++            document.addEventListener(
++                "keydown",
++                event => {
++
++                    if (
++                        event.key !== "Escape" ||
++                        !shareMenu ||
++                        !shareMenu.open
++                    ) {
++                        return;
++                    }
++
++                    event.preventDefault();
++
++                    event.stopPropagation();
++
++                    event.stopImmediatePropagation();
++
++                    setShareMenuOpen(false);
++
++                    try {
++                        shareMenu.button.focus({
++                            preventScroll: true
++                        });
++                    }
++                    catch (error) {
++                        shareMenu.button.focus();
++                    }
++                },
++                true
++            );
++        }
++
++        return shareMenu;
++    }
++
++
++    /* =====================================================
++       HAND-OFF TO THE MAIN APP
++       -----------------------------------------------------
++       Closing the shared item no longer shows the Go panel.
++       After the normal close cleanup (which stops playback),
++       the visitor is taken straight to the front page.
++
++       If the navigation has not happened after
++       LIBRARY_HANDOFF_FALLBACK_MS (offline, blocked, ...),
++       the old closed-state panel is shown instead; its Go
++       link now also points at the front page.
++
++       Back from the front page: the browser may restore this
++       page from its back/forward cache in the half-closed
++       state, so a restored page reloads the share link, which
++       is the same as Replay.
++    ===================================================== */
++
++    function leaveForLibrary() {
++
++        setShareMenuOpen(false);
++
++        if (leavingForLibrary) {
++            return;
++        }
++
++        leavingForLibrary =
++            true;
++
++        libraryFallbackTimer =
++            window.setTimeout(
++                () => {
++
++                    libraryFallbackTimer =
++                        0;
++
++                    leavingForLibrary =
++                        false;
++
++                    showClosedPanel();
++                },
++                LIBRARY_HANDOFF_FALLBACK_MS
++            );
++
++        try {
++            window.location.assign(
++                FRONT_PAGE_URL
++            );
++        }
++        catch (error) {
++
++            console.warn(
++                "[SkyMedia Share] Front page hand-off failed:",
++                error
++            );
++
++            window.clearTimeout(
++                libraryFallbackTimer
++            );
++
++            libraryFallbackTimer =
++                0;
++
++            leavingForLibrary =
++                false;
++
++            showClosedPanel();
++        }
++    }
++
++
++    function bindLibraryHandoff() {
++
++        window.addEventListener(
++            "pageshow",
++            event => {
++
++                if (!event.persisted) {
++                    return;
++                }
++
++                setShareMenuOpen(false);
++
++                if (leavingForLibrary) {
++                    window.location.reload();
++                }
++            }
++        );
++    }
++
++
++    /* =====================================================
+        CLOSED STATE: MOBILE CHROME (LOGO / OPEN BUTTON)
+        -----------------------------------------------------
+        On mobile, once the go-button-mobile artwork is showing,
+@@ -4279,6 +4703,8 @@
+             return;
+         }
+ 
++        setShareMenuOpen(false);
++
+ 
+         shell.classList.add(
+             "sky-share-document-closed"
+@@ -4643,7 +5069,7 @@
+             hideSharedItemSurfaces();
+ 
+ 
+-            showClosedPanel();
++            leaveForLibrary();
+ 
+         }
+         catch (error) {
+@@ -6474,6 +6900,8 @@
+ 
+         bindFullscreenChange();
+ 
++        bindLibraryHandoff();
++
+ 
+         /*
+          * Do NOT bind last-page protection yet.
+--- a/css/share.css	2026-10-24 05:20:00.000000000 +0000
++++ b/css/share.css	2026-10-28 21:54:48.775289588 +0000
+@@ -1800,12 +1800,11 @@
+ 
+ 
+ /*
+- * The existing Open button becomes the small clickable
+- * Meditation Mornings logo.
+- *
+- * Its existing href remains:
+- *
+- * https://meditationmornings.glide.page/dl/media
++ * The existing Open button is now the app switcher menu
++ * button (see createShareMenu in shareViewer.js): a glass
++ * button with the menu icon, matching #frontMenuButton on
++ * the Front Page. Its size and position are unchanged, so
++ * the controls placed around it keep their layout.
+  */
+ 
+ .sky-share-open-button {
+@@ -1813,7 +1812,8 @@
+     bottom: clamp(35px, 4vw, 40px);
+     right: clamp(15px, 1.2vw, 25px);
+ 
+-    display: block !important;
++    display: grid !important;
++    place-items: center !important;
+ 
+     width: clamp(42px, 5vw, 64px) !important;
+     height: clamp(42px, 5vw, 64px) !important;
+@@ -1825,37 +1825,50 @@
+     max-height: 64px !important;
+ 
+     padding: 0 !important;
++    margin: 0 !important;
+ 
+     border: 1px solid rgba(255,255,255,.55) !important;
+ 
+     border-radius: clamp(8px, 1vw, 13px) !important;
+ 
+-    background-image: url("../assets/logo.png") !important;
+-    background-position: center !important;
+-    background-repeat: no-repeat !important;
+-    background-size: contain !important;
++    background: rgba(216,239,238,.30) !important;
+ 
+-    background-color: rgba(216,239,238,.80) !important;
++    color: #FFFFFF !important;
+ 
+     box-sizing: border-box !important;
+ 
+     overflow: hidden !important;
+ 
+-    font-size: 0 !important;
+-    line-height: 0 !important;
+-    text-indent: -9999px !important;
+-
+     text-decoration: none !important;
+ 
+     cursor: pointer;
+ 
+     backdrop-filter: blur(7px);
++    -webkit-backdrop-filter: blur(7px);
+ 
+     animation: frontMenuGlow 4s ease-in-out infinite;
+ 
+     transition:
+         transform .25s ease,
+         box-shadow .25s ease;
++
++    -webkit-tap-highlight-color: transparent;
++}
++
++.sky-share-open-button svg {
++    width: 52%;
++    height: 52%;
++    display: block;
++    pointer-events: none;
++    filter: drop-shadow(0 0 3px rgba(84,231,196,.85));
++}
++
++.sky-share-open-button[aria-expanded="true"] {
++    animation-play-state: paused;
++    box-shadow:
++        0 0 7px #ACE1AF,
++        0 0 14px #00FA9A,
++        inset 0 0 12px #ACE1AF !important;
+ }
+ 
+ .sky-share-open-button::before,
+@@ -3597,33 +3610,66 @@
+     left: auto !important;
+     top: auto !important;
+ 
+-    display: block !important;
+     visibility: visible !important;
+     opacity: 1 !important;
++
++    display: grid !important;
++    place-items: center !important;
++
+     width: clamp(42px, 5vw, 64px) !important;
+     height: clamp(42px, 5vw, 64px) !important;
++
+     min-width: 42px !important;
+     min-height: 42px !important;
++
+     max-width: 64px !important;
+     max-height: 64px !important;
++
+     padding: 0 !important;
++    margin: 0 !important;
++
+     border: 1px solid rgba(255,255,255,.55) !important;
++
+     border-radius: clamp(8px, 1vw, 13px) !important;
+-    background-image: url("../assets/logo.png") !important;
+-    background-position: center !important;
+-    background-repeat: no-repeat !important;
+-    background-size: contain !important;
+-    background-color: rgba(216,239,238,.30) !important;
++
++    background: rgba(216,239,238,.30) !important;
++
++    color: #FFFFFF !important;
++
+     box-sizing: border-box !important;
++
+     overflow: hidden !important;
+-    font-size: 0 !important;
+-    line-height: 0 !important;
+-    text-indent: -9999px !important;
++
+     text-decoration: none !important;
+-    cursor: pointer !important;
++
++    cursor: pointer;
++
+     backdrop-filter: blur(7px);
++    -webkit-backdrop-filter: blur(7px);
++
+     animation: frontMenuGlow 4s ease-in-out infinite;
+-    transition: transform .25s ease, box-shadow .25s ease;
++
++    transition:
++        transform .25s ease,
++        box-shadow .25s ease;
++
++    -webkit-tap-highlight-color: transparent;
++}
++
++body.sky-share-mode .sky-share-open-button svg {
++    width: 52%;
++    height: 52%;
++    display: block;
++    pointer-events: none;
++    filter: drop-shadow(0 0 3px rgba(84,231,196,.85));
++}
++
++body.sky-share-mode .sky-share-open-button[aria-expanded="true"] {
++    animation-play-state: paused;
++    box-shadow:
++        0 0 7px #ACE1AF,
++        0 0 14px #00FA9A,
++        inset 0 0 12px #ACE1AF !important;
+ }
+ 
+ 
+@@ -3647,6 +3693,137 @@
+     transform: scale(.95) !important;
+ }
+ 
++/* =========================================================
++   SHARE PAGE APP SWITCHER MENU (opens upward)
++
++   Mirrors #frontMenuPanel on the Front Page (glass panel,
++   same row style) but is anchored above the bottom-right
++   button instead of below a top-right one. Both the scrim
++   and the panel live inside .sky-share-actions, so they
++   share its stacking layer (z-index 1000040) and, with the
++   scrim at z-index -1, sit behind the button itself.
++   ========================================================= */
++
++body.sky-share-mode .sky-share-menu-scrim {
++    position: fixed;
++    inset: 0;
++    z-index: -1;
++    display: none;
++    background: transparent;
++    -webkit-tap-highlight-color: transparent;
++}
++
++body.sky-share-mode .sky-share-menu-scrim.is-open {
++    display: block;
++}
++
++body.sky-share-mode .sky-share-menu-panel {
++    --sky-share-menu-text: #18202a;
++    --sky-share-menu-bg: rgba(255,255,255,.88);
++    --sky-share-menu-border: rgba(24,32,42,.22);
++    --sky-share-menu-shadow: 0 12px 34px rgba(0,0,0,.18);
++
++    position: fixed;
++    right: clamp(15px, 1.2vw, 25px);
++    bottom: calc(
++        clamp(35px, 4vw, 40px) +
++        clamp(42px, 5vw, 64px) +
++        8px
++    );
++    z-index: 2;
++
++    display: flex;
++    flex-direction: column;
++    gap: 7px;
++
++    min-width: 170px;
++    padding: 9px;
++    box-sizing: border-box;
++
++    border: 1px solid var(--sky-share-menu-border);
++    border-radius: 16px;
++    background: var(--sky-share-menu-bg);
++    color: var(--sky-share-menu-text);
++    box-shadow: var(--sky-share-menu-shadow);
++    backdrop-filter: blur(16px);
++    -webkit-backdrop-filter: blur(16px);
++
++    opacity: 0;
++    visibility: hidden;
++    transform: translateY(5px);
++    transition:
++        opacity .18s ease,
++        transform .18s ease,
++        visibility .18s ease;
++}
++
++html[data-theme="dark"] body.sky-share-mode .sky-share-menu-panel {
++    --sky-share-menu-text: #f4f7fa;
++    --sky-share-menu-bg: rgba(12,16,22,.86);
++    --sky-share-menu-border: rgba(244,247,250,.24);
++    --sky-share-menu-shadow: 0 14px 38px rgba(0,0,0,.48);
++}
++
++body.sky-share-mode .sky-share-menu-panel.is-open {
++    opacity: 1;
++    visibility: visible;
++    transform: translateY(0);
++}
++
++body.sky-share-mode .sky-share-menu-link {
++    display: flex;
++    align-items: center;
++    gap: 10px;
++
++    width: 100%;
++    min-height: 38px;
++    padding: 8px 11px;
++    box-sizing: border-box;
++
++    border: 1px solid transparent;
++    border-radius: 11px;
++    background: transparent;
++    color: inherit;
++
++    font: 600 13px/1 Inter, Arial, sans-serif;
++    text-decoration: none;
++    text-align: left;
++    white-space: nowrap;
++
++    cursor: pointer;
++    -webkit-tap-highlight-color: transparent;
++}
++
++body.sky-share-mode .sky-share-menu-link:hover,
++body.sky-share-mode .sky-share-menu-link:focus-visible {
++    background: color-mix(in srgb, var(--sky-share-menu-text) 9%, transparent);
++    border-color: color-mix(in srgb, var(--sky-share-menu-text) 14%, transparent);
++}
++
++body.sky-share-mode .sky-share-menu-link:focus-visible {
++    outline: 2px solid currentColor;
++    outline-offset: 1px;
++}
++
++body.sky-share-mode .sky-share-menu-link svg {
++    width: 20px;
++    height: 20px;
++    flex: 0 0 20px;
++    display: block;
++}
++
++@media (max-width: 700px) {
++    body.sky-share-mode .sky-share-menu-panel {
++        min-width: 158px;
++    }
++}
++
++@media (prefers-reduced-motion: reduce) {
++    body.sky-share-mode .sky-share-menu-panel {
++        transition: none;
++    }
++}
++
+ /* The central button is a separate layer and is intentionally
+    neutral for now; it can later receive an image background. */
+ body.sky-share-mode.sky-share-document-closed
+--- a/index.html	2026-10-24 05:20:00.000000000 +0000
++++ b/index.html	2026-10-28 21:54:48.792418883 +0000
+@@ -31,7 +31,7 @@
+ <link rel="stylesheet" href="css/slideshow.css?v=1.1.5">
+ <link rel="stylesheet" href="css/front-page.css?v=fs5">
+ <link rel="stylesheet" href="css/item-share.css?v=is1">
+-<link rel="stylesheet" href="css/share.css">
++<link rel="stylesheet" href="css/share.css?v=sm1">
+ 
+ <script>
+ /*
+@@ -741,7 +741,7 @@
+ <script src="js/mediaManager.js"></script>
+ <script src="js/itemShare.js?v=1.0.2"></script>
+ <script src="js/shareManager.js?v=is2"></script>
+-<script src="js/shareViewer.js?v=sv4"></script>
++<script src="js/shareViewer.js?v=sv5"></script>
+ 
+ <script src="js/app.js"></script>
+ <script src="js/videoContract.js"></script>

@@ -1800,12 +1800,11 @@ body.sky-share-mode .app-switch-button {
 
 
 /*
- * The existing Open button becomes the small clickable
- * Meditation Mornings logo.
- *
- * Its existing href remains:
- *
- * https://meditationmornings.glide.page/dl/media
+ * The existing Open button is now the app switcher menu
+ * button (see createShareMenu in shareViewer.js): a glass
+ * button with the menu icon, matching #frontMenuButton on
+ * the Front Page. Its size and position are unchanged, so
+ * the controls placed around it keep their layout.
  */
 
 .sky-share-open-button {
@@ -1813,7 +1812,8 @@ body.sky-share-mode .app-switch-button {
     bottom: clamp(35px, 4vw, 40px);
     right: clamp(15px, 1.2vw, 25px);
 
-    display: block !important;
+    display: grid !important;
+    place-items: center !important;
 
     width: clamp(42px, 5vw, 64px) !important;
     height: clamp(42px, 5vw, 64px) !important;
@@ -1825,37 +1825,50 @@ body.sky-share-mode .app-switch-button {
     max-height: 64px !important;
 
     padding: 0 !important;
+    margin: 0 !important;
 
     border: 1px solid rgba(255,255,255,.55) !important;
 
     border-radius: clamp(8px, 1vw, 13px) !important;
 
-    background-image: url("../assets/logo.png") !important;
-    background-position: center !important;
-    background-repeat: no-repeat !important;
-    background-size: contain !important;
+    background: rgba(216,239,238,.30) !important;
 
-    background-color: rgba(216,239,238,.80) !important;
+    color: #FFFFFF !important;
 
     box-sizing: border-box !important;
 
     overflow: hidden !important;
-
-    font-size: 0 !important;
-    line-height: 0 !important;
-    text-indent: -9999px !important;
 
     text-decoration: none !important;
 
     cursor: pointer;
 
     backdrop-filter: blur(7px);
+    -webkit-backdrop-filter: blur(7px);
 
     animation: frontMenuGlow 4s ease-in-out infinite;
 
     transition:
         transform .25s ease,
         box-shadow .25s ease;
+
+    -webkit-tap-highlight-color: transparent;
+}
+
+.sky-share-open-button svg {
+    width: 52%;
+    height: 52%;
+    display: block;
+    pointer-events: none;
+    filter: drop-shadow(0 0 3px rgba(84,231,196,.85));
+}
+
+.sky-share-open-button[aria-expanded="true"] {
+    animation-play-state: paused;
+    box-shadow:
+        0 0 7px #ACE1AF,
+        0 0 14px #00FA9A,
+        inset 0 0 12px #ACE1AF !important;
 }
 
 .sky-share-open-button::before,
@@ -3597,33 +3610,66 @@ body.sky-share-mode .sky-share-open-button {
     left: auto !important;
     top: auto !important;
 
-    display: block !important;
     visibility: visible !important;
     opacity: 1 !important;
+
+    display: grid !important;
+    place-items: center !important;
+
     width: clamp(42px, 5vw, 64px) !important;
     height: clamp(42px, 5vw, 64px) !important;
+
     min-width: 42px !important;
     min-height: 42px !important;
+
     max-width: 64px !important;
     max-height: 64px !important;
+
     padding: 0 !important;
+    margin: 0 !important;
+
     border: 1px solid rgba(255,255,255,.55) !important;
+
     border-radius: clamp(8px, 1vw, 13px) !important;
-    background-image: url("../assets/logo.png") !important;
-    background-position: center !important;
-    background-repeat: no-repeat !important;
-    background-size: contain !important;
-    background-color: rgba(216,239,238,.30) !important;
+
+    background: rgba(216,239,238,.30) !important;
+
+    color: #FFFFFF !important;
+
     box-sizing: border-box !important;
+
     overflow: hidden !important;
-    font-size: 0 !important;
-    line-height: 0 !important;
-    text-indent: -9999px !important;
+
     text-decoration: none !important;
-    cursor: pointer !important;
+
+    cursor: pointer;
+
     backdrop-filter: blur(7px);
+    -webkit-backdrop-filter: blur(7px);
+
     animation: frontMenuGlow 4s ease-in-out infinite;
-    transition: transform .25s ease, box-shadow .25s ease;
+
+    transition:
+        transform .25s ease,
+        box-shadow .25s ease;
+
+    -webkit-tap-highlight-color: transparent;
+}
+
+body.sky-share-mode .sky-share-open-button svg {
+    width: 52%;
+    height: 52%;
+    display: block;
+    pointer-events: none;
+    filter: drop-shadow(0 0 3px rgba(84,231,196,.85));
+}
+
+body.sky-share-mode .sky-share-open-button[aria-expanded="true"] {
+    animation-play-state: paused;
+    box-shadow:
+        0 0 7px #ACE1AF,
+        0 0 14px #00FA9A,
+        inset 0 0 12px #ACE1AF !important;
 }
 
 
@@ -3645,6 +3691,137 @@ body.sky-share-mode .sky-share-open-button:hover {
 
 body.sky-share-mode .sky-share-open-button:active {
     transform: scale(.95) !important;
+}
+
+/* =========================================================
+   SHARE PAGE APP SWITCHER MENU (opens upward)
+
+   Mirrors #frontMenuPanel on the Front Page (glass panel,
+   same row style) but is anchored above the bottom-right
+   button instead of below a top-right one. Both the scrim
+   and the panel live inside .sky-share-actions, so they
+   share its stacking layer (z-index 1000040) and, with the
+   scrim at z-index -1, sit behind the button itself.
+   ========================================================= */
+
+body.sky-share-mode .sky-share-menu-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    display: none;
+    background: transparent;
+    -webkit-tap-highlight-color: transparent;
+}
+
+body.sky-share-mode .sky-share-menu-scrim.is-open {
+    display: block;
+}
+
+body.sky-share-mode .sky-share-menu-panel {
+    --sky-share-menu-text: #18202a;
+    --sky-share-menu-bg: rgba(255,255,255,.88);
+    --sky-share-menu-border: rgba(24,32,42,.22);
+    --sky-share-menu-shadow: 0 12px 34px rgba(0,0,0,.18);
+
+    position: fixed;
+    right: clamp(15px, 1.2vw, 25px);
+    bottom: calc(
+        clamp(35px, 4vw, 40px) +
+        clamp(42px, 5vw, 64px) +
+        8px
+    );
+    z-index: 2;
+
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+
+    min-width: 170px;
+    padding: 9px;
+    box-sizing: border-box;
+
+    border: 1px solid var(--sky-share-menu-border);
+    border-radius: 16px;
+    background: var(--sky-share-menu-bg);
+    color: var(--sky-share-menu-text);
+    box-shadow: var(--sky-share-menu-shadow);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(5px);
+    transition:
+        opacity .18s ease,
+        transform .18s ease,
+        visibility .18s ease;
+}
+
+html[data-theme="dark"] body.sky-share-mode .sky-share-menu-panel {
+    --sky-share-menu-text: #f4f7fa;
+    --sky-share-menu-bg: rgba(12,16,22,.86);
+    --sky-share-menu-border: rgba(244,247,250,.24);
+    --sky-share-menu-shadow: 0 14px 38px rgba(0,0,0,.48);
+}
+
+body.sky-share-mode .sky-share-menu-panel.is-open {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+body.sky-share-mode .sky-share-menu-link {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+    width: 100%;
+    min-height: 38px;
+    padding: 8px 11px;
+    box-sizing: border-box;
+
+    border: 1px solid transparent;
+    border-radius: 11px;
+    background: transparent;
+    color: inherit;
+
+    font: 600 13px/1 Inter, Arial, sans-serif;
+    text-decoration: none;
+    text-align: left;
+    white-space: nowrap;
+
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+body.sky-share-mode .sky-share-menu-link:hover,
+body.sky-share-mode .sky-share-menu-link:focus-visible {
+    background: color-mix(in srgb, var(--sky-share-menu-text) 9%, transparent);
+    border-color: color-mix(in srgb, var(--sky-share-menu-text) 14%, transparent);
+}
+
+body.sky-share-mode .sky-share-menu-link:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 1px;
+}
+
+body.sky-share-mode .sky-share-menu-link svg {
+    width: 20px;
+    height: 20px;
+    flex: 0 0 20px;
+    display: block;
+}
+
+@media (max-width: 700px) {
+    body.sky-share-mode .sky-share-menu-panel {
+        min-width: 158px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    body.sky-share-mode .sky-share-menu-panel {
+        transition: none;
+    }
 }
 
 /* The central button is a separate layer and is intentionally
