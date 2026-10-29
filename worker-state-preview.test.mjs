@@ -71,6 +71,7 @@ let failures = 0;
 const check = (name, ok, extra = "") => { console.log((ok ? "PASS" : "FAIL") + "  " + name + (extra ? "  [" + extra + "]" : "")); if (!ok) failures++; };
 const get = (w, env, path) => w.fetch(new Request(BASE + path), env, ctx);
 const LOGO = BASE + "/assets/base-logo.jpg";
+const POSTER = BASE + "/assets/mmicj-poster.png";
 
 // ---- item state link ---------------------------------------------------
 {
@@ -126,15 +127,24 @@ const LOGO = BASE + "/assets/base-logo.jpg";
   let html = await (await get(w, env, "/?view=video&item=" + encodeURIComponent('video/"><script>alert(1)</script>'))).text();
   check("hostile item value is not reflected", !html.includes("<script>alert") && !html.includes("alert(1)"));
   html = await (await get(w, env, "/?view=%3Cb%3E&item=zzz")).text();
-  check("garbage view/item -> normal centerpiece card, nothing reflected", !html.includes("<b>") && html.includes("section=slideshow&amp;id=slide-newest&amp;base=1"));
+  check("garbage view/item -> the plain front-page card (poster), nothing reflected", !html.includes("<b>") && html.includes('og:image" content="' + POSTER + '"'));
 }
 
 // ---- unchanged behaviour ----------------------------------------------
 {
   const w = await fresh(); const env = makeEnv(snapshot);
   const html = await (await get(w, env, "/")).text();
-  check("bare base URL still shows the centerpiece card",
-    html.includes("section=slideshow&amp;id=slide-newest&amp;base=1") && html.includes('og:url" content="https://example.workers.dev/"'));
+  check("bare base URL (front page) previews with mmicj-poster.png, not the centerpiece thumbnail",
+    html.includes('og:image" content="' + POSTER + '"') && !html.includes("&amp;base=1") && html.includes('og:url" content="https://example.workers.dev/"'));
+  check("...with the poster's own square size hints (720 x 720)",
+    html.includes('og:image:width" content="720"') && html.includes('og:image:height" content="720"'));
+  check("the poster file is really in assets/ (deploy it with the app)",
+    (await import("node:fs")).existsSync(new URL("./assets/mmicj-poster.png", import.meta.url)));
+  check("...and the front page needs no KV read at all", env.ops.gwm === 0 && env.ops.get === 0, "gwm=" + env.ops.gwm + " get=" + env.ops.get);
+  for (const path of ["/?view=front", "/?view=video", "/?view=reader", "/?view=slideshow"]) {
+    const h = await (await get(w, env, path)).text();
+    check(path + " (section link, no item) keeps the base-logo.jpg card", h.includes('og:image" content="' + LOGO + '"') && !h.includes("&amp;base=1"));
+  }
   const t = await (await get(w, env, "/?contractz=abc&view=video")).text();
   check("contract link gets no preview tags", !t.includes("og:image"));
 }

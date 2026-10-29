@@ -60,6 +60,34 @@ const OG_IMAGE_PATH =
 const BASE_LOGO_PATH =
   "/assets/base-logo.jpg";
 
+/*
+ * The plain base address (the front page: #frontShareButton, and the
+ * browser's own share while the front page is showing) is previewed with
+ * the square poster, assets/mmicj-poster.png.
+ *
+ * Section and item links (/?view=...&item=...) are unaffected: they keep
+ * the open item's own card, else assets/base-logo.jpg.
+ *
+ * To use the logo for the front page instead, point
+ * FRONT_PREVIEW_IMAGE_PATH at BASE_LOGO_PATH (and the size at
+ * BASE_LOGO_SIZE). The poster file must be deployed with the app
+ * (assets/mmicj-poster.png); worker-state-preview.test.mjs checks it
+ * exists.
+ */
+const FRONT_PREVIEW_IMAGE_PATH =
+  "/assets/mmicj-poster.png";
+
+/* Pixel size of the poster (square); only used for the
+   og:image:width / og:image:height hints. */
+const FRONT_PREVIEW_IMAGE_SIZE =
+  720;
+
+/* false  the poster above (current choice; also costs no KV read)
+   true   the Front Page centerpiece's thumbnail, with the poster only as
+          its fallback (the original behaviour) */
+const FRONT_PREVIEW_USES_CENTERPIECE =
+  false;
+
 /* Pixel size of assets/base-logo.jpg (it is square). Only used for
    the og:image:width / og:image:height hints. */
 const BASE_LOGO_SIZE =
@@ -6255,15 +6283,24 @@ function buildBaseOgTags(
     height =
       630;
   } else {
+    const fallback =
+      options.fallbackImage || {
+        path:
+          BASE_LOGO_PATH,
+
+        size:
+          BASE_LOGO_SIZE
+      };
+
     imageUrl =
       origin +
-      BASE_LOGO_PATH;
+      fallback.path;
 
     width =
-      BASE_LOGO_SIZE;
+      fallback.size;
 
     height =
-      BASE_LOGO_SIZE;
+      fallback.size;
   }
 
   const pageUrl =
@@ -6450,9 +6487,20 @@ async function serveBasePage(
       tags =
         buildBaseOgTags(
           origin,
-          await getBaseCenterpiece(
-            env
-          )
+          FRONT_PREVIEW_USES_CENTERPIECE
+            ? await getBaseCenterpiece(
+                env
+              )
+            : null,
+          {
+            fallbackImage: {
+              path:
+                FRONT_PREVIEW_IMAGE_PATH,
+
+              size:
+                FRONT_PREVIEW_IMAGE_SIZE
+            }
+          }
         );
     }
 
