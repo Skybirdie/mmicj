@@ -1964,6 +1964,7 @@ function injectContractBootstrap(
 ) {
   const item =
     manifest?.content?.[0] ||
+    imageQuery?.previewItem ||
     null;
 
   const section =
@@ -1976,12 +1977,37 @@ function injectContractBootstrap(
       item?.id || ""
     ).trim();
 
+  /* No manifest = target-only share: the app loads its normal data
+     and resolves the item itself, so no contract is injected. */
+  const contractLine =
+    manifest
+      ? "window.SkyMediaContract = " +
+        JSON.stringify(
+          manifest
+        ) +
+        ";"
+      : "";
+
+  const switchLine =
+    typeof imageQuery?.shareModeEnabled ===
+    "boolean"
+      ? "window.__SKY_SHARE_MODE_ENABLED = " +
+        (
+          imageQuery.shareModeEnabled
+            ? "true"
+            : "false"
+        ) +
+        ";"
+      : "";
+
   const script = `
 <script>
 (function () {
   "use strict";
 
-  window.SkyMediaContract = ${JSON.stringify(manifest)};
+  ${contractLine}
+
+  ${switchLine}
 
   window.__SKY_SHARE_MODE = true;
 
@@ -2202,7 +2228,12 @@ async function serveWithContract(
           manifest.content[0].id
       },
       {
-        key
+        key,
+
+        shareModeEnabled:
+          isShareModeEnabled(
+            env
+          )
       }
     ),
     {
@@ -2220,7 +2251,8 @@ async function serveWithContract(
 ========================================================= */
 
 /* /s/<section>/<id>  ->  /?view=<section>&item=<section>/<id>
-   (the format js/browserAddress.js writes and js/appSwitcher.js opens). */
+   (the format js/browserAddress.js writes and js/appSwitcher.js opens).
+   Used when the Share Mode switch is off. */
 function redirectToAppItem(
   request,
   target
@@ -2271,18 +2303,25 @@ async function serveDirectShare(
       target
     );
 
-  if (!record) {
-    /*
-     * No share record for /s/<section>/<id> (for example an item that
-     * exists only in the R2 published catalog). Rather than a dead-end
-     * "unavailable" page, send the visitor to the main app link, which
-     * opens the item from the full library and simply stays on the
-     * section if the item is not there.
-     */
-    return redirectToAppItem(
-      request,
-      target
-    );
+  /*
+   * No KV record. An item that exists only in the R2 published catalog
+   * is still shareable: the page is served with just the share target
+   * (no one-item contract), and Share Mode resolves the item from the
+   * normal app data, exactly like a direct-ID share. Anything unknown
+   * (or not released yet) gets the "unavailable" page.
+   */
+  const publishedItem =
+    record
+      ? null
+      : await getPublishedCatalogItem(
+          target
+        );
+
+  if (
+    !record &&
+    !publishedItem
+  ) {
+    return friendlyResponse("unavailable", request, "MMicjMedia shared item was not found.");
   }
 
   const html =
@@ -2301,11 +2340,21 @@ async function serveDirectShare(
   const modified =
     injectContractBootstrap(
       html,
-      record.manifest,
+      record
+        ? record.manifest
+        : null,
       request,
       target,
       {
-        target
+        target,
+
+        previewItem:
+          publishedItem,
+
+        shareModeEnabled:
+          isShareModeEnabled(
+            env
+          )
       }
     );
 
@@ -2360,7 +2409,12 @@ async function serveCatalogShare(
       request,
       target,
       {
-        target
+        target,
+
+        shareModeEnabled:
+          isShareModeEnabled(
+            env
+          )
       }
     );
 
@@ -3660,6 +3714,21 @@ async function handleDirectShare(
 
   if (!target) {
     return null;
+  }
+
+  /*
+   * Share Mode switched off: every /s/<section>/<id> link goes to the
+   * main app instead (no KV read at all).
+   */
+  if (
+    !isShareModeEnabled(
+      env
+    )
+  ) {
+    return redirectToAppItem(
+      request,
+      target
+    );
   }
 
   /*
@@ -5759,6 +5828,76 @@ function parseBaseStateItem(
    (SkyDate.isVisible).
 ========================================================= */
 
+/* =========================================================
+   SHARE MODE SWITCH
+
+   true   Individual-item links are Share Mode links:
+            /s/<section>/<id>  ->  the standalone Share Viewer.
+          The in-app and in-viewer Share buttons create /s/ links,
+          and a link copied from the browser address bar
+          (/?view=<section>&item=<section>/<id>) is handed to the
+          Share Viewer when someone arrives at it (see the small
+          script at the top of index.html).
+
+   false  Individual-item links open the item inside the main app:
+            /?view=<section>&item=<section>/<id>
+          The Share buttons create those links, and any /s/ link
+          still in circulation is redirected to them.
+          (Old 16-character /s/<key> links keep working either way.)
+
+   To switch: change the constant below and deploy, or set a
+   Worker variable named SHARE_MODE_ENABLED to "true" / "false"
+   (when it is set it wins; no deploy needed). The page tells the
+   browser which way it is set, so the Worker and the app can
+   never disagree.
+========================================================= */
+
+const SHARE_MODE_ENABLED =
+  true;
+
+function isShareModeEnabled(
+  env
+) {
+  const raw =
+    env &&
+    env.SHARE_MODE_ENABLED !== undefined &&
+    env.SHARE_MODE_ENABLED !== null
+      ? String(
+          env.SHARE_MODE_ENABLED
+        )
+          .trim()
+          .toLowerCase()
+      : "";
+
+  if (
+    [
+      "false",
+      "0",
+      "off",
+      "no"
+    ].includes(
+      raw
+    )
+  ) {
+    return false;
+  }
+
+  if (
+    [
+      "true",
+      "1",
+      "on",
+      "yes"
+    ].includes(
+      raw
+    )
+  ) {
+    return true;
+  }
+
+  return SHARE_MODE_ENABLED;
+}
+
 const PUBLISHED_CATALOG_URL =
   "https://media.mmicj.com/catalog/published.json";
 
@@ -6328,6 +6467,24 @@ async function serveBasePage(
             element(
               element
             ) {
+              /* First thing in <head>, so the arrival script at the top
+                 of index.html can read it. */
+              element.prepend(
+                "<script>window.__SKY_SHARE_MODE_ENABLED = " +
+                  (
+                    isShareModeEnabled(
+                      env
+                    )
+                      ? "true"
+                      : "false"
+                  ) +
+                  ";</script>",
+                {
+                  html:
+                    true
+                }
+              );
+
               element.append(
                 tags,
                 {

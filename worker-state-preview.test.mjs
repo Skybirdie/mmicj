@@ -9,7 +9,7 @@ globalThis.HTMLRewriter = class {
   transform(res) {
     const h = this.h;
     const body = res.text().then(t => t.replace(/<head[^>]*>/i, m => {
-      let add = ""; h.element({ append(x) { add += x; } }); return m + add;
+      let pre = "", add = ""; h.element({ prepend(x) { pre += x; }, append(x) { add += x; } }); return m + pre + add;
     }));
     return { body: new ReadableStream({ async start(c) { c.enqueue(new TextEncoder().encode(await body)); c.close(); } }) };
   }
