@@ -5821,11 +5821,16 @@ function parseBaseStateItem(
 
    Preview lookups therefore fall back to that file when KV has
    no match: no KV read, no R2 binding, and at most one fetch
-   per isolate per PUBLISHED_CATALOG_MEMORY_TTL_MS (the file
-   itself is served with max-age=300, and the subrequest is
-   cached at the edge too). Items that are not released yet are
-   never previewed, the same rule the app applies
-   (SkyDate.isVisible).
+   per isolate per PUBLISHED_CATALOG_MEMORY_TTL_MS (5 minutes,
+   the same as the file's own max-age). Items that are not
+   released yet are never previewed, the same rule the app
+   applies (SkyDate.isVisible).
+
+   The memory copy is the ONLY cache layer on purpose: the
+   subrequest is not edge-cached as well, so the two never add
+   up. When an item is deleted in the admin portal (which
+   rewrites published.json straight away), its preview card and
+   its /s/ link stop working within 5 minutes.
 ========================================================= */
 
 /* =========================================================
@@ -5935,15 +5940,7 @@ async function loadPublishedCatalogIndex() {
         PUBLISHED_CATALOG_URL,
         {
           signal:
-            controller.signal,
-
-          cf: {
-            cacheEverything:
-              true,
-
-            cacheTtl:
-              300
-          }
+            controller.signal
         }
       );
 
