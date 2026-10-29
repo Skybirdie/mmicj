@@ -9,6 +9,11 @@ window.ShareManager = (function () {
     const SHARE_PRIME_PATH =
         "/__sky_share_prime";
 
+    /* Which link the Share buttons create: "app" (main app, item
+       opened in its section) or "focused" (/s/ Share Mode viewer). */
+    const SHARE_LINK_STYLE =
+        "app";
+
 
     /* =====================================================
        SECTION NORMALIZATION
@@ -314,22 +319,55 @@ window.ShareManager = (function () {
      * The Share button no longer sends anything to
      * /__sky_share_prime and therefore performs NO KV write.
      *
-     * The Worker receives the section and item ID directly
-     * in the permanent short URL.
+     * Two link styles exist (see SHARE_LINK_STYLE):
+     *
+     *   "app"      /?view=<section>&item=<section>/<id>
+     *              Opens the item inside the full app, from the
+     *              complete library (the same link the browser's
+     *              own share command shares). Works for items
+     *              published to R2.
+     *
+     *   "focused"  /s/<section>/<id>
+     *              The standalone Share Mode viewer. Links already
+     *              in circulation keep working either way.
      */
     const baseUrl =
         window.location.origin;
 
+    if (SHARE_LINK_STYLE === "focused") {
+
+        return (
+            baseUrl +
+            "/s/" +
+            encodeURIComponent(
+                normalizedSection
+            ) +
+            "/" +
+            encodeURIComponent(
+                normalizedId
+            )
+        );
+    }
+
+    const params =
+        new URLSearchParams();
+
+    params.set(
+        "view",
+        normalizedSection
+    );
+
+    params.set(
+        "item",
+        normalizedSection +
+        "/" +
+        normalizedId
+    );
+
     return (
         baseUrl +
-        "/s/" +
-        encodeURIComponent(
-            normalizedSection
-        ) +
-        "/" +
-        encodeURIComponent(
-            normalizedId
-        )
+        "/?" +
+        params.toString()
     );
 }
 

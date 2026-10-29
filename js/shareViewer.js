@@ -4178,13 +4178,6 @@ async function waitForSharedSlideshowReady() {
             next ? "true" : "false"
         );
 
-        shareMenu.button.setAttribute(
-            "aria-label",
-            next
-                ? "Close media navigation"
-                : "Open media navigation"
-        );
-
         shareMenu.panel.classList.toggle(
             "is-open",
             next
@@ -4211,9 +4204,18 @@ async function waitForSharedSlideshowReady() {
         button.id =
             "skyShareMenuButton";
 
+        /*
+         * Keep this label constant and free of the word "close":
+         * bindMediaCloseClickBridge() treats any clicked button whose
+         * id, class, aria-label or title contains "close" as a close
+         * button, so a "Close media navigation" label turned the second
+         * tap on this button into a close-and-leave. aria-expanded
+         * (below) already tells assistive technology whether the menu
+         * is open.
+         */
         button.setAttribute(
             "aria-label",
-            "Open media navigation"
+            "Media navigation"
         );
 
         button.setAttribute(
@@ -6387,6 +6389,16 @@ async function waitForSharedSlideshowReady() {
                 if (
                     !target ||
                     !target.closest
+                ) {
+                    return;
+                }
+
+
+                /* The app switcher menu is navigation, never a close. */
+                if (
+                    target.closest(
+                        "#skyShareMenuButton, .sky-share-menu-panel"
+                    )
                 ) {
                     return;
                 }

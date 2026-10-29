@@ -15,6 +15,20 @@ globalThis.HTMLRewriter = class {
   }
 };
 
+/* The Worker reads the R2 published catalog over the network when KV has
+   no match. Tests never touch the network: R2.body is what that file holds,
+   R2.status its HTTP status (or "throw" to simulate an outage). */
+const R2 = { body: null, status: 200, calls: 0, other: [] };
+globalThis.fetch = async (url) => {
+  if (String(url) === "https://media.mmicj.com/catalog/published.json") {
+    R2.calls++;
+    if (R2.status === "throw") throw new TypeError("fetch failed");
+    return new Response(R2.body === null ? "{}" : JSON.stringify(R2.body), { status: R2.status });
+  }
+  R2.other.push(String(url));
+  return new Response("not found", { status: 404 });
+};
+
 const INDEX = "<!DOCTYPE html><html><head><title>MMicj</title></head><body>app</body></html>";
 const BASE = "https://example.workers.dev";
 const ctx = { waitUntil() {} };
@@ -138,6 +152,71 @@ const LOGO = BASE + "/assets/base-logo.jpg";
   const r = await get(w, env, "/?view=video&item=video/vid-1");
   const html = await r.text();
   check("no snapshot -> 200 with base logo", r.status === 200 && html.includes('og:image" content="' + LOGO + '"'));
+}
+
+// ---- R2 published catalog fallback --------------------------------------
+{
+  const r2item = (id, type, date, title = "R2 title of " + id) =>
+    ({ id, type, title, subtitle: "", thumbnail: "https://media.mmicj.com/thumbs/" + id + ".jpg",
+       media: "https://media.mmicj.com/media/" + id, audio: "", author: "", category: "Meditation", date });
+
+  // item only in R2 (not in the KV snapshot) gets its own card
+  R2.body = { version: "1", content: [ r2item("r2-vid", "video", "202601010900"), r2item("r2-book", "book", "202601010900") ] };
+  R2.status = 200; R2.calls = 0;
+  let w = await fresh(); let env = makeEnv(snapshot);
+  let html = await (await get(w, env, "/?view=video&item=video%2Fr2-vid")).text();
+  check("R2-only item: card uses its own composed thumbnail", html.includes("section=video&amp;id=r2-vid&amp;base=1"));
+  check("R2-only item: og:title is the item's title", html.includes('og:title\" content=\"R2 title of r2-vid\"'.replace(/\\/g, "")));
+  html = await (await get(w, env, "/?view=reader&item=reader%2Fr2-book")).text();
+  check("R2-only book is found under the reader section", html.includes("section=reader&amp;id=r2-book&amp;base=1"));
+  check("the R2 file is fetched once and kept in memory", R2.calls === 1, "calls=" + R2.calls);
+
+  // KV snapshot wins; R2 is not even asked
+  R2.calls = 0;
+  w = await fresh(); env = makeEnv(snapshot);
+  R2.body = { content: [ r2item("vid-1", "video", "202601010900", "R2 copy of vid-1") ] };
+  html = await (await get(w, env, "/?view=video&item=video%2Fvid-1")).text();
+  check("item in both: the KV snapshot still wins", html.includes('og:title" content="Title of vid-1"') && R2.calls === 0, "calls=" + R2.calls);
+
+  // not released yet, or no valid date -> never previewed
+  R2.body = { content: [ r2item("future-vid", "video", "209912312359"), r2item("nodate-vid", "video", "") ] };
+  w = await fresh(); env = makeEnv(snapshot);
+  html = await (await get(w, env, "/?view=video&item=video%2Ffuture-vid")).text();
+  check("R2 item that is not released yet -> base logo", html.includes('og:image" content="' + LOGO + '"'));
+  html = await (await get(w, env, "/?view=video&item=video%2Fnodate-vid")).text();
+  check("R2 item without a valid date -> base logo", html.includes('og:image" content="' + LOGO + '"'));
+
+  // outage: page still served with the base logo, and no retry storm
+  R2.status = "throw"; R2.calls = 0;
+  w = await fresh(); env = makeEnv(snapshot);
+  let res = await get(w, env, "/?view=video&item=video%2Fr2-vid");
+  html = await res.text();
+  check("R2 outage -> 200 with base logo", res.status === 200 && html.includes('og:image" content="' + LOGO + '"'));
+  await (await get(w, env, "/?view=video&item=video%2Fr2-other")).text();
+  check("after a failed read the Worker does not retry on every request", R2.calls === 1, "calls=" + R2.calls);
+
+  // bad responses are treated like an outage
+  for (const [label, status, body] of [["HTTP 500", 500, {}], ["no content list", 200, { nope: 1 }]]) {
+    R2.status = status; R2.body = body;
+    w = await fresh(); env = makeEnv(snapshot);
+    res = await get(w, env, "/?view=video&item=video%2Fr2-vid");
+    html = await res.text();
+    check("R2 " + label + " -> 200 with base logo", res.status === 200 && html.includes('og:image" content="' + LOGO + '"'));
+  }
+
+  // the OG image route finds R2-only items too. With base=1 any failure
+  // sends the crawler to the base logo (302), so "found" is shown by the
+  // route going on to request that item's own thumbnail.
+  R2.status = 200; R2.body = { content: [ r2item("r2-vid", "video", "202601010900") ] };
+  w = await fresh(); env = makeEnv(snapshot);
+  env.IMAGES = {};   // the route refuses to start without the Images binding
+  R2.other.length = 0;
+  res = await get(w, env, "/__sky_og_image?section=video&id=ghost&base=1");
+  check("OG image route: unknown item -> base logo, no thumbnail requested",
+    res.status === 302 && /\/assets\/base-logo\.jpg$/.test(res.headers.get("location") || "") && R2.other.length === 0);
+  res = await get(w, env, "/__sky_og_image?section=video&id=r2-vid&base=1");
+  check("OG image route: R2-only item is found and its own thumbnail is requested",
+    R2.other.some(u => u.includes("/thumbs/r2-vid.jpg")), "requested=" + R2.other.join(","));
 }
 
 console.log(failures ? "\n" + failures + " FAILED" : "\nALL PASSED");

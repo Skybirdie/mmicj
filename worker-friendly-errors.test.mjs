@@ -20,21 +20,32 @@ let failures=0;
 const check=(name,cond,extra="")=>{console.log((cond?"PASS":"FAIL")+"  "+name+(extra?"  ["+extra+"]":""));if(!cond)failures++;};
 let r,t;
 
-/* ---- share link that no longer exists ---- */
-r=await call("/s/book/ghost-1",mkEnv(),PAGE); t=await r.text();
-check("missing share link, page load -> 404 with the picture page",r.status===404 && t.includes("/assets/errors/unavailable.webp") && t.includes("Link no longer available"),"status="+r.status);
+/* ---- /s/<section>/<id> with no share record ----
+   Used to be a dead-end "unavailable" page. It now sends the visitor to
+   the main app link, which opens the item from the full library (and
+   simply stays on the section if the item is not there). */
+r=await call("/s/book/ghost-1",mkEnv(),PAGE);
+check("missing /s/<section>/<id> -> 302 to the main app link",r.status===302 && r.headers.get("location")===BASE+"/?view=reader&item=reader%2Fghost-1","status="+r.status+" location="+r.headers.get("location"));
+check("the redirect is never cached",/no-store/.test(r.headers.get("cache-control")||""));
+r=await call("/s/video/vid%2F7"); 
+check("a section/id redirect needs no Accept: html and re-encodes the id",r.status===302 && r.headers.get("location")===BASE+"/?view=video&item=video%2Fvid%2F7");
+
+/* ---- legacy 16-character share key that no longer exists ---- */
+const GHOST_KEY="/s/AAAAAAAAAAAAAAAA";
+r=await call(GHOST_KEY,mkEnv(),PAGE); t=await r.text();
+check("missing legacy key, page load -> 404 with the picture page",r.status===404 && t.includes("/assets/errors/unavailable.webp") && t.includes("Link no longer available"),"status="+r.status);
 check("friendly page is never cached",/no-store/.test(r.headers.get("cache-control")||"") && /text\/html/.test(r.headers.get("content-type")||""));
 check("friendly page has a way home",t.includes('href="/"'));
-r=await call("/s/book/ghost-1"); t=await r.text();
-check("same address without Accept: html -> the same plain text as before",r.status===404 && t==="MMicjMedia shared item was not found." && /text\/plain/.test(r.headers.get("content-type")||""));
-r=await call("/s/book/ghost-1",mkEnv(),{headers:{accept:"text/html","sec-fetch-dest":"script"}}); t=await r.text();
+r=await call(GHOST_KEY); t=await r.text();
+check("same address without Accept: html -> plain text",r.status===404 && t==="MMicjMedia publication not found." && /text\/plain/.test(r.headers.get("content-type")||""));
+r=await call(GHOST_KEY,mkEnv(),{headers:{accept:"text/html","sec-fetch-dest":"script"}}); t=await r.text();
 check("a script/image request is never given a page",r.status===404 && !t.includes("<html"));
-r=await call("/s/book/ghost-1",mkEnv(),{headers:{accept:"text/html,application/xhtml+xml","sec-fetch-dest":"empty","sec-fetch-mode":"same-origin"}}); t=await r.text();
+r=await call(GHOST_KEY,mkEnv(),{headers:{accept:"text/html,application/xhtml+xml","sec-fetch-dest":"empty","sec-fetch-mode":"same-origin"}}); t=await r.text();
 check("a page load forwarded by the service worker (Sec-Fetch-Dest: empty) still gets the picture page",r.status===404 && t.includes("unavailable.webp"));
-r=await call("/s/book/ghost-1",mkEnv(),{headers:{accept:"text/html","sec-fetch-dest":"document","sec-fetch-mode":"navigate"}}); t=await r.text();
+r=await call(GHOST_KEY,mkEnv(),{headers:{accept:"text/html","sec-fetch-dest":"document","sec-fetch-mode":"navigate"}}); t=await r.text();
 check("an ordinary page load (Sec-Fetch-Dest: document) gets the picture page",r.status===404 && t.includes("unavailable.webp"));
-r=await call("/s/book/ghost-1",mkEnv(),{headers:{accept:"*/*","sec-fetch-dest":"empty"}}); t=await r.text();
-check("fetch() with Accept: */* is never given a page",r.status===404 && t==="MMicjMedia shared item was not found.");
+r=await call(GHOST_KEY,mkEnv(),{headers:{accept:"*/*","sec-fetch-dest":"empty"}}); t=await r.text();
+check("fetch() with Accept: */* is never given a page",r.status===404 && t==="MMicjMedia publication not found.");
 
 /* ---- maintenance switch ---- */
 r=await call("/",mkEnv({MAINTENANCE:"1"}),PAGE); t=await r.text();

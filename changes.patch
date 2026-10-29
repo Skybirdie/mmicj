@@ -1,0 +1,1459 @@
+--- a/js/shareViewer.js	2026-10-24 05:20:00.000000000 +0000
++++ b/js/shareViewer.js	2026-10-28 22:20:15.472508188 +0000
+@@ -122,8 +122,24 @@
+ 
+     const BOOK_TOUCH_THRESHOLD = 48;
+ 
+-    const GLIDE_MEDIA_URL =
+-        "https://meditationmornings.glide.page/dl/media";
++    /* The app no longer hands visitors back to Glide. Share Mode links
++       now lead into the main app, which is served from the same origin
++       as the share page itself. */
++    const FRONT_PAGE_URL = "/";
++
++    /* Entries of the share-page app switcher menu (see createShareMenu).
++       The hrefs are the same state links js/browserAddress.js writes and
++       js/appSwitcher.js reads, so each one is a normal page navigation. */
++    const SHARE_MENU_LINKS = [
++        { label: "The 7 Arms",      href: "/",                  icon: "icon-radial" },
++        { label: "Books",           href: "/?view=reader",      icon: "icon-open-book" },
++        { label: "Videos",          href: "/?view=video",       icon: "icon-video" },
++        { label: "Images/Graphics", href: "/?view=slideshow",   icon: "icon-slideshow" }
++    ];
++
++    /* How long Share Mode waits for the hand-off to the front page before
++       it falls back to the old closed-state panel. */
++    const LIBRARY_HANDOFF_FALLBACK_MS = 8000;
+ 
+ /* Standalone Share Mode loading sequence. */
+ const SHARE_LOADING_INTERVAL = 2500;
+@@ -1002,15 +1018,7 @@
+ 
+ 
+     goLink.href =
+-        GLIDE_MEDIA_URL;
+-
+-
+-    goLink.target =
+-        "_blank";
+-
+-
+-    goLink.rel =
+-        "noopener noreferrer";
++        FRONT_PAGE_URL;
+ 
+ 
+     goLink.className =
+@@ -1409,22 +1417,18 @@
+             );
+ 
+ 
+-        const openButton =
+-            createElement(
+-                "a",
+-                "sky-share-open-button",
+-                "Open Meditation Mornings"
+-            );
+-
+-
+-        openButton.href =
+-            GLIDE_MEDIA_URL;
+-
+-        openButton.target =
+-            "_blank";
++        /*
++         * The Open button is now the app switcher menu button.
++         * createShareMenu() returns the button (still carrying the
++         * .sky-share-open-button class so the existing positioning and
++         * closed-state rules keep applying), the menu panel and a
++         * transparent scrim that catches outside taps.
++         */
++        const menu =
++            createShareMenu();
+ 
+-        openButton.rel =
+-            "noopener noreferrer";
++        const openButton =
++            menu.button;
+ 
+ 
+         const closeButton =
+@@ -1454,6 +1458,14 @@
+ 
+ 
+         actions.appendChild(
++            menu.scrim
++        );
++
++        actions.appendChild(
++            menu.panel
++        );
++
++        actions.appendChild(
+             openButton
+         );
+ 
+@@ -4080,6 +4092,420 @@
+ 
+ 
+     /* =====================================================
++       APP SWITCHER MENU
++       -----------------------------------------------------
++       The bottom-right button opens a small menu that opens
++       upward (the front page menu opens downward) with four
++       destinations in the main app: The 7 Arms (front page),
++       Books, Videos and Images/Graphics.
++
++       The entries are plain links to the state links the main
++       app already understands (/, /?view=reader, ...), so no
++       main-app code is involved and the viewer itself is not
++       touched. Share Mode does not run AppSwitcher, which is
++       why the menu is built here instead of reusing it.
++
++       A transparent scrim sits behind the panel while it is
++       open, so the tap that dismisses the menu cannot also
++       turn a page or toggle playback underneath it.
++    ===================================================== */
++
++    const SVG_NS =
++        "http://www.w3.org/2000/svg";
++
++    let shareMenu = null;
++
++    let shareMenuEscapeBound = false;
++
++    let leavingForLibrary = false;
++
++    let libraryFallbackTimer = 0;
++
++
++    function createMenuIcon(symbolId) {
++
++        const svg =
++            document.createElementNS(
++                SVG_NS,
++                "svg"
++            );
++
++        svg.setAttribute(
++            "class",
++            "icon"
++        );
++
++        svg.setAttribute(
++            "aria-hidden",
++            "true"
++        );
++
++        const use =
++            document.createElementNS(
++                SVG_NS,
++                "use"
++            );
++
++        use.setAttribute(
++            "href",
++            "#" + symbolId
++        );
++
++        svg.appendChild(use);
++
++        return svg;
++    }
++
++
++    function setShareMenuOpen(open) {
++
++        if (!shareMenu) {
++            return;
++        }
++
++        const next =
++            !!open;
++
++        if (shareMenu.open === next) {
++            return;
++        }
++
++        shareMenu.open =
++            next;
++
++        shareMenu.button.setAttribute(
++            "aria-expanded",
++            next ? "true" : "false"
++        );
++
++        shareMenu.panel.classList.toggle(
++            "is-open",
++            next
++        );
++
++        shareMenu.scrim.classList.toggle(
++            "is-open",
++            next
++        );
++    }
++
++
++    function createShareMenu() {
++
++        const button =
++            createElement(
++                "button",
++                "sky-share-open-button"
++            );
++
++        button.type =
++            "button";
++
++        button.id =
++            "skyShareMenuButton";
++
++        /*
++         * Keep this label constant and free of the word "close":
++         * bindMediaCloseClickBridge() treats any clicked button whose
++         * id, class, aria-label or title contains "close" as a close
++         * button, so a "Close media navigation" label turned the second
++         * tap on this button into a close-and-leave. aria-expanded
++         * (below) already tells assistive technology whether the menu
++         * is open.
++         */
++        button.setAttribute(
++            "aria-label",
++            "Media navigation"
++        );
++
++        button.setAttribute(
++            "aria-haspopup",
++            "true"
++        );
++
++        button.setAttribute(
++            "aria-expanded",
++            "false"
++        );
++
++        button.setAttribute(
++            "aria-controls",
++            "skyShareMenuPanel"
++        );
++
++        button.appendChild(
++            createMenuIcon("icon-menu")
++        );
++
++
++        const panel =
++            createElement(
++                "nav",
++                "sky-share-menu-panel"
++            );
++
++        panel.id =
++            "skyShareMenuPanel";
++
++        panel.setAttribute(
++            "aria-label",
++            "Media section navigation"
++        );
++
++        SHARE_MENU_LINKS.forEach(
++            entry => {
++
++                const link =
++                    createElement(
++                        "a",
++                        "sky-share-menu-link"
++                    );
++
++                link.href =
++                    entry.href;
++
++                link.appendChild(
++                    createMenuIcon(entry.icon)
++                );
++
++                link.appendChild(
++                    createElement(
++                        "span",
++                        "",
++                        entry.label
++                    )
++                );
++
++                panel.appendChild(link);
++            }
++        );
++
++
++        const scrim =
++            createElement(
++                "div",
++                "sky-share-menu-scrim"
++            );
++
++        scrim.setAttribute(
++            "aria-hidden",
++            "true"
++        );
++
++
++        shareMenu = {
++            button,
++            panel,
++            scrim,
++            open: false
++        };
++
++
++        button.addEventListener(
++            "click",
++            event => {
++
++                event.preventDefault();
++
++                event.stopPropagation();
++
++                const opening =
++                    !shareMenu.open;
++
++                setShareMenuOpen(opening);
++
++                if (opening) {
++
++                    const first =
++                        panel.querySelector(
++                            ".sky-share-menu-link"
++                        );
++
++                    if (first) {
++
++                        try {
++                            first.focus({
++                                preventScroll: true
++                            });
++                        }
++                        catch (error) {
++                            first.focus();
++                        }
++                    }
++                }
++            }
++        );
++
++        scrim.addEventListener(
++            "click",
++            event => {
++
++                event.preventDefault();
++
++                event.stopPropagation();
++
++                setShareMenuOpen(false);
++            }
++        );
++
++        panel.addEventListener(
++            "click",
++            event => {
++
++                /* Let the link navigate; just fold the menu away. */
++                if (
++                    event.target &&
++                    event.target.closest &&
++                    event.target.closest(
++                        ".sky-share-menu-link"
++                    )
++                ) {
++                    setShareMenuOpen(false);
++                }
++            }
++        );
++
++
++        /*
++         * Escape closes the menu first. This listener runs in the
++         * capture phase, ahead of bindEscape(), and stops the event
++         * so that the same key press does not also close the shared
++         * item and leave the page.
++         */
++        if (!shareMenuEscapeBound) {
++
++            shareMenuEscapeBound =
++                true;
++
++            document.addEventListener(
++                "keydown",
++                event => {
++
++                    if (
++                        event.key !== "Escape" ||
++                        !shareMenu ||
++                        !shareMenu.open
++                    ) {
++                        return;
++                    }
++
++                    event.preventDefault();
++
++                    event.stopPropagation();
++
++                    event.stopImmediatePropagation();
++
++                    setShareMenuOpen(false);
++
++                    try {
++                        shareMenu.button.focus({
++                            preventScroll: true
++                        });
++                    }
++                    catch (error) {
++                        shareMenu.button.focus();
++                    }
++                },
++                true
++            );
++        }
++
++        return shareMenu;
++    }
++
++
++    /* =====================================================
++       HAND-OFF TO THE MAIN APP
++       -----------------------------------------------------
++       Closing the shared item no longer shows the Go panel.
++       After the normal close cleanup (which stops playback),
++       the visitor is taken straight to the front page.
++
++       If the navigation has not happened after
++       LIBRARY_HANDOFF_FALLBACK_MS (offline, blocked, ...),
++       the old closed-state panel is shown instead; its Go
++       link now also points at the front page.
++
++       Back from the front page: the browser may restore this
++       page from its back/forward cache in the half-closed
++       state, so a restored page reloads the share link, which
++       is the same as Replay.
++    ===================================================== */
++
++    function leaveForLibrary() {
++
++        setShareMenuOpen(false);
++
++        if (leavingForLibrary) {
++            return;
++        }
++
++        leavingForLibrary =
++            true;
++
++        libraryFallbackTimer =
++            window.setTimeout(
++                () => {
++
++                    libraryFallbackTimer =
++                        0;
++
++                    leavingForLibrary =
++                        false;
++
++                    showClosedPanel();
++                },
++                LIBRARY_HANDOFF_FALLBACK_MS
++            );
++
++        try {
++            window.location.assign(
++                FRONT_PAGE_URL
++            );
++        }
++        catch (error) {
++
++            console.warn(
++                "[SkyMedia Share] Front page hand-off failed:",
++                error
++            );
++
++            window.clearTimeout(
++                libraryFallbackTimer
++            );
++
++            libraryFallbackTimer =
++                0;
++
++            leavingForLibrary =
++                false;
++
++            showClosedPanel();
++        }
++    }
++
++
++    function bindLibraryHandoff() {
++
++        window.addEventListener(
++            "pageshow",
++            event => {
++
++                if (!event.persisted) {
++                    return;
++                }
++
++                setShareMenuOpen(false);
++
++                if (leavingForLibrary) {
++                    window.location.reload();
++                }
++            }
++        );
++    }
++
++
++    /* =====================================================
+        CLOSED STATE: MOBILE CHROME (LOGO / OPEN BUTTON)
+        -----------------------------------------------------
+        On mobile, once the go-button-mobile artwork is showing,
+@@ -4279,6 +4705,8 @@
+             return;
+         }
+ 
++        setShareMenuOpen(false);
++
+ 
+         shell.classList.add(
+             "sky-share-document-closed"
+@@ -4643,7 +5071,7 @@
+             hideSharedItemSurfaces();
+ 
+ 
+-            showClosedPanel();
++            leaveForLibrary();
+ 
+         }
+         catch (error) {
+@@ -5966,6 +6394,16 @@
+                 }
+ 
+ 
++                /* The app switcher menu is navigation, never a close. */
++                if (
++                    target.closest(
++                        "#skyShareMenuButton, .sky-share-menu-panel"
++                    )
++                ) {
++                    return;
++                }
++
++
+                 const button =
+                     target.closest(
+                         "button, a, [role='button'], [data-action]"
+@@ -6474,6 +6912,8 @@
+ 
+         bindFullscreenChange();
+ 
++        bindLibraryHandoff();
++
+ 
+         /*
+          * Do NOT bind last-page protection yet.
+--- a/js/shareManager.js	2026-10-24 05:20:00.000000000 +0000
++++ b/js/shareManager.js	2026-10-29 02:38:00.155748393 +0000
+@@ -9,6 +9,11 @@
+     const SHARE_PRIME_PATH =
+         "/__sky_share_prime";
+ 
++    /* Which link the Share buttons create: "app" (main app, item
++       opened in its section) or "focused" (/s/ Share Mode viewer). */
++    const SHARE_LINK_STYLE =
++        "app";
++
+ 
+     /* =====================================================
+        SECTION NORMALIZATION
+@@ -314,22 +319,55 @@
+      * The Share button no longer sends anything to
+      * /__sky_share_prime and therefore performs NO KV write.
+      *
+-     * The Worker receives the section and item ID directly
+-     * in the permanent short URL.
++     * Two link styles exist (see SHARE_LINK_STYLE):
++     *
++     *   "app"      /?view=<section>&item=<section>/<id>
++     *              Opens the item inside the full app, from the
++     *              complete library (the same link the browser's
++     *              own share command shares). Works for items
++     *              published to R2.
++     *
++     *   "focused"  /s/<section>/<id>
++     *              The standalone Share Mode viewer. Links already
++     *              in circulation keep working either way.
+      */
+     const baseUrl =
+         window.location.origin;
+ 
++    if (SHARE_LINK_STYLE === "focused") {
++
++        return (
++            baseUrl +
++            "/s/" +
++            encodeURIComponent(
++                normalizedSection
++            ) +
++            "/" +
++            encodeURIComponent(
++                normalizedId
++            )
++        );
++    }
++
++    const params =
++        new URLSearchParams();
++
++    params.set(
++        "view",
++        normalizedSection
++    );
++
++    params.set(
++        "item",
++        normalizedSection +
++        "/" +
++        normalizedId
++    );
++
+     return (
+         baseUrl +
+-        "/s/" +
+-        encodeURIComponent(
+-            normalizedSection
+-        ) +
+-        "/" +
+-        encodeURIComponent(
+-            normalizedId
+-        )
++        "/?" +
++        params.toString()
+     );
+ }
+ 
+--- a/css/share.css	2026-10-24 05:20:00.000000000 +0000
++++ b/css/share.css	2026-10-28 22:20:15.473594369 +0000
+@@ -1800,12 +1800,11 @@
+ 
+ 
+ /*
+- * The existing Open button becomes the small clickable
+- * Meditation Mornings logo.
+- *
+- * Its existing href remains:
+- *
+- * https://meditationmornings.glide.page/dl/media
++ * The existing Open button is now the app switcher menu
++ * button (see createShareMenu in shareViewer.js): a glass
++ * button with the menu icon, matching #frontMenuButton on
++ * the Front Page. Its size and position are unchanged, so
++ * the controls placed around it keep their layout.
+  */
+ 
+ .sky-share-open-button {
+@@ -1813,7 +1812,8 @@
+     bottom: clamp(35px, 4vw, 40px);
+     right: clamp(15px, 1.2vw, 25px);
+ 
+-    display: block !important;
++    display: grid !important;
++    place-items: center !important;
+ 
+     width: clamp(42px, 5vw, 64px) !important;
+     height: clamp(42px, 5vw, 64px) !important;
+@@ -1825,37 +1825,50 @@
+     max-height: 64px !important;
+ 
+     padding: 0 !important;
++    margin: 0 !important;
+ 
+     border: 1px solid rgba(255,255,255,.55) !important;
+ 
+     border-radius: clamp(8px, 1vw, 13px) !important;
+ 
+-    background-image: url("../assets/logo.png") !important;
+-    background-position: center !important;
+-    background-repeat: no-repeat !important;
+-    background-size: contain !important;
++    background: rgba(216,239,238,.30) !important;
+ 
+-    background-color: rgba(216,239,238,.80) !important;
++    color: #FFFFFF !important;
+ 
+     box-sizing: border-box !important;
+ 
+     overflow: hidden !important;
+ 
+-    font-size: 0 !important;
+-    line-height: 0 !important;
+-    text-indent: -9999px !important;
+-
+     text-decoration: none !important;
+ 
+     cursor: pointer;
+ 
+     backdrop-filter: blur(7px);
++    -webkit-backdrop-filter: blur(7px);
+ 
+     animation: frontMenuGlow 4s ease-in-out infinite;
+ 
+     transition:
+         transform .25s ease,
+         box-shadow .25s ease;
++
++    -webkit-tap-highlight-color: transparent;
++}
++
++.sky-share-open-button svg {
++    width: 52%;
++    height: 52%;
++    display: block;
++    pointer-events: none;
++    filter: drop-shadow(0 0 3px rgba(84,231,196,.85));
++}
++
++.sky-share-open-button[aria-expanded="true"] {
++    animation-play-state: paused;
++    box-shadow:
++        0 0 7px #ACE1AF,
++        0 0 14px #00FA9A,
++        inset 0 0 12px #ACE1AF !important;
+ }
+ 
+ .sky-share-open-button::before,
+@@ -3597,33 +3610,66 @@
+     left: auto !important;
+     top: auto !important;
+ 
+-    display: block !important;
+     visibility: visible !important;
+     opacity: 1 !important;
++
++    display: grid !important;
++    place-items: center !important;
++
+     width: clamp(42px, 5vw, 64px) !important;
+     height: clamp(42px, 5vw, 64px) !important;
++
+     min-width: 42px !important;
+     min-height: 42px !important;
++
+     max-width: 64px !important;
+     max-height: 64px !important;
++
+     padding: 0 !important;
++    margin: 0 !important;
++
+     border: 1px solid rgba(255,255,255,.55) !important;
++
+     border-radius: clamp(8px, 1vw, 13px) !important;
+-    background-image: url("../assets/logo.png") !important;
+-    background-position: center !important;
+-    background-repeat: no-repeat !important;
+-    background-size: contain !important;
+-    background-color: rgba(216,239,238,.30) !important;
++
++    background: rgba(216,239,238,.30) !important;
++
++    color: #FFFFFF !important;
++
+     box-sizing: border-box !important;
++
+     overflow: hidden !important;
+-    font-size: 0 !important;
+-    line-height: 0 !important;
+-    text-indent: -9999px !important;
++
+     text-decoration: none !important;
+-    cursor: pointer !important;
++
++    cursor: pointer;
++
+     backdrop-filter: blur(7px);
++    -webkit-backdrop-filter: blur(7px);
++
+     animation: frontMenuGlow 4s ease-in-out infinite;
+-    transition: transform .25s ease, box-shadow .25s ease;
++
++    transition:
++        transform .25s ease,
++        box-shadow .25s ease;
++
++    -webkit-tap-highlight-color: transparent;
++}
++
++body.sky-share-mode .sky-share-open-button svg {
++    width: 52%;
++    height: 52%;
++    display: block;
++    pointer-events: none;
++    filter: drop-shadow(0 0 3px rgba(84,231,196,.85));
++}
++
++body.sky-share-mode .sky-share-open-button[aria-expanded="true"] {
++    animation-play-state: paused;
++    box-shadow:
++        0 0 7px #ACE1AF,
++        0 0 14px #00FA9A,
++        inset 0 0 12px #ACE1AF !important;
+ }
+ 
+ 
+@@ -3647,6 +3693,139 @@
+     transform: scale(.95) !important;
+ }
+ 
++/* =========================================================
++   SHARE PAGE APP SWITCHER MENU (opens upward)
++
++   Mirrors #frontMenuPanel on the Front Page (glass panel,
++   same row style) but is anchored above the bottom-right
++   button instead of below a top-right one. Both the scrim
++   and the panel live inside .sky-share-actions, so they
++   share its stacking layer (z-index 1000040) and, with the
++   scrim at z-index -1, sit behind the button itself.
++   ========================================================= */
++
++body.sky-share-mode .sky-share-menu-scrim {
++    position: fixed;
++    inset: 0;
++    z-index: -1;
++    display: none;
++    background: transparent;
++    -webkit-tap-highlight-color: transparent;
++}
++
++body.sky-share-mode .sky-share-menu-scrim.is-open {
++    display: block;
++}
++
++body.sky-share-mode .sky-share-menu-panel {
++    --sky-share-menu-text: #18202a;
++    /* Same translucency as #frontMenuPanel: 30% of the theme panel
++       colour over a 16px backdrop blur. */
++    --sky-share-menu-bg: color-mix(in srgb, var(--panel, #ffffff) 30%, transparent);
++    --sky-share-menu-border: rgba(24,32,42,.22);
++    --sky-share-menu-shadow: 0 12px 34px rgba(0,0,0,.18);
++
++    position: fixed;
++    right: clamp(15px, 1.2vw, 25px);
++    bottom: calc(
++        clamp(35px, 4vw, 40px) +
++        clamp(42px, 5vw, 64px) +
++        8px
++    );
++    z-index: 2;
++
++    display: flex;
++    flex-direction: column;
++    gap: 7px;
++
++    min-width: 170px;
++    padding: 9px;
++    box-sizing: border-box;
++
++    border: 1px solid var(--sky-share-menu-border);
++    border-radius: 16px;
++    background: var(--sky-share-menu-bg);
++    color: var(--sky-share-menu-text);
++    box-shadow: var(--sky-share-menu-shadow);
++    backdrop-filter: blur(16px);
++    -webkit-backdrop-filter: blur(16px);
++
++    opacity: 0;
++    visibility: hidden;
++    transform: translateY(5px);
++    transition:
++        opacity .18s ease,
++        transform .18s ease,
++        visibility .18s ease;
++}
++
++html[data-theme="dark"] body.sky-share-mode .sky-share-menu-panel {
++    --sky-share-menu-text: #f4f7fa;
++    --sky-share-menu-bg: color-mix(in srgb, var(--panel, #171a1f) 30%, transparent);
++    --sky-share-menu-border: rgba(244,247,250,.24);
++    --sky-share-menu-shadow: 0 14px 38px rgba(0,0,0,.48);
++}
++
++body.sky-share-mode .sky-share-menu-panel.is-open {
++    opacity: 1;
++    visibility: visible;
++    transform: translateY(0);
++}
++
++body.sky-share-mode .sky-share-menu-link {
++    display: flex;
++    align-items: center;
++    gap: 10px;
++
++    width: 100%;
++    min-height: 38px;
++    padding: 8px 11px;
++    box-sizing: border-box;
++
++    border: 1px solid transparent;
++    border-radius: 11px;
++    background: transparent;
++    color: inherit;
++
++    font: 600 13px/1 Inter, Arial, sans-serif;
++    text-decoration: none;
++    text-align: left;
++    white-space: nowrap;
++
++    cursor: pointer;
++    -webkit-tap-highlight-color: transparent;
++}
++
++body.sky-share-mode .sky-share-menu-link:hover,
++body.sky-share-mode .sky-share-menu-link:focus-visible {
++    background: color-mix(in srgb, var(--sky-share-menu-text) 9%, transparent);
++    border-color: color-mix(in srgb, var(--sky-share-menu-text) 14%, transparent);
++}
++
++body.sky-share-mode .sky-share-menu-link:focus-visible {
++    outline: 2px solid currentColor;
++    outline-offset: 1px;
++}
++
++body.sky-share-mode .sky-share-menu-link svg {
++    width: 20px;
++    height: 20px;
++    flex: 0 0 20px;
++    display: block;
++}
++
++@media (max-width: 700px) {
++    body.sky-share-mode .sky-share-menu-panel {
++        min-width: 158px;
++    }
++}
++
++@media (prefers-reduced-motion: reduce) {
++    body.sky-share-mode .sky-share-menu-panel {
++        transition: none;
++    }
++}
++
+ /* The central button is a separate layer and is intentionally
+    neutral for now; it can later receive an image background. */
+ body.sky-share-mode.sky-share-document-closed
+--- a/index.html	2026-10-24 05:20:00.000000000 +0000
++++ b/index.html	2026-10-29 02:39:01.264425984 +0000
+@@ -31,7 +31,7 @@
+ <link rel="stylesheet" href="css/slideshow.css?v=1.1.5">
+ <link rel="stylesheet" href="css/front-page.css?v=fs5">
+ <link rel="stylesheet" href="css/item-share.css?v=is1">
+-<link rel="stylesheet" href="css/share.css">
++<link rel="stylesheet" href="css/share.css?v=sm1">
+ 
+ <script>
+ /*
+@@ -740,8 +740,8 @@
+ <script src="js/settingsPanel.js?v=1.0.2"></script>
+ <script src="js/mediaManager.js"></script>
+ <script src="js/itemShare.js?v=1.0.2"></script>
+-<script src="js/shareManager.js?v=is2"></script>
+-<script src="js/shareViewer.js?v=sv4"></script>
++<script src="js/shareManager.js?v=is3"></script>
++<script src="js/shareViewer.js?v=sv5"></script>
+ 
+ <script src="js/app.js"></script>
+ <script src="js/videoContract.js"></script>
+--- a/worker.js	2026-10-24 05:20:00.000000000 +0000
++++ b/worker.js	2026-10-29 02:38:00.152242868 +0000
+@@ -2219,6 +2219,47 @@
+    SERVE DIRECT SHARE
+ ========================================================= */
+ 
++/* /s/<section>/<id>  ->  /?view=<section>&item=<section>/<id>
++   (the format js/browserAddress.js writes and js/appSwitcher.js opens). */
++function redirectToAppItem(
++  request,
++  target
++) {
++  const destination =
++    new URL(
++      "/",
++      request.url
++    );
++
++  destination.searchParams.set(
++    "view",
++    target.section
++  );
++
++  destination.searchParams.set(
++    "item",
++    target.section +
++      "/" +
++      target.id
++  );
++
++  return new Response(
++    null,
++    {
++      status:
++        302,
++
++      headers: {
++        Location:
++          destination.toString(),
++
++        "Cache-Control":
++          "no-store"
++      }
++    }
++  );
++}
++
+ async function serveDirectShare(
+   request,
+   env,
+@@ -2231,7 +2272,17 @@
+     );
+ 
+   if (!record) {
+-    return friendlyResponse("unavailable", request, "MMicjMedia shared item was not found.");
++    /*
++     * No share record for /s/<section>/<id> (for example an item that
++     * exists only in the R2 published catalog). Rather than a dead-end
++     * "unavailable" page, send the visitor to the main app link, which
++     * opens the item from the full library and simply stays on the
++     * section if the item is not there.
++     */
++    return redirectToAppItem(
++      request,
++      target
++    );
+   }
+ 
+   const html =
+@@ -2613,7 +2664,19 @@
+         );
+     }
+ 
+-    if (!record) {
++    /* Not in KV: an item that exists only in the R2 published
++       catalog still gets its own card image. */
++    const publishedItem =
++      record
++        ? null
++        : await getPublishedCatalogItem(
++            target
++          );
++
++    if (
++      !record &&
++      !publishedItem
++    ) {
+       return new Response(
+         "MMicjMedia shared item was not found.",
+         {
+@@ -2627,7 +2690,9 @@
+     }
+ 
+     item =
+-      record.item;
++      record
++        ? record.item
++        : publishedItem;
+   }
+ 
+   if (!item) {
+@@ -5677,10 +5742,248 @@
+ 
+ /* The catalog item with this section and id, from the snapshot the
+    base preview already reads. Never throws; null when not found. */
++/* =========================================================
++   R2 PUBLISHED CATALOG  (preview fallback)
++
++   The admin portal publishes the catalog to R2 as one public
++   file (the same file the app reads in js/manifest.js). The
++   KV catalog snapshot only knows what the Glide publish wrote,
++   so an item that exists only in R2 had no preview card.
++
++   Preview lookups therefore fall back to that file when KV has
++   no match: no KV read, no R2 binding, and at most one fetch
++   per isolate per PUBLISHED_CATALOG_MEMORY_TTL_MS (the file
++   itself is served with max-age=300, and the subrequest is
++   cached at the edge too). Items that are not released yet are
++   never previewed, the same rule the app applies
++   (SkyDate.isVisible).
++========================================================= */
++
++const PUBLISHED_CATALOG_URL =
++  "https://media.mmicj.com/catalog/published.json";
++
++const PUBLISHED_CATALOG_MEMORY_TTL_MS =
++  300000;
++
++/* After a failed read, try again after this long, not on every request. */
++const PUBLISHED_CATALOG_RETRY_MS =
++  30000;
++
++const PUBLISHED_CATALOG_TIMEOUT_MS =
++  4000;
++
++/* { items: Map("<section>/<id>" -> cleaned item), at } */
++let publishedCatalogMemo =
++  null;
++
++let publishedCatalogPending =
++  null;
++
++async function loadPublishedCatalogIndex() {
++  const controller =
++    new AbortController();
++
++  const timer =
++    setTimeout(
++      () =>
++        controller.abort(),
++      PUBLISHED_CATALOG_TIMEOUT_MS
++    );
++
++  try {
++    const response =
++      await fetch(
++        PUBLISHED_CATALOG_URL,
++        {
++          signal:
++            controller.signal,
++
++          cf: {
++            cacheEverything:
++              true,
++
++            cacheTtl:
++              300
++          }
++        }
++      );
++
++    if (!response.ok) {
++      throw new Error(
++        "Published catalog request failed (" +
++        response.status +
++        ")."
++      );
++    }
++
++    const data =
++      await response.json();
++
++    if (
++      !data ||
++      !Array.isArray(
++        data.content
++      )
++    ) {
++      throw new Error(
++        "Published catalog has no content list."
++      );
++    }
++
++    const items =
++      new Map();
++
++    for (
++      const raw of
++      data.content
++    ) {
++      const item =
++        normalizeCatalogPublishItem(
++          raw
++        );
++
++      if (!item) {
++        continue;
++      }
++
++      const section =
++        sectionFromItem(
++          item
++        );
++
++      if (!section) {
++        continue;
++      }
++
++      items.set(
++        section +
++          "/" +
++          item.id,
++        item
++      );
++    }
++
++    return items;
++  } finally {
++    clearTimeout(
++      timer
++    );
++  }
++}
++
++async function getPublishedCatalogItem(
++  target
++) {
++  try {
++    const now =
++      Date.now();
++
++    if (
++      !publishedCatalogMemo ||
++      now -
++        publishedCatalogMemo.at >=
++        PUBLISHED_CATALOG_MEMORY_TTL_MS
++    ) {
++      if (!publishedCatalogPending) {
++        publishedCatalogPending =
++          loadPublishedCatalogIndex()
++            .then(
++              items => {
++                publishedCatalogMemo = {
++                  items,
++                  at:
++                    Date.now()
++                };
++              }
++            )
++            .catch(
++              error => {
++                logLimited(
++                  "warn",
++                  "published-catalog",
++                  "MMicjMedia could not read the R2 published catalog:",
++                  error
++                );
++
++                publishedCatalogMemo = {
++                  items:
++                    publishedCatalogMemo
++                      ? publishedCatalogMemo.items
++                      : new Map(),
++
++                  at:
++                    Date.now() -
++                    (
++                      PUBLISHED_CATALOG_MEMORY_TTL_MS -
++                      PUBLISHED_CATALOG_RETRY_MS
++                    )
++                };
++              }
++            )
++            .finally(
++              () => {
++                publishedCatalogPending =
++                  null;
++              }
++            );
++      }
++
++      await publishedCatalogPending;
++    }
++
++    const item =
++      publishedCatalogMemo
++        ? publishedCatalogMemo.items.get(
++            target.section +
++              "/" +
++              target.id
++          )
++        : null;
++
++    if (!item) {
++      return null;
++    }
++
++    const date =
++      baseDateKey(
++        item.date
++      );
++
++    return date &&
++      date <=
++        baseNowKey()
++      ? item
++      : null;
++  } catch (error) {
++    return null;
++  }
++}
++
++/* The item a state link points at: the KV catalog snapshot first
++   (unchanged behaviour), then the R2 published catalog. */
+ async function getBaseSnapshotItem(
+   env,
+   target
+ ) {
++  const fromSnapshot =
++    await getKvSnapshotItem(
++      env,
++      target
++    );
++
++  if (fromSnapshot) {
++    return fromSnapshot;
++  }
++
++  return getPublishedCatalogItem(
++    target
++  );
++}
++
++async function getKvSnapshotItem(
++  env,
++  target
++) {
+   try {
+     const text =
+       await getCatalogSnapshotText(
+--- a/worker-friendly-errors.test.mjs	2026-10-24 05:20:00.000000000 +0000
++++ b/worker-friendly-errors.test.mjs	2026-10-29 02:38:27.714888738 +0000
+@@ -20,21 +20,32 @@
+ const check=(name,cond,extra="")=>{console.log((cond?"PASS":"FAIL")+"  "+name+(extra?"  ["+extra+"]":""));if(!cond)failures++;};
+ let r,t;
+ 
+-/* ---- share link that no longer exists ---- */
+-r=await call("/s/book/ghost-1",mkEnv(),PAGE); t=await r.text();
+-check("missing share link, page load -> 404 with the picture page",r.status===404 && t.includes("/assets/errors/unavailable.webp") && t.includes("Link no longer available"),"status="+r.status);
++/* ---- /s/<section>/<id> with no share record ----
++   Used to be a dead-end "unavailable" page. It now sends the visitor to
++   the main app link, which opens the item from the full library (and
++   simply stays on the section if the item is not there). */
++r=await call("/s/book/ghost-1",mkEnv(),PAGE);
++check("missing /s/<section>/<id> -> 302 to the main app link",r.status===302 && r.headers.get("location")===BASE+"/?view=reader&item=reader%2Fghost-1","status="+r.status+" location="+r.headers.get("location"));
++check("the redirect is never cached",/no-store/.test(r.headers.get("cache-control")||""));
++r=await call("/s/video/vid%2F7"); 
++check("a section/id redirect needs no Accept: html and re-encodes the id",r.status===302 && r.headers.get("location")===BASE+"/?view=video&item=video%2Fvid%2F7");
++
++/* ---- legacy 16-character share key that no longer exists ---- */
++const GHOST_KEY="/s/AAAAAAAAAAAAAAAA";
++r=await call(GHOST_KEY,mkEnv(),PAGE); t=await r.text();
++check("missing legacy key, page load -> 404 with the picture page",r.status===404 && t.includes("/assets/errors/unavailable.webp") && t.includes("Link no longer available"),"status="+r.status);
+ check("friendly page is never cached",/no-store/.test(r.headers.get("cache-control")||"") && /text\/html/.test(r.headers.get("content-type")||""));
+ check("friendly page has a way home",t.includes('href="/"'));
+-r=await call("/s/book/ghost-1"); t=await r.text();
+-check("same address without Accept: html -> the same plain text as before",r.status===404 && t==="MMicjMedia shared item was not found." && /text\/plain/.test(r.headers.get("content-type")||""));
+-r=await call("/s/book/ghost-1",mkEnv(),{headers:{accept:"text/html","sec-fetch-dest":"script"}}); t=await r.text();
++r=await call(GHOST_KEY); t=await r.text();
++check("same address without Accept: html -> plain text",r.status===404 && t==="MMicjMedia publication not found." && /text\/plain/.test(r.headers.get("content-type")||""));
++r=await call(GHOST_KEY,mkEnv(),{headers:{accept:"text/html","sec-fetch-dest":"script"}}); t=await r.text();
+ check("a script/image request is never given a page",r.status===404 && !t.includes("<html"));
+-r=await call("/s/book/ghost-1",mkEnv(),{headers:{accept:"text/html,application/xhtml+xml","sec-fetch-dest":"empty","sec-fetch-mode":"same-origin"}}); t=await r.text();
++r=await call(GHOST_KEY,mkEnv(),{headers:{accept:"text/html,application/xhtml+xml","sec-fetch-dest":"empty","sec-fetch-mode":"same-origin"}}); t=await r.text();
+ check("a page load forwarded by the service worker (Sec-Fetch-Dest: empty) still gets the picture page",r.status===404 && t.includes("unavailable.webp"));
+-r=await call("/s/book/ghost-1",mkEnv(),{headers:{accept:"text/html","sec-fetch-dest":"document","sec-fetch-mode":"navigate"}}); t=await r.text();
++r=await call(GHOST_KEY,mkEnv(),{headers:{accept:"text/html","sec-fetch-dest":"document","sec-fetch-mode":"navigate"}}); t=await r.text();
+ check("an ordinary page load (Sec-Fetch-Dest: document) gets the picture page",r.status===404 && t.includes("unavailable.webp"));
+-r=await call("/s/book/ghost-1",mkEnv(),{headers:{accept:"*/*","sec-fetch-dest":"empty"}}); t=await r.text();
+-check("fetch() with Accept: */* is never given a page",r.status===404 && t==="MMicjMedia shared item was not found.");
++r=await call(GHOST_KEY,mkEnv(),{headers:{accept:"*/*","sec-fetch-dest":"empty"}}); t=await r.text();
++check("fetch() with Accept: */* is never given a page",r.status===404 && t==="MMicjMedia publication not found.");
+ 
+ /* ---- maintenance switch ---- */
+ r=await call("/",mkEnv({MAINTENANCE:"1"}),PAGE); t=await r.text();
+--- a/worker-state-preview.test.mjs	2026-10-24 05:20:00.000000000 +0000
++++ b/worker-state-preview.test.mjs	2026-10-29 02:39:28.526561913 +0000
+@@ -15,6 +15,20 @@
+   }
+ };
+ 
++/* The Worker reads the R2 published catalog over the network when KV has
++   no match. Tests never touch the network: R2.body is what that file holds,
++   R2.status its HTTP status (or "throw" to simulate an outage). */
++const R2 = { body: null, status: 200, calls: 0, other: [] };
++globalThis.fetch = async (url) => {
++  if (String(url) === "https://media.mmicj.com/catalog/published.json") {
++    R2.calls++;
++    if (R2.status === "throw") throw new TypeError("fetch failed");
++    return new Response(R2.body === null ? "{}" : JSON.stringify(R2.body), { status: R2.status });
++  }
++  R2.other.push(String(url));
++  return new Response("not found", { status: 404 });
++};
++
+ const INDEX = "<!DOCTYPE html><html><head><title>MMicj</title></head><body>app</body></html>";
+ const BASE = "https://example.workers.dev";
+ const ctx = { waitUntil() {} };
+@@ -140,5 +154,70 @@
+   check("no snapshot -> 200 with base logo", r.status === 200 && html.includes('og:image" content="' + LOGO + '"'));
+ }
+ 
++// ---- R2 published catalog fallback --------------------------------------
++{
++  const r2item = (id, type, date, title = "R2 title of " + id) =>
++    ({ id, type, title, subtitle: "", thumbnail: "https://media.mmicj.com/thumbs/" + id + ".jpg",
++       media: "https://media.mmicj.com/media/" + id, audio: "", author: "", category: "Meditation", date });
++
++  // item only in R2 (not in the KV snapshot) gets its own card
++  R2.body = { version: "1", content: [ r2item("r2-vid", "video", "202601010900"), r2item("r2-book", "book", "202601010900") ] };
++  R2.status = 200; R2.calls = 0;
++  let w = await fresh(); let env = makeEnv(snapshot);
++  let html = await (await get(w, env, "/?view=video&item=video%2Fr2-vid")).text();
++  check("R2-only item: card uses its own composed thumbnail", html.includes("section=video&amp;id=r2-vid&amp;base=1"));
++  check("R2-only item: og:title is the item's title", html.includes('og:title\" content=\"R2 title of r2-vid\"'.replace(/\\/g, "")));
++  html = await (await get(w, env, "/?view=reader&item=reader%2Fr2-book")).text();
++  check("R2-only book is found under the reader section", html.includes("section=reader&amp;id=r2-book&amp;base=1"));
++  check("the R2 file is fetched once and kept in memory", R2.calls === 1, "calls=" + R2.calls);
++
++  // KV snapshot wins; R2 is not even asked
++  R2.calls = 0;
++  w = await fresh(); env = makeEnv(snapshot);
++  R2.body = { content: [ r2item("vid-1", "video", "202601010900", "R2 copy of vid-1") ] };
++  html = await (await get(w, env, "/?view=video&item=video%2Fvid-1")).text();
++  check("item in both: the KV snapshot still wins", html.includes('og:title" content="Title of vid-1"') && R2.calls === 0, "calls=" + R2.calls);
++
++  // not released yet, or no valid date -> never previewed
++  R2.body = { content: [ r2item("future-vid", "video", "209912312359"), r2item("nodate-vid", "video", "") ] };
++  w = await fresh(); env = makeEnv(snapshot);
++  html = await (await get(w, env, "/?view=video&item=video%2Ffuture-vid")).text();
++  check("R2 item that is not released yet -> base logo", html.includes('og:image" content="' + LOGO + '"'));
++  html = await (await get(w, env, "/?view=video&item=video%2Fnodate-vid")).text();
++  check("R2 item without a valid date -> base logo", html.includes('og:image" content="' + LOGO + '"'));
++
++  // outage: page still served with the base logo, and no retry storm
++  R2.status = "throw"; R2.calls = 0;
++  w = await fresh(); env = makeEnv(snapshot);
++  let res = await get(w, env, "/?view=video&item=video%2Fr2-vid");
++  html = await res.text();
++  check("R2 outage -> 200 with base logo", res.status === 200 && html.includes('og:image" content="' + LOGO + '"'));
++  await (await get(w, env, "/?view=video&item=video%2Fr2-other")).text();
++  check("after a failed read the Worker does not retry on every request", R2.calls === 1, "calls=" + R2.calls);
++
++  // bad responses are treated like an outage
++  for (const [label, status, body] of [["HTTP 500", 500, {}], ["no content list", 200, { nope: 1 }]]) {
++    R2.status = status; R2.body = body;
++    w = await fresh(); env = makeEnv(snapshot);
++    res = await get(w, env, "/?view=video&item=video%2Fr2-vid");
++    html = await res.text();
++    check("R2 " + label + " -> 200 with base logo", res.status === 200 && html.includes('og:image" content="' + LOGO + '"'));
++  }
++
++  // the OG image route finds R2-only items too. With base=1 any failure
++  // sends the crawler to the base logo (302), so "found" is shown by the
++  // route going on to request that item's own thumbnail.
++  R2.status = 200; R2.body = { content: [ r2item("r2-vid", "video", "202601010900") ] };
++  w = await fresh(); env = makeEnv(snapshot);
++  env.IMAGES = {};   // the route refuses to start without the Images binding
++  R2.other.length = 0;
++  res = await get(w, env, "/__sky_og_image?section=video&id=ghost&base=1");
++  check("OG image route: unknown item -> base logo, no thumbnail requested",
++    res.status === 302 && /\/assets\/base-logo\.jpg$/.test(res.headers.get("location") || "") && R2.other.length === 0);
++  res = await get(w, env, "/__sky_og_image?section=video&id=r2-vid&base=1");
++  check("OG image route: R2-only item is found and its own thumbnail is requested",
++    R2.other.some(u => u.includes("/thumbs/r2-vid.jpg")), "requested=" + R2.other.join(","));
++}
++
+ console.log(failures ? "\n" + failures + " FAILED" : "\nALL PASSED");
+ process.exit(failures ? 1 : 0);

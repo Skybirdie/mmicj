@@ -3719,7 +3719,9 @@ body.sky-share-mode .sky-share-menu-scrim.is-open {
 
 body.sky-share-mode .sky-share-menu-panel {
     --sky-share-menu-text: #18202a;
-    --sky-share-menu-bg: rgba(255,255,255,.88);
+    /* Same translucency as #frontMenuPanel: 30% of the theme panel
+       colour over a 16px backdrop blur. */
+    --sky-share-menu-bg: color-mix(in srgb, var(--panel, #ffffff) 30%, transparent);
     --sky-share-menu-border: rgba(24,32,42,.22);
     --sky-share-menu-shadow: 0 12px 34px rgba(0,0,0,.18);
 
@@ -3742,7 +3744,7 @@ body.sky-share-mode .sky-share-menu-panel {
 
     border: 1px solid var(--sky-share-menu-border);
     border-radius: 16px;
-    background: color-mix(in srgb, var(--sky-share-menu-bg) 30%, transparent);
+    background: var(--sky-share-menu-bg);
     color: var(--sky-share-menu-text);
     box-shadow: var(--sky-share-menu-shadow);
     backdrop-filter: blur(16px);
@@ -3759,7 +3761,7 @@ body.sky-share-mode .sky-share-menu-panel {
 
 html[data-theme="dark"] body.sky-share-mode .sky-share-menu-panel {
     --sky-share-menu-text: #f4f7fa;
-    --sky-share-menu-bg: rgba(12,16,22,.86);
+    --sky-share-menu-bg: color-mix(in srgb, var(--panel, #171a1f) 30%, transparent);
     --sky-share-menu-border: rgba(244,247,250,.24);
     --sky-share-menu-shadow: 0 14px 38px rgba(0,0,0,.48);
 }

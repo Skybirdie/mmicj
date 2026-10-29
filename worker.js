@@ -2219,6 +2219,47 @@ async function serveWithContract(
    SERVE DIRECT SHARE
 ========================================================= */
 
+/* /s/<section>/<id>  ->  /?view=<section>&item=<section>/<id>
+   (the format js/browserAddress.js writes and js/appSwitcher.js opens). */
+function redirectToAppItem(
+  request,
+  target
+) {
+  const destination =
+    new URL(
+      "/",
+      request.url
+    );
+
+  destination.searchParams.set(
+    "view",
+    target.section
+  );
+
+  destination.searchParams.set(
+    "item",
+    target.section +
+      "/" +
+      target.id
+  );
+
+  return new Response(
+    null,
+    {
+      status:
+        302,
+
+      headers: {
+        Location:
+          destination.toString(),
+
+        "Cache-Control":
+          "no-store"
+      }
+    }
+  );
+}
+
 async function serveDirectShare(
   request,
   env,
@@ -2231,7 +2272,17 @@ async function serveDirectShare(
     );
 
   if (!record) {
-    return friendlyResponse("unavailable", request, "MMicjMedia shared item was not found.");
+    /*
+     * No share record for /s/<section>/<id> (for example an item that
+     * exists only in the R2 published catalog). Rather than a dead-end
+     * "unavailable" page, send the visitor to the main app link, which
+     * opens the item from the full library and simply stays on the
+     * section if the item is not there.
+     */
+    return redirectToAppItem(
+      request,
+      target
+    );
   }
 
   const html =
@@ -2613,7 +2664,19 @@ async function serveOgImage(
         );
     }
 
-    if (!record) {
+    /* Not in KV: an item that exists only in the R2 published
+       catalog still gets its own card image. */
+    const publishedItem =
+      record
+        ? null
+        : await getPublishedCatalogItem(
+            target
+          );
+
+    if (
+      !record &&
+      !publishedItem
+    ) {
       return new Response(
         "MMicjMedia shared item was not found.",
         {
@@ -2627,7 +2690,9 @@ async function serveOgImage(
     }
 
     item =
-      record.item;
+      record
+        ? record.item
+        : publishedItem;
   }
 
   if (!item) {
@@ -5677,7 +5742,245 @@ function parseBaseStateItem(
 
 /* The catalog item with this section and id, from the snapshot the
    base preview already reads. Never throws; null when not found. */
+/* =========================================================
+   R2 PUBLISHED CATALOG  (preview fallback)
+
+   The admin portal publishes the catalog to R2 as one public
+   file (the same file the app reads in js/manifest.js). The
+   KV catalog snapshot only knows what the Glide publish wrote,
+   so an item that exists only in R2 had no preview card.
+
+   Preview lookups therefore fall back to that file when KV has
+   no match: no KV read, no R2 binding, and at most one fetch
+   per isolate per PUBLISHED_CATALOG_MEMORY_TTL_MS (the file
+   itself is served with max-age=300, and the subrequest is
+   cached at the edge too). Items that are not released yet are
+   never previewed, the same rule the app applies
+   (SkyDate.isVisible).
+========================================================= */
+
+const PUBLISHED_CATALOG_URL =
+  "https://media.mmicj.com/catalog/published.json";
+
+const PUBLISHED_CATALOG_MEMORY_TTL_MS =
+  300000;
+
+/* After a failed read, try again after this long, not on every request. */
+const PUBLISHED_CATALOG_RETRY_MS =
+  30000;
+
+const PUBLISHED_CATALOG_TIMEOUT_MS =
+  4000;
+
+/* { items: Map("<section>/<id>" -> cleaned item), at } */
+let publishedCatalogMemo =
+  null;
+
+let publishedCatalogPending =
+  null;
+
+async function loadPublishedCatalogIndex() {
+  const controller =
+    new AbortController();
+
+  const timer =
+    setTimeout(
+      () =>
+        controller.abort(),
+      PUBLISHED_CATALOG_TIMEOUT_MS
+    );
+
+  try {
+    const response =
+      await fetch(
+        PUBLISHED_CATALOG_URL,
+        {
+          signal:
+            controller.signal,
+
+          cf: {
+            cacheEverything:
+              true,
+
+            cacheTtl:
+              300
+          }
+        }
+      );
+
+    if (!response.ok) {
+      throw new Error(
+        "Published catalog request failed (" +
+        response.status +
+        ")."
+      );
+    }
+
+    const data =
+      await response.json();
+
+    if (
+      !data ||
+      !Array.isArray(
+        data.content
+      )
+    ) {
+      throw new Error(
+        "Published catalog has no content list."
+      );
+    }
+
+    const items =
+      new Map();
+
+    for (
+      const raw of
+      data.content
+    ) {
+      const item =
+        normalizeCatalogPublishItem(
+          raw
+        );
+
+      if (!item) {
+        continue;
+      }
+
+      const section =
+        sectionFromItem(
+          item
+        );
+
+      if (!section) {
+        continue;
+      }
+
+      items.set(
+        section +
+          "/" +
+          item.id,
+        item
+      );
+    }
+
+    return items;
+  } finally {
+    clearTimeout(
+      timer
+    );
+  }
+}
+
+async function getPublishedCatalogItem(
+  target
+) {
+  try {
+    const now =
+      Date.now();
+
+    if (
+      !publishedCatalogMemo ||
+      now -
+        publishedCatalogMemo.at >=
+        PUBLISHED_CATALOG_MEMORY_TTL_MS
+    ) {
+      if (!publishedCatalogPending) {
+        publishedCatalogPending =
+          loadPublishedCatalogIndex()
+            .then(
+              items => {
+                publishedCatalogMemo = {
+                  items,
+                  at:
+                    Date.now()
+                };
+              }
+            )
+            .catch(
+              error => {
+                logLimited(
+                  "warn",
+                  "published-catalog",
+                  "MMicjMedia could not read the R2 published catalog:",
+                  error
+                );
+
+                publishedCatalogMemo = {
+                  items:
+                    publishedCatalogMemo
+                      ? publishedCatalogMemo.items
+                      : new Map(),
+
+                  at:
+                    Date.now() -
+                    (
+                      PUBLISHED_CATALOG_MEMORY_TTL_MS -
+                      PUBLISHED_CATALOG_RETRY_MS
+                    )
+                };
+              }
+            )
+            .finally(
+              () => {
+                publishedCatalogPending =
+                  null;
+              }
+            );
+      }
+
+      await publishedCatalogPending;
+    }
+
+    const item =
+      publishedCatalogMemo
+        ? publishedCatalogMemo.items.get(
+            target.section +
+              "/" +
+              target.id
+          )
+        : null;
+
+    if (!item) {
+      return null;
+    }
+
+    const date =
+      baseDateKey(
+        item.date
+      );
+
+    return date &&
+      date <=
+        baseNowKey()
+      ? item
+      : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+/* The item a state link points at: the KV catalog snapshot first
+   (unchanged behaviour), then the R2 published catalog. */
 async function getBaseSnapshotItem(
+  env,
+  target
+) {
+  const fromSnapshot =
+    await getKvSnapshotItem(
+      env,
+      target
+    );
+
+  if (fromSnapshot) {
+    return fromSnapshot;
+  }
+
+  return getPublishedCatalogItem(
+    target
+  );
+}
+
+async function getKvSnapshotItem(
   env,
   target
 ) {
