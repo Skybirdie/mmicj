@@ -80,5 +80,21 @@
 
   "images": {
     "binding": "IMAGES"
-  }
+  },
+
+  /*
+   * ANALYTICS (admin-only usage counts)
+   *
+   * Workers Analytics Engine, free plan: 100,000 data points and
+   * 10,000 read queries per day. The dataset is created automatically
+   * on the first write.
+   *
+   * The ON/OFF SWITCH is a separate plain variable, not set here:
+   * add  ANALYTICS_ENABLED = true  (or false)  in the Cloudflare
+   * dashboard, the same place as MAINTENANCE and SHARE_MODE_ENABLED.
+   * Missing or anything other than true/on/1/yes means OFF.
+   */
+  "analytics_engine_datasets": [
+    { "binding": "ANALYTICS_AE", "dataset": "mmicj_events" }
+  ]
 }

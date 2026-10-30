@@ -3744,6 +3744,12 @@ async function handleDirectShare(
     return null;
   }
 
+  trackShareOpen(
+    request,
+    env,
+    target
+  );
+
   /*
    * Share Mode switched off: every /s/<section>/<id> link goes to the
    * main app instead (no KV read at all).
@@ -6752,6 +6758,132 @@ function maintenanceOn(env) {
   return !["", "0", "false", "off", "no"].includes(String(v).trim().toLowerCase());
 }
 
+/* =========================================================
+   ANALYTICS (admin-only usage counts)  -  v1.0.0
+
+   Two small pieces, both behind ONE switch:
+
+     POST /__sky_collect   the app's js/analytics.js sends one small summary
+                           of counters here (about once per visit). Each line
+                           becomes one Analytics Engine data point.
+     share_open            a share link (/s/<section>/<id>) was opened. Counted
+                           right here on the server, so no browser code is
+                           involved. Link-preview robots (WhatsApp, Facebook,
+                           Telegram ...) are recorded separately as "preview".
+
+   THE SWITCH: variable  ANALYTICS_ENABLED  (Cloudflare dashboard -> this
+   Worker -> Settings -> Variables, next to MAINTENANCE / SHARE_MODE_ENABLED).
+     true / on / 1 / yes   counting is on
+     anything else, or missing   OFF: nothing is written, the collect route
+                           answers {"on":false} and every app pauses itself
+                           for 6 hours. No redeploy is needed.
+
+   Cost: no KV, no R2. One Worker request per app visit (batched in the
+   browser) and one Analytics Engine data point per summary line. Free plan:
+   100,000 data points per day. A failure here is swallowed: it can never
+   change what a visitor or a share link receives.
+   ========================================================= */
+
+const ANALYTICS_PATH = "/__sky_collect";
+const ANALYTICS_EVENTS = new Set([
+  "session", "section_view", "item_open", "share_tap", "share_tile", "share_done"
+]);
+const ANALYTICS_SECTIONS = new Set(["front", "reader", "video", "slideshow"]);
+const ANALYTICS_SURFACES = new Set(["embed", "pwa", "browser", "share"]);
+const ANALYTICS_MAX_BODY = 8192;
+const ANALYTICS_MAX_ENTRIES = 60;
+const ANALYTICS_PREVIEW_BOTS =
+  /bot|crawl|spider|preview|facebookexternalhit|whatsapp|telegram|slack|discord|skype|linkedin|pinterest|embedly|vkshare|quora|headless/i;
+
+function analyticsOn(env) {
+  const v = env && env.ANALYTICS_ENABLED;
+  if (v === undefined || v === null) return false;
+  return ["true", "on", "1", "yes"].includes(String(v).trim().toLowerCase());
+}
+
+function analyticsReady(env) {
+  return analyticsOn(env) && !!(env.ANALYTICS_AE && typeof env.ANALYTICS_AE.writeDataPoint === "function");
+}
+
+function analyticsJson(body, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json; charset=UTF-8", "cache-control": "no-store" }
+  });
+}
+
+const analyticsClean = (v, max, pattern) =>
+  String(v === undefined || v === null ? "" : v).replace(pattern, "_").slice(0, max);
+
+async function handleAnalyticsCollect(request, env) {
+  if (request.method !== "POST") {
+    return new Response(null, { status: 405, headers: { allow: "POST", "cache-control": "no-store" } });
+  }
+
+  /* switched off (or the binding is missing): tell the app to pause itself, write nothing */
+  if (!analyticsReady(env)) return analyticsJson({ on: false });
+
+  let text = "";
+  try { text = await request.text(); } catch (_) { return analyticsJson({ on: true, stored: 0 }, 400); }
+  if (text.length > ANALYTICS_MAX_BODY) return analyticsJson({ on: true, stored: 0 }, 413);
+
+  let payload = null;
+  try { payload = JSON.parse(text); } catch (_) { return analyticsJson({ on: true, stored: 0 }, 400); }
+  if (!payload || payload.v !== 1 || !Array.isArray(payload.e)) return analyticsJson({ on: true, stored: 0 }, 400);
+
+  const visitor = analyticsClean(payload.a, 32, /[^A-Za-z0-9]/g);
+  const surface = ANALYTICS_SURFACES.has(payload.p) ? payload.p : "browser";
+  const country = analyticsClean(request.cf && request.cf.country, 2, /[^A-Za-z]/g);
+
+  let stored = 0;
+  for (const row of payload.e.slice(0, ANALYTICS_MAX_ENTRIES)) {
+    if (!Array.isArray(row) || row.length < 5) continue;
+    const [event, section, id, detail, n] = row;
+    if (!ANALYTICS_EVENTS.has(event)) continue;
+    const count = Math.floor(Number(n));
+    if (!Number.isFinite(count) || count < 1) continue;
+    try {
+      env.ANALYTICS_AE.writeDataPoint({
+        indexes: [event],
+        blobs: [
+          event,
+          ANALYTICS_SECTIONS.has(section) ? section : "",
+          analyticsClean(id, 64, /[^A-Za-z0-9_\-.:~]/g),
+          analyticsClean(String(detail || "").toLowerCase(), 24, /[^a-z0-9_\-]/g),
+          surface,
+          country,
+          visitor
+        ],
+        doubles: [Math.min(count, 1000)]
+      });
+      stored++;
+    } catch (_) { /* never let counting fail the request */ }
+  }
+  return analyticsJson({ on: true, stored });
+}
+
+/* A share link was opened. Synchronous and fire-and-forget: no await, no KV, no R2. */
+function trackShareOpen(request, env, target) {
+  try {
+    if (!analyticsReady(env) || !target) return;
+    const ua = request.headers.get("user-agent") || "";
+    const preview = request.method === "HEAD" || ANALYTICS_PREVIEW_BOTS.test(ua);
+    env.ANALYTICS_AE.writeDataPoint({
+      indexes: ["share_open"],
+      blobs: [
+        "share_open",
+        ANALYTICS_SECTIONS.has(target.section) ? target.section : "",
+        analyticsClean(target.id, 64, /[^A-Za-z0-9_\-.:~]/g),
+        preview ? "preview" : "visitor",
+        "link",
+        analyticsClean(request.cf && request.cf.country, 2, /[^A-Za-z]/g),
+        ""
+      ],
+      doubles: [1]
+    });
+  } catch (_) { /* counting must never affect a share link */ }
+}
+
 const workerHandlers = {
 
   async fetch(
@@ -6850,6 +6982,20 @@ const workerHandlers = {
       "/__sky_catalog_publish"
     ) {
       return handleCatalogPublishTest(
+        request,
+        env
+      );
+    }
+
+    /* -----------------------------------------------------
+       Analytics (admin-only usage counts; see ANALYTICS_ENABLED)
+    ----------------------------------------------------- */
+
+    if (
+      url.pathname ===
+      ANALYTICS_PATH
+    ) {
+      return handleAnalyticsCollect(
         request,
         env
       );
