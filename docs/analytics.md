@@ -12,11 +12,21 @@ What it counts, how to switch it off, and what it costs on the Cloudflare free p
 | `share_tap` | a share button was pressed | browser (`ShareManager.share`, front-page share button) |
 | `share_tile` | a tile was chosen in a share panel (WhatsApp, Copy link ...) | browser |
 | `share_done` | the phone's own share sheet reported success | browser (`navigator.share`) |
+| `feature_use` | a real tap on one of the app's own buttons (search, sort, filter, favourite, bookmark, next/previous, play, settings, library drawer ...). The name of the button is stored, never what was typed or opened | **browser**, one page-wide click listener (`FEATURES` list in `js/analytics.js`) |
 | `share_open` | a share link was opened (people and, separately, link-preview robots) | **server** (worker.js, `/s/<section>/<id>`) |
 
 Not collected: names, IP addresses, search text, titles, link text. Each browser keeps one random id so "visitors" can be counted. Do Not Track and Global Privacy Control switch it off for that visitor. Only the admin portal can read the numbers (it needs the `ADMIN_TOKEN`); the app has no screen that shows them.
 
-Not counted: moving next/previous inside the Video viewer, page turns, time spent. The same item opened twice within 30 seconds counts once.
+Not counted: page turns made by swiping or keyboard (only taps on the on-screen next/previous buttons), moving between videos inside the Video viewer, time spent, anything typed. The same item opened twice within 30 seconds counts once.
+
+## How buttons are detected (no KV, no per-button code)
+
+The app spots its own taps. `js/analytics.js` holds ONE click listener on the whole page and a list called `FEATURES` (control -> name). A tap on a listed control adds 1 to a counter named `feature_use / <section> / <name>`. Because the listener sits on the page, buttons the app draws later (favourite hearts, bookmark rows, recent-shelf cards) are caught too, and no viewer file had to change.
+
+- To count another button: add one line to `FEATURES` (`["name", "#buttonId"]` or `[".className"]`). The FIRST matching line wins. Names are lower-case letters, digits, `-`, `_`, 24 characters at most. The portal shows an unknown name as it is; add a friendly label in `U_FEAT` in `mmicj-admin.html` if you want one.
+- Only real taps count: a click the app's own code fires on itself is ignored, and one physical tap that raises two click events counts once.
+- `node analytics-client.test.mjs` (run in the app folder) checks every selector in `FEATURES` still exists in your files, so a renamed button is noticed instead of silently going quiet.
+- Opening a book from Share Mode used to be missed (it calls `Reader.open()` directly). It is now counted as `item_open`, once.
 
 ## How it works (so a request is never made per click)
 
@@ -43,21 +53,20 @@ No KV is used, no R2, no Cloudflare Images.
 
 **Assumptions** (I have no real traffic figures; change them in your head if your visits look different):
 - a visit sends about **1.4** summaries (1 when it closes, plus 1 per 5 minutes if it stays open)
-- a visit writes about **6** data points (1 visit + about 2 section views + 1-2 items + occasional share lines)
+- a visit writes about **12** data points (1 visit + about 2 section views + 1-2 items + about 6 different buttons used + occasional share lines). Button taps are added up in the browser, so pressing Next 40 times is ONE data point; what costs is how many DIFFERENT buttons a visit uses.
 - today the app already costs about **2** Worker requests per visit (base page, catalog snapshot, share links)
 - share-link opens add 1 data point each and **no** extra request
 
 | Visits per day | Extra Worker requests | Data points | Worker requests, all-in (about 3.4 per visit) |
 |---:|---:|---:|---:|
-| 100 | +140 (0.1%) | 600 (1%) | 340 (0.3%) |
-| 500 | +700 (0.7%) | 3,000 (3%) | 1,700 (1.7%) |
-| 1,000 | +1,400 (1.4%) | 6,000 (6%) | 3,400 (3.4%) |
-| 2,500 | +3,500 (3.5%) | 15,000 (15%) | 8,500 (8.5%) |
-| 5,000 | +7,000 (7.0%) | 30,000 (30%) | 17,000 (17%) |
-| 10,000 | +14,000 (14%) | 60,000 (60%) | 34,000 (34%) |
-| 16,000 | +22,400 (22%) | 96,000 (96%) | 54,400 (54%) |
+| 100 | +140 (0.1%) | 1,200 (1%) | 340 (0.3%) |
+| 500 | +700 (0.7%) | 6,000 (6%) | 1,700 (1.7%) |
+| 1,000 | +1,400 (1.4%) | 12,000 (12%) | 3,400 (3.4%) |
+| 2,500 | +3,500 (3.5%) | 30,000 (30%) | 8,500 (8.5%) |
+| 5,000 | +7,000 (7.0%) | 60,000 (60%) | 17,000 (17%) |
+| 8,000 | +11,200 (11%) | 96,000 (96%) | 27,200 (27%) |
 
-Percentages are of the daily free limits. **The data-point limit is reached first, at roughly 16,000 visits a day.** Relative to what the Worker handles today, analytics adds about 70% more Worker requests per visit (1.4 on top of about 2), but against the free ceiling it is small until you are well into the thousands of visits a day.
+Percentages are of the daily free limits. **The data-point limit is reached first, at roughly 8,000 visits a day** (it was about 16,000 before button counting; Worker requests are unchanged because nothing is sent per tap). If that ever looks close, shorten the `FEATURES` list rather than touching the send limits.
 
 Portal side: opening the Dashboard costs 1 Worker request and 1 R2 read. It runs 4 SQL queries and 1 R2 write only when the saved answer is a day old, or when the portal page was just reloaded and the Dashboard opened (never more than once a minute; 4 admins reloading 20 times each is about 320 queries, against 10,000). Three tiny files are stored in the private bucket (`analytics/summary-*.json`).
 
@@ -72,7 +81,8 @@ CPU: the collect route parses at most 8 KB and writes at most 60 points, which s
 
 ## Files
 
-- `js/analytics.js` (new) and one `<script>` line in `index.html`
+- `js/analytics.js` (v1.1.0: adds `feature_use`) and one `<script>` line in `index.html`
 - `worker.js`: `/__sky_collect`, `share_open` counting (marked "ANALYTICS")
 - `wrangler.jsonc`: the `ANALYTICS_AE` binding (dataset `mmicj_events`). `run_worker_first` already contains `/__sky_*`, so no routing change is needed.
+- `analytics-client.test.mjs`: tests the browser side against a fake page (`node analytics-client.test.mjs`)
 - `worker-analytics.test.mjs`: run it like your other worker tests (`node worker-analytics.test.mjs` with `worker.js` copied to `worker.mjs`)

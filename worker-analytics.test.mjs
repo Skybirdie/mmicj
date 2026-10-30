@@ -49,6 +49,19 @@ check("double1 = the count",p.doubles[0]===2);
 check("tile keeps its platform as detail",points[3].blobs[3]==="whatsapp");
 check("every point has exactly 7 blobs and 1 double",points.every(x=>x.blobs.length===7&&x.doubles.length===1));
 
+/* ---------- feature taps (feature_use) ---------- */
+points.length=0;
+r=await post(mkEnv({ANALYTICS_AE:AE,ANALYTICS_ENABLED:"true"}),{v:1,a:"abc123DEF456",p:"pwa",e:[
+  ["feature_use","video","","video_search",4],
+  ["feature_use","reader","","reader_next",37],
+  ["feature_use","reader","","Bad Name!/<x>",1]
+]});
+j=await r.json();
+check("feature_use is accepted: 3 data points",r.status===200&&j.stored===3&&points.length===3);
+check("feature_use layout: event, section, no id, feature name as detail, surface",JSON.stringify(points[0].blobs)===JSON.stringify(["feature_use","video","","video_search","pwa","","abc123DEF456"]),JSON.stringify(points[0].blobs));
+check("feature_use count goes in double1",points[1].doubles[0]===37);
+check("feature name is cleaned, never rejected or injected",/^[a-z0-9_-]*$/.test(points[2].blobs[3]),points[2].blobs[3]);
+
 /* ---------- validation ---------- */
 const env=mkEnv({ANALYTICS_AE:AE,ANALYTICS_ENABLED:"true"});
 points.length=0;

@@ -6786,7 +6786,7 @@ function maintenanceOn(env) {
 
 const ANALYTICS_PATH = "/__sky_collect";
 const ANALYTICS_EVENTS = new Set([
-  "session", "section_view", "item_open", "share_tap", "share_tile", "share_done"
+  "session", "section_view", "item_open", "share_tap", "share_tile", "share_done", "feature_use"
 ]);
 const ANALYTICS_SECTIONS = new Set(["front", "reader", "video", "slideshow"]);
 const ANALYTICS_SURFACES = new Set(["embed", "pwa", "browser", "share"]);

@@ -1,5 +1,5 @@
 /* =========================================================
-   MMicj in-app analytics  (js/analytics.js  v1.0.0)
+   MMicj in-app analytics  (js/analytics.js  v1.1.0)
 
    Counts, for the admin portal only:
      session        the app was opened
@@ -8,6 +8,10 @@
      share_tap      a share button was pressed
      share_tile     a tile was chosen in the share panel (WhatsApp, Copy link ...)
      share_done     the native share sheet reported success
+     feature_use    a real tap/click on one of the app's own controls (search, sort,
+                    filter, favourite, bookmark, next/previous, play, settings ...).
+                    WHICH controls is the FEATURES list below: add a line there to
+                    count a new button. Nothing else needs touching.
    (Share LINKS being opened by other people are counted on the server, in
     worker.js, so nothing here is needed for them.)
 
@@ -46,16 +50,70 @@
     const MIN_SEND_GAP_MS = 5 * 60 * 1000;   /* while the app stays open: at most one send per 5 minutes */
     const HIDDEN_SEND_GAP_MS = 60 * 1000;    /* when the page is hidden/closed: at most one send per minute */
     const MAX_SENDS_PER_DAY = 20;            /* per device, per day: a hard ceiling on Worker requests */
-    const MAX_ENTRIES_PER_SEND = 40;         /* distinct (event, section, item) lines in one send */
+    const MAX_ENTRIES_PER_SEND = 60;         /* distinct (event, section, item) lines in one send */
     const MAX_PENDING_KEYS = 300;            /* the local backlog never grows past this */
     const PAUSE_WHEN_OFF_MS = 6 * 60 * 60 * 1000;     /* after the server says "off" */
     const PAUSE_WHEN_MISSING_MS = 24 * 60 * 60 * 1000; /* after 403/404/405/410: no such endpoint here */
+    const FEATURE_DEDUPE_MS = 250;           /* one physical tap that fires two click events counts once */
     const REOPEN_DEDUPE_MS = 30 * 1000;      /* the same item "opened" twice within 30 s counts once */
     const STORE_KEY = "mm-an-v1";
     const SKIP_KEY = "mm-an-skip";
 
-    const EVENTS = ["session", "section_view", "item_open", "share_tap", "share_tile", "share_done"];
+    const EVENTS = ["session", "section_view", "item_open", "share_tap", "share_tile", "share_done", "feature_use"];
     const SECTIONS = { front: 1, reader: 1, video: 1, slideshow: 1 };
+    /* ----- THE FEATURE LIST: [name shown in the portal, CSS selector of the control] -----
+       The app itself spots the tap: one listener on the whole page, no matter how or when the
+       button was drawn (buttons the app builds later are caught too). The FIRST line that
+       matches wins, so put specific lines above general ones. A name is lower-case letters,
+       digits, - or _ and at most 24 characters. To count a new control, add a line here and
+       (optionally) a friendly label in the portal's U_FEAT list in mmicj-admin.html. */
+    const FEATURES = [
+        /* the front page */
+        ["front_menu",        "#frontMenuButton"],
+        /* books (Reader) */
+        ["reader_next",       "#nextButton"],
+        ["reader_prev",       "#previousButton"],
+        ["reader_jump",       "#pageJumpButton, #pageJumpInput"],
+        ["reader_close",      "#readerCloseButton"],
+        ["fullscreen",        "#viewerFullscreenButton"],      /* book or video: the section says which */
+        ["reader_sound",      "#muteButton"],
+        ["reader_rotate",     "#rotateButton"],
+        ["reader_settings",   "#settingsButton"],
+        ["reader_search",     "#topSearchButton, #searchBox"],
+        ["bookmark_add",      "#bookmarkAddButton"],
+        ["bookmark_panel",    "#bookmarkPanelButton"],
+        ["bookmark_delete",   ".sr-bookmark-delete"],
+        ["bookmark_open",     ".sr-bookmark-row"],
+        ["recent_open",       ".sr-recent-card"],
+        ["book_favourite",    ".favoriteButton"],
+        ["book_sort",         "#librarySortButton"],
+        ["book_filter",       "#libraryFilterButton"],
+        ["book_list_view",    "#listViewButton"],
+        ["book_shelf_view",   "#shelfViewButton"],
+        ["book_drawer",       "#narrowLibraryToggle, #libraryDrawerClose"],
+        /* videos */
+        ["video_search",      "#videoSearchButton, #videoSearchBox"],
+        ["video_sort",        "#videoSortButton"],
+        ["video_filter",      "#videoFilterButton"],
+        ["video_settings",    "#videoSettingsButton"],
+        ["video_close",       "#videoViewerClose"],
+        ["video_favourite",   ".video-favorite-control"],
+        ["video_drawer",      "#videoNarrowLibraryToggle"],
+        /* slideshows */
+        ["slide_play",        "#slideshowPlay"],
+        ["slide_next",        "#slideshowNext"],
+        ["slide_prev",        "#slideshowPrevious"],
+        ["slide_restart",     "#slideshowRestart"],
+        ["slide_fullscreen",  "#slideshowFullscreen"],
+        ["slide_close",       "#slideshowClose"],
+        ["slide_search",      "#slideshowSearchButton, #slideshowSearchBox"],
+        ["slide_sort",        "#slideshowSortButton"],
+        ["slide_filter",      "#slideshowFilterButton"],
+        ["slide_settings",    "#slideshowSettingsButton"],
+        ["slide_favourite",   ".slideshow-favorite-control"],
+        ["slide_drawer",      "#slideshowNarrowLibraryToggle, #slideshowLibraryDrawerClose"]
+    ];
+
     const SECTION_ALIASES = {
         book: "reader", books: "reader", reader: "reader", pdf: "reader", pdfs: "reader", magazine: "reader", magazines: "reader",
         video: "video", videos: "video",
@@ -254,10 +312,11 @@
     /* ----- what gets counted ----- */
 
     /* sections: AppSwitcher already announces every switch */
+    let currentSection = "";
     window.addEventListener("app:switched", ev => {
         try {
             const id = ev && ev.detail && ev.detail.id;
-            if (SECTIONS[id]) track("section_view", id, "", "");
+            if (SECTIONS[id]) { currentSection = id; track("section_view", id, "", ""); }
         } catch (_) { }
     });
 
@@ -280,6 +339,9 @@
         wrap(window.VideoViewer, "openVideo", video => { if (video) trackOpen("video", video.id); });
         wrap(window.SlideshowViewer, "open", item => { if (item) trackOpen("slideshow", item.id); });
         wrap(window.SRNavigation, "openMagazine", book => { if (book) trackOpen("reader", book.id); });
+        /* Share Mode opens a shared book through Reader.open() and never calls openMagazine().
+           A normal open reaches both; the 30-second rule in trackOpen() counts it once. */
+        wrap(window.Reader, "open", book => { if (book) trackOpen("reader", book.id); });
 
         /* share button -> ShareManager.share(section, item): the one funnel every item share button uses */
         wrap(window.ShareManager, "share", (section, item) => {
@@ -291,11 +353,28 @@
 
     let lastShare = { section: "front", id: "" };
 
+    /* every real tap on a listed control (see FEATURES) */
+    const lastFeature = {};
+    function trackFeature(t) {
+        for (let i = 0; i < FEATURES.length; i++) {
+            let hit = null;
+            try { hit = t.closest(FEATURES[i][1]); } catch (_) { }
+            if (!hit) continue;
+            const name = FEATURES[i][0], now = Date.now();
+            if (lastFeature[name] && now - lastFeature[name] < FEATURE_DEDUPE_MS) return;
+            lastFeature[name] = now;
+            track("feature_use", currentSection, "", name);
+            return;
+        }
+    }
+
     /* the front page share button has its own panel */
     document.addEventListener("click", ev => {
         try {
             const t = ev.target && ev.target.closest ? ev.target : null;
             if (!t) return;
+            /* only a person's own tap: a click the app's code fires on itself (element.click()) is not use */
+            if (ev.isTrusted !== false) trackFeature(t);
             if (t.closest("#frontShareButton")) {
                 lastShare = { section: "front", id: "" };
                 track("share_tap", "front", "", "");
