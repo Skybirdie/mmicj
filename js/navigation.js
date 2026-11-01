@@ -339,6 +339,11 @@ navigation.next = async function(){
 
     if(twoPageDocument){
 
+    /* Share Mode: reaching the end of a shared book must NEVER close it.
+       The only way out is the toolbar's close button (Share Mode's own close).
+       Wheel, keyboard and swipe all arrive here, so the rule lives here. */
+    if(document.body && document.body.classList.contains("sky-share-mode")) return false;
+
     clearReaderBookmarkOverlay();
 
     Reader.close({playSound:true});
@@ -383,6 +388,11 @@ if(
         : (total <= 1 ? 1 : (total % 2 === 0 ? total : total - 1));
 
     if(page >= finalSpreadStart){
+
+    /* Share Mode: reaching the end of a shared book must NEVER close it.
+       The only way out is the toolbar's close button (Share Mode's own close).
+       Wheel, keyboard and swipe all arrive here, so the rule lives here. */
+    if(document.body && document.body.classList.contains("sky-share-mode")) return false;
 
     clearReaderBookmarkOverlay();
 
