@@ -4838,3 +4838,22 @@ body.sky-share-mode .sky-share-shell.sky-share-document-closed .sky-share-replay
     opacity: .6 !important;
     cursor: default !important;
 }
+
+
+/* =========================================================
+   SHARE PAGE MENU: HIDDEN WHILE THE SHARED ITEM LOADS
+
+   The menu (open button, link panel, scrim) is created with the
+   shell, at the very start of loading, but every rule that styles
+   and hides it is scoped to body.sky-share-mode, and that class is
+   only added once the shared item has finished preparing. In
+   between, the links showed up as plain unstyled text. Keep the
+   whole menu out of the page until share mode is active; from then
+   on the rules above take over exactly as before.
+   ========================================================= */
+
+body:not(.sky-share-mode) .sky-share-open-button,
+body:not(.sky-share-mode) .sky-share-menu-panel,
+body:not(.sky-share-mode) .sky-share-menu-scrim {
+    display: none !important;
+}
