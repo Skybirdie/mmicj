@@ -357,6 +357,16 @@ function makeEnv(o){
   ok(!e.els.some(x=>/not working/.test(x.textContent||'')),'no error message when level 2 worked');
 }
 {
+  /* only the third matching voice works (the others are listed but have no data): they are tried one after another */
+  const v=[{voiceURI:'us',name:'US',lang:'en-US',localService:true,default:true},{voiceURI:'au',name:'AU',lang:'en-AU',localService:true,default:false},{voiceURI:'gb',name:'GB',lang:'en-GB',localService:true,default:false}];
+  const e=makeEnv({voices:v,pages:[lines(['One title','Two title','Three title'],{step:30,w:100})],
+    failWith:(u)=>u.voice&&u.voice.voiceURI==='gb'?null:'synthesis-failed'});
+  e.RA.start();
+  await until(()=>e.RA.state()==='idle'&&e.log.length>=3,10000);
+  ok(e.log.join('|')==='One title.|Two title.|Three title.','a working voice found among several: '+e.log.join('|'));
+  ok(!e.els.some(x=>/not working/.test(x.textContent||'')),'no error message when another voice worked');
+}
+{
   /* an engine that only works one piece at a time at normal speed: level 3 */
   const v=[{voiceURI:'en',name:'E',lang:'en-US',localService:true,default:true}];
   let busy=0;

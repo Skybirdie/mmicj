@@ -62,7 +62,7 @@ The file is optional: if it is missing, the text is still spoken as tidied, and 
 
 ## If the device's speech engine rejects the voice
 If the engine reports a voice / language / synthesis error, Listen starts that piece again with a more cautious setup, up to three times
-(1: the device's default voice; 2: a voice picked to match the phone's language; 3: the same at normal speed, one piece at a time) and carries on in order.
+(1: the device's default voice; 2: voices picked to match the phone's language, up to six of them one after another; 3: the same at normal speed, one piece at a time) and carries on in order.
 If speech still fails, the notice names the error code and how many voices the device reports, e.g. "Speech is not working on this device
 (synthesis-failed, 2 voices found)." With 0 voices it says to check that a text-to-speech engine is installed and turned on.
 
