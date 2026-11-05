@@ -99,7 +99,7 @@ api.setButtonVisible=function(v){
     return api.isButtonVisible();
 };
 api.setRate=function(v){settings.rate=clampRate(v);saveSettings();return settings.rate;};
-api.setVoice=function(uri){settings.voice=String(uri||"");safeMode=false;saveSettings();};
+api.setVoice=function(uri){settings.voice=String(uri||"");level=0;saveSettings();};
 api.rateRange=()=>({min:RATE_MIN,max:RATE_MAX});
 
 /*-------------------------------------------------------
@@ -499,15 +499,35 @@ function enforce(text){
 }
 api._enforce=enforce;
 
-/* safeMode: after the phone's speech engine rejected a piece of text with a voice / language /
-   synthesis error, the chosen voice and language are dropped and the device's own default is used */
-let safeMode=false;
+/* When the phone's speech engine rejects a piece of text (voice / language / synthesis error), Listen
+   starts that piece again with a more cautious setup, up to three times:
+     level 1  the device's own default voice (no chosen voice, no language)
+     level 2  a voice picked explicitly to match the phone's language (some engines refuse "no voice")
+     level 3  the same, at normal speed, one piece at a time (nothing queued ahead)
+   level 0 = normal. The level stays for the rest of the session (and goes back to 0 when the voice is changed). */
+let level=0;
 const RECOVERABLE=["language-unavailable","voice-unavailable","synthesis-failed","synthesis-unavailable","invalid-argument"];
+
+function voiceCount(){
+    try{return SS?(SS.getVoices()||[]).length:0;}catch(e){return 0;}
+}
+
+/* a voice that matches the phone's language, preferring one stored on the device */
+function autoVoice(){
+    let list=[];
+    try{list=SS.getVoices()||[];}catch(e){}
+    if(!list.length)return null;
+    const norm=l=>String(l||"").toLowerCase().replace("_","-");
+    const want=norm((typeof navigator!=="undefined"&&navigator.language)||(document.documentElement&&document.documentElement.lang)||"en-US");
+    const base=want.split("-")[0];
+    const pick=f=>list.find(v=>f(v)&&v.localService)||list.find(f);
+    return pick(v=>norm(v.lang)===want)||pick(v=>norm(v.lang).split("-")[0]===base)||pick(v=>v.default)||pick(v=>norm(v.lang).split("-")[0]==="en")||list[0];
+}
 
 function makeUtterance(text){
     const u=new Utter(enforce(text));
-    u.rate=settings.rate;
-    const v=safeMode?null:chosenVoice();
+    u.rate=level>=3?1:settings.rate;
+    const v=level===0?chosenVoice():level>=2?autoVoice():null;
     if(v){u.voice=v;u.lang=v.lang;}
     return u;
 }
@@ -523,7 +543,7 @@ function speakList(list,from,token){
         cursor=from;
         const done=()=>{if(token===session&&!dead)resolve(true);};
         const enqueue=()=>{
-            while(token===session&&!dead&&next<total&&next-ended<=2&&holdAt<0){
+            while(token===session&&!dead&&next<total&&next-ended<=(level>=3?1:2)&&holdAt<0){
                 const i=next++;
                 const u=makeUtterance(list[i].text);
                 const gapMs=list[i].gap>0&&i<total-1?Math.round(list[i].gap/settings.rate):0;
@@ -543,14 +563,15 @@ function speakList(list,from,token){
                     const code=ev&&ev.error;
                     if(code==="canceled"||code==="interrupted")return;
                     /* a voice / language the phone cannot use: start this piece again with the device's default voice */
-                    if(!safeMode&&RECOVERABLE.indexOf(code)>=0){
-                        safeMode=true;
+                    if(level<3&&RECOVERABLE.indexOf(code)>=0){
+                        level++;
                         dead=true;
                         cancelSpeech();
+                        try{SS.resume();}catch(e){}
                         setTimeout(()=>{
                             if(token!==session)return;
                             speakList(list,i,token).then(resolve);
-                        },150);
+                        },level>=3?500:200);
                         return;
                     }
                     errorRun++;
@@ -561,7 +582,7 @@ function speakList(list,from,token){
                             ? "This browser blocked speech. Tap Listen again."
                             : (code==="audio-busy"||code==="audio-hardware")
                                 ? "The phone's audio is busy. Close other apps using sound and tap Listen again."
-                                : "Speech is not working on this device ("+(code||"unknown")+").");
+                                : speechFailedMessage(code));
                         resolve(false);
                         return;
                     }
@@ -574,6 +595,14 @@ function speakList(list,from,token){
         };
         enqueue();
     });
+}
+
+function speechFailedMessage(code){
+    const n=voiceCount();
+    const head="Speech is not working on this device ("+(code||"unknown");
+    return n===0
+        ? head+"). No voices were found: check that a text-to-speech engine is installed and turned on in the phone's settings."
+        : head+", "+n+" voice"+(n===1?"":"s")+" found).";
 }
 
 function spreadPages(){

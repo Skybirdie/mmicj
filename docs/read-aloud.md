@@ -61,8 +61,10 @@ The file is optional: if it is missing, the text is still spoken as tidied, and 
 `enforce()` (in `readAloudRules.js`, with a smaller built-in copy in `readAloud.js`): MMICJ is spelled out and no colon, semicolon or dash is left in it.
 
 ## If the device's speech engine rejects the voice
-If the engine reports a voice / language / synthesis error, Listen restarts from that piece with the device's default voice (no chosen voice or language)
-and carries on in order. If speech still fails, the notice names the error code, e.g. "Speech is not working on this device (synthesis-failed)."
+If the engine reports a voice / language / synthesis error, Listen starts that piece again with a more cautious setup, up to three times
+(1: the device's default voice; 2: a voice picked to match the phone's language; 3: the same at normal speed, one piece at a time) and carries on in order.
+If speech still fails, the notice names the error code and how many voices the device reports, e.g. "Speech is not working on this device
+(synthesis-failed, 2 voices found)." With 0 voices it says to check that a text-to-speech engine is installed and turned on.
 
 ## Limits
 - A page with no text layer (a scan, a picture) is skipped; three empty spreads in a row stop with a note.

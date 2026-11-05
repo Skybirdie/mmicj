@@ -331,12 +331,41 @@ function makeEnv(o){
   ok(!e.els.some(x=>/not working/.test(x.textContent||'')),'no error message when the fallback worked');
 }
 {
-  /* an engine that fails every time: the message names the error code */
+  /* an engine that fails every time and reports no voices: the message names the code and the likely cause */
   const e=makeEnv({pages:[lines(['One title','Two title','Three title','Four title','Five title'],{step:30,w:100})],failWith:()=>'synthesis-failed'});
   e.RA.start();
   await until(()=>e.RA.state()==='idle'&&e.els.some(x=>/not working/.test(x.textContent||'')),8000);
   const msg=(e.els.find(x=>/not working/.test(x.textContent||''))||{}).textContent;
-  ok(msg==='Speech is not working on this device (synthesis-failed).','message with the code: '+msg);
+  ok(/^Speech is not working on this device \(synthesis-failed\)\. No voices were found/.test(msg),'message with the code, no voices: '+msg);
+}
+{
+  /* an engine that fails every time but has voices: the message counts them */
+  const v=[{voiceURI:'a',name:'A',lang:'en-US',localService:true,default:true},{voiceURI:'b',name:'B',lang:'fr-FR',localService:true,default:false}];
+  const e=makeEnv({voices:v,pages:[lines(['One title','Two title','Three title','Four title','Five title'],{step:30,w:100})],failWith:()=>'synthesis-failed'});
+  e.RA.start();
+  await until(()=>e.RA.state()==='idle'&&e.els.some(x=>/not working/.test(x.textContent||'')),10000);
+  const msg=(e.els.find(x=>/not working/.test(x.textContent||''))||{}).textContent;
+  ok(msg==='Speech is not working on this device (synthesis-failed, 2 voices found).','message with code and voice count: '+msg);
+}
+{
+  /* an engine that refuses "no voice" but works with an explicit voice: level 2 finds it, order kept */
+  const v=[{voiceURI:'fr',name:'F',lang:'fr-FR',localService:true,default:false},{voiceURI:'en',name:'E',lang:'en-US',localService:true,default:false}];
+  const e=makeEnv({voices:v,pages:[lines(['One title','Two title','Three title'],{step:30,w:100})],failWith:(u)=>u.voice?null:'synthesis-failed'});
+  e.RA.start();
+  await until(()=>e.RA.state()==='idle'&&e.log.length>=3,10000);
+  ok(e.log.join('|')==='One title.|Two title.|Three title.','explicit voice found after the default failed: '+e.log.join('|'));
+  ok(!e.els.some(x=>/not working/.test(x.textContent||'')),'no error message when level 2 worked');
+}
+{
+  /* an engine that only works one piece at a time at normal speed: level 3 */
+  const v=[{voiceURI:'en',name:'E',lang:'en-US',localService:true,default:true}];
+  let busy=0;
+  const e=makeEnv({voices:v,pages:[lines(['One title','Two title','Three title'],{step:30,w:100})],
+    failWith:(u,n)=>{ if(u.rate!==1)return 'synthesis-failed'; return null; }});
+  e.RA.setRate(1.5);
+  e.RA.start();
+  await until(()=>e.RA.state()==='idle'&&e.log.length>=3,10000);
+  ok(e.log.join('|')==='One title.|Two title.|Three title.','level 3 (normal speed) works: '+e.log.join('|'));
 }
 {
   /* the gap is shorter at a faster speed */
