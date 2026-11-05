@@ -60,6 +60,10 @@ The file is optional: if it is missing, the text is still spoken as tidied, and 
 **Always enforced.** Whatever happens (rules file missing, a rule throwing an error), the very last text handed to the voice goes through
 `enforce()` (in `readAloudRules.js`, with a smaller built-in copy in `readAloud.js`): MMICJ is spelled out and no colon, semicolon or dash is left in it.
 
+## If the device's speech engine rejects the voice
+If the engine reports a voice / language / synthesis error, Listen restarts from that piece with the device's default voice (no chosen voice or language)
+and carries on in order. If speech still fails, the notice names the error code, e.g. "Speech is not working on this device (synthesis-failed)."
+
 ## Limits
 - A page with no text layer (a scan, a picture) is skipped; three empty spreads in a row stop with a note.
   Scanned books need OCR first, on the admin side, so readers' devices are not burdened.

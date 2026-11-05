@@ -200,16 +200,21 @@ function makeEnv(o){
   let cur=1,flipping=false;
   const N=o.pages.length,store={};
   const docListeners={};
-  const mkEl=()=>({dataset:{},attrs:{},style:{},classList:{toggle(){},add(){},remove(){}},listeners:{},setAttribute(){},getAttribute(){},
-    addEventListener(t,f){(this.listeners[t]=this.listeners[t]||[]).push(f)},querySelector(){return{setAttribute(){}}},title:''});
+  const els=[];
+  const mkEl=()=>els[els.push({dataset:{},attrs:{},style:{},classList:{toggle(){},add(){},remove(){}},listeners:{},setAttribute(){},getAttribute(){},
+    addEventListener(t,f){(this.listeners[t]=this.listeners[t]||[]).push(f)},querySelector(){return{setAttribute(){}}},title:''})-1];
   const button=mkEl();
   const doc={readyState:'complete',getElementById:id=>id==='listenButton'?button:null,visibilityState:'visible',createElement(){return mkEl()},body:{appendChild(){}},
     addEventListener(t,f){(docListeners[t]=docListeners[t]||[]).push(f)},dispatchEvent(ev){(docListeners[ev.type]||[]).forEach(f=>f(ev))}};
-  const SS={queue:[],speaking:false,pending:false,paused:false,cur:null,timer:null,
-    getVoices(){return[]},addEventListener(){},
+  const SS={queue:[],speaking:false,pending:false,paused:false,cur:null,timer:null,calls:0,
+    getVoices(){return o.voices||[]},addEventListener(){},
     speak(u){this.queue.push(u);this.pending=true;if(!this.speaking)this._next()},
     _next(){const u=this.queue.shift();if(!u){this.speaking=false;this.pending=false;this.cur=null;return}
-      this.speaking=true;this.cur=u;this.timer=setTimeout(()=>{log.push(u.text);stamps.push(Date.now());u.onend&&u.onend({});this._next()},2)},
+      this.speaking=true;this.cur=u;this.timer=setTimeout(()=>{
+        this.calls++;
+        const err=o.failWith&&o.failWith(u,this.calls);
+        if(err){u.onerror&&u.onerror({error:err});this._next();return}
+        log.push(u.text);stamps.push(Date.now());u.onend&&u.onend({});this._next()},2)},
     cancel(){clearTimeout(this.timer);const c=this.cur;this.queue.length=0;this.speaking=false;this.pending=false;this.cur=null;if(c)setTimeout(()=>c.onerror&&c.onerror({error:'canceled'}),0)}};
   class Utter{constructor(t){this.text=t}}
   const Reader={isOpen:()=>true,pages:()=>N,page:()=>cur,book:()=>({id:'b'}),
@@ -225,7 +230,7 @@ function makeEnv(o){
   if(o.numberGap!==undefined&&win.ReadAloudRules)win.ReadAloudRules.gaps.number=o.numberGap;
   if(o.breakRules&&win.ReadAloudRules){const boom=()=>{throw new Error('rule failed')};win.ReadAloudRules.spokenParts=boom;win.ReadAloudRules.spoken=boom;win.ReadAloudRules.enforce=boom;}
   vm.runInContext(o.src||SRC,win);
-  return {RA:win.ReadAloud,log,stamps,win,button};
+  return {RA:win.ReadAloud,log,stamps,win,button,SS,els};
 }
 
 {
@@ -313,6 +318,25 @@ function makeEnv(o){
   ok(v.RA.isButtonVisible()===true&&v.button.hidden===false,'changing the constant to true makes the button visible by default');
   v.RA.setButtonVisible(false);
   ok(v.RA.isButtonVisible()===false,'a reader can still switch it off');
+}
+{
+  /* a voice the phone rejects: the first piece is retried with the device's default voice, in order, nothing lost */
+  const voice={voiceURI:'bad',name:'Bad',lang:'xx-XX',localService:true,default:false};
+  const e=makeEnv({voices:[voice],pages:[lines(['One title','Two title','Three title','Four title'],{step:30,w:100})],
+    failWith:(u)=>u.voice?'synthesis-failed':null});
+  e.RA.setVoice('bad');
+  e.RA.start();
+  await until(()=>e.RA.state()==='idle'&&e.log.length>=4,8000);
+  ok(e.log.join('|')==='One title.|Two title.|Three title.|Four title.','retried with the default voice, order kept: '+e.log.join('|'));
+  ok(!e.els.some(x=>/not working/.test(x.textContent||'')),'no error message when the fallback worked');
+}
+{
+  /* an engine that fails every time: the message names the error code */
+  const e=makeEnv({pages:[lines(['One title','Two title','Three title','Four title','Five title'],{step:30,w:100})],failWith:()=>'synthesis-failed'});
+  e.RA.start();
+  await until(()=>e.RA.state()==='idle'&&e.els.some(x=>/not working/.test(x.textContent||'')),8000);
+  const msg=(e.els.find(x=>/not working/.test(x.textContent||''))||{}).textContent;
+  ok(msg==='Speech is not working on this device (synthesis-failed).','message with the code: '+msg);
 }
 {
   /* the gap is shorter at a faster speed */

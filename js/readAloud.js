@@ -99,7 +99,7 @@ api.setButtonVisible=function(v){
     return api.isButtonVisible();
 };
 api.setRate=function(v){settings.rate=clampRate(v);saveSettings();return settings.rate;};
-api.setVoice=function(uri){settings.voice=String(uri||"");saveSettings();};
+api.setVoice=function(uri){settings.voice=String(uri||"");safeMode=false;saveSettings();};
 api.rateRange=()=>({min:RATE_MIN,max:RATE_MAX});
 
 /*-------------------------------------------------------
@@ -499,10 +499,15 @@ function enforce(text){
 }
 api._enforce=enforce;
 
+/* safeMode: after the phone's speech engine rejected a piece of text with a voice / language /
+   synthesis error, the chosen voice and language are dropped and the device's own default is used */
+let safeMode=false;
+const RECOVERABLE=["language-unavailable","voice-unavailable","synthesis-failed","synthesis-unavailable","invalid-argument"];
+
 function makeUtterance(text){
     const u=new Utter(enforce(text));
     u.rate=settings.rate;
-    const v=chosenVoice();
+    const v=safeMode?null:chosenVoice();
     if(v){u.voice=v;u.lang=v.lang;}
     return u;
 }
@@ -514,35 +519,49 @@ function speakList(list,from,token){
         let next=from,ended=from-1;
         let holdAt=-1;                 /* a piece followed by a silent gap: nothing after it is queued until the gap is over */
         const total=list.length;
+        let dead=false;                /* this run was replaced by a restart in safe mode: its late callbacks are ignored */
         cursor=from;
-        const done=()=>{if(token===session)resolve(true);};
+        const done=()=>{if(token===session&&!dead)resolve(true);};
         const enqueue=()=>{
-            while(token===session&&next<total&&next-ended<=2&&holdAt<0){
+            while(token===session&&!dead&&next<total&&next-ended<=2&&holdAt<0){
                 const i=next++;
                 const u=makeUtterance(list[i].text);
                 const gapMs=list[i].gap>0&&i<total-1?Math.round(list[i].gap/settings.rate):0;
                 if(gapMs>0)holdAt=i;
                 const finish=()=>{
-                    if(token!==session)return;
+                    if(token!==session||dead)return;
                     ended=i;cursor=i+1;
                     if(ended>=total-1)done();
                     else if(holdAt===i){
-                        setTimeout(()=>{if(token!==session)return;holdAt=-1;enqueue();},gapMs);
+                        setTimeout(()=>{if(token!==session||dead)return;holdAt=-1;enqueue();},gapMs);
                     }
                     else enqueue();
                 };
                 u.onend=()=>{errorRun=0;finish();};
                 u.onerror=ev=>{
-                    if(token!==session)return;
+                    if(token!==session||dead)return;
                     const code=ev&&ev.error;
                     if(code==="canceled"||code==="interrupted")return;
+                    /* a voice / language the phone cannot use: start this piece again with the device's default voice */
+                    if(!safeMode&&RECOVERABLE.indexOf(code)>=0){
+                        safeMode=true;
+                        dead=true;
+                        cancelSpeech();
+                        setTimeout(()=>{
+                            if(token!==session)return;
+                            speakList(list,i,token).then(resolve);
+                        },150);
+                        return;
+                    }
                     errorRun++;
-                    if(code==="not-allowed"||errorRun>=3){
+                    if(code==="not-allowed"||code==="audio-busy"||code==="audio-hardware"||errorRun>=3){
                         session++;
                         setState("idle");
                         toast(code==="not-allowed"
                             ? "This browser blocked speech. Tap Listen again."
-                            : "Speech is not working on this device.");
+                            : (code==="audio-busy"||code==="audio-hardware")
+                                ? "The phone's audio is busy. Close other apps using sound and tap Listen again."
+                                : "Speech is not working on this device ("+(code||"unknown")+").");
                         resolve(false);
                         return;
                     }
