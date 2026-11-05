@@ -1489,3 +1489,56 @@ transition:
     transition:none;
 }
 }
+
+/* ---------- LISTEN (read-aloud) ---------- */
+
+/* The Reader's floating buttons are placed in style.css (#readerPanel #toolbar #listenButton).
+   These rules only add the "listening" look; they are as specific as the base button rules
+   so that they win over its translucent background. */
+#readerPanel #toolbar #listenButton.is-listening{
+    background:#0f7a4a!important;
+    border-color:rgba(255,255,255,.55);
+    box-shadow:0 0 0 3px rgba(15,122,74,.30),0 5px 18px rgba(0,0,0,.16);
+}
+
+#readerPanel #toolbar #listenButton.is-listening svg{
+    color:#fff!important;
+}
+
+#readerPanel #toolbar #listenButton[data-state="loading"] svg{
+    animation:srListenPulse 1s ease-in-out infinite;
+}
+
+@keyframes srListenPulse{
+    0%,100%{opacity:1}
+    50%{opacity:.45}
+}
+
+.sr-listen-toast{
+    position:fixed;
+    left:50%;
+    bottom:84px;
+    transform:translate(-50%,8px);
+    max-width:min(86vw,360px);
+    padding:9px 14px;
+    border-radius:999px;
+    background:rgba(18,22,30,.94);
+    color:#fff;
+    font:500 13px/1.35 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    text-align:center;
+    box-shadow:0 6px 18px rgba(0,0,0,.35);
+    pointer-events:none;
+    opacity:0;
+    transition:opacity .25s ease,transform .25s ease;
+    z-index:2000000;
+}
+
+.sr-listen-toast.on{
+    opacity:1;
+    transform:translate(-50%,0);
+}
+
+@media (prefers-reduced-motion:reduce){
+    #readerPanel #toolbar #listenButton[data-state="loading"] svg{animation:none}
+    .sr-listen-toast{transition:none}
+}

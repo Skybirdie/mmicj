@@ -1671,6 +1671,45 @@ renderer.goTo=async function(page){
     return true;
 };
 
+/*-------------------------------------------------------
+ Page text (used by read-aloud, js/readAloud.js)
+
+ Asks pdf.js for the text of ONE page of the book that is already
+ open. Nothing is fetched beyond what that page needs. Returns
+ {height, items:[{s,x,y,w,h,e}]} (y measured from the bottom of the
+ page) or null if the book changed or closed meanwhile.
+-------------------------------------------------------*/
+
+renderer.pageText=async function(number){
+    if(!pdf) return null;
+
+    number=Math.max(1,Math.min(pageCount,Number(number)||1));
+
+    const token=openToken;
+    const page=await getPage(number);
+    const content=await page.getTextContent();
+
+    if(token!==openToken || !pdf) return null;
+
+    const view=page.view||[0,0,0,0];
+    const items=[];
+
+    for(const item of content.items){
+        if(typeof item.str!=="string") continue;
+        const t=item.transform||[1,0,0,1,0,0];
+        items.push({
+            s:item.str,
+            x:t[4]-view[0],
+            y:t[5]-view[1],
+            w:item.width||0,
+            h:item.height||Math.abs(t[3])||0,
+            e:!!item.hasEOL
+        });
+    }
+
+    return {height:view[3]-view[1],items:items};
+};
+
 renderer.refresh=function(){
     if(!pdf) return;
 

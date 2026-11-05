@@ -1543,6 +1543,7 @@ html[data-theme="dark"] #topBar .iconButton{
 #readerPanel #toolbar #readerShareButton{right:164px!important;left:auto!important;}
 #readerPanel #toolbar #rotateButton{right:214px!important;left:auto!important;}
 #readerPanel #toolbar #bookmarkAddButton{right:264px!important;left:auto!important;}
+#readerPanel #toolbar #listenButton{right:314px!important;left:auto!important;}   /* Listen (read-aloud): next slot, nothing else moves */
 
 /*
  * The outline+plus button is the "add" affordance -- visible only when
@@ -1697,6 +1698,7 @@ html[data-theme="dark"] #topBar .iconButton{
 
 #readerPanel #toolbar #rotateButton svg,
 #readerPanel #toolbar #muteButton svg,
+#readerPanel #toolbar #listenButton svg,
 #readerPanel #toolbar #bookmarkAddButton svg,
 #readerPanel #toolbar #viewerFullscreenButton svg,
 #readerPanel #toolbar #readerCloseButton svg{
@@ -1769,6 +1771,8 @@ html[data-theme="dark"] #readerPanel #toolbar .iconButton{
 }
 .sr-setting-range{flex-wrap:wrap;}
 .sr-setting-range input[type="range"]{width:100%;}
+.sr-setting-select span{flex:0 0 auto;}
+.sr-setting-select select{flex:1;min-width:0;max-width:65%;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);color:var(--text);font:inherit;text-overflow:ellipsis;}
 .sr-settings-action{width:100%;margin-top:18px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--panel2);color:var(--text);cursor:pointer;font:inherit;}
 
 /* ---------- Welcome / focus ---------- */
@@ -1950,6 +1954,18 @@ html[data-theme="dark"] #readerPanel #toolbar .iconButton{
   #readerPanel #toolbar #readerShareButton{right:149px!important;}
   #readerPanel #toolbar #rotateButton{right:197px!important;}
   #readerPanel #toolbar #bookmarkAddButton{right:245px!important;}
+  #readerPanel #toolbar #listenButton{right:293px!important;}
+}
+
+/* very small phones (320px wide): seven 38px buttons only fit with a 6px gap */
+@media (max-width:340px){
+  #readerPanel #toolbar #readerCloseButton{right:5px!important;}
+  #readerPanel #toolbar #viewerFullscreenButton{right:49px!important;}
+  #readerPanel #toolbar #muteButton{right:93px!important;}
+  #readerPanel #toolbar #readerShareButton{right:137px!important;}
+  #readerPanel #toolbar #rotateButton{right:181px!important;}
+  #readerPanel #toolbar #bookmarkAddButton{right:225px!important;}
+  #readerPanel #toolbar #listenButton{right:269px!important;}
 }
 
  #statusBar {

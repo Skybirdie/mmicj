@@ -65,8 +65,8 @@
 
 <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
 <link rel="icon" href="/favicon.ico" type="image/x-icon">
-<link rel="stylesheet" href="css/style.css?v=1.0.3">
-<link rel="stylesheet" href="css/reader.css?v=1.2.0">
+<link rel="stylesheet" href="css/style.css?v=1.0.5">
+<link rel="stylesheet" href="css/reader.css?v=1.2.1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.3.289/pdf_viewer.css">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="apple-touch-icon" href="/assets/icons/apple-touch-icon.png">
@@ -516,6 +516,10 @@ body.sky-share-mode #workspacePrimaryLogo {
 <svg class="icon"><use href="#icon-volume"></use></svg>
 </button>
 
+<button id="listenButton" class="iconButton" type="button" hidden style="display:none" title="Listen to this book" aria-label="Listen to this book" aria-pressed="false">
+<svg class="icon"><use href="#icon-listen"></use></svg>
+</button>
+
 <button id="viewerFullscreenButton" class="iconButton viewerFullscreenToolbarButton" type="button" title="Focus viewer" aria-label="Focus viewer" aria-pressed="false">
 <svg class="icon"><use href="#icon-fullscreen"></use></svg>
 </button>
@@ -669,6 +673,17 @@ stroke-width="2"
 stroke-linecap="round"/>
 </symbol>
 
+<symbol id="icon-listen" viewBox="0 0 24 24">
+<!-- headphones resting on a book, the way headphones sit on a head: band over the top, an ear cup each side, the book (with its spine) between -->
+<g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+<path d="M3.5 12.4v-.9a8.5 8.5 0 0 1 17 0v.9"/>
+<rect x="1.9" y="11.6" width="3.2" height="6.2" rx="1.3"/>
+<rect x="18.9" y="11.6" width="3.2" height="6.2" rx="1.3"/>
+<rect x="7.9" y="6.9" width="8.2" height="14.2" rx="1.1"/>
+<path d="M10.4 6.9v14.2"/>
+</g>
+</symbol>
+
 <symbol id="icon-volume-off" viewBox="0 0 24 24"><path d="M4 10v4h4l5 4V6l-5 4H4Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="m17 9 4 6m0-6-4 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
 <symbol id="icon-fullscreen" viewBox="0 0 24 24">
 <path d="M8 3H3v5M16 3h5v5M3 16v5h5M21 16v5h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -782,7 +797,9 @@ stroke-linecap="round"/>
 <script src="js/navigation.js?v=n3"></script>
 <script src="js/bookmarkPanel.js"></script>
 <script src="js/ui.js?v=1.0.1"></script>
-<script src="js/settingsPanel.js?v=1.0.2"></script>
+<script src="js/readAloudRules.js?v=1.1.0"></script>
+<script src="js/readAloud.js?v=1.2.0"></script>
+<script src="js/settingsPanel.js?v=1.0.4"></script>
 <script src="js/mediaManager.js"></script>
 <script src="js/itemShare.js?v=1.0.2"></script>
 <script src="js/shareManager.js?v=is4"></script>

@@ -28,6 +28,11 @@ window.SettingsPanel=(function(){
   <input id="srSettingBackgroundMedia" type="checkbox">
 </label>
 
+<label class="sr-setting-row" id="srSettingListenRow">
+  <span>Show Listen (read aloud) button</span>
+  <input id="srSettingListen" type="checkbox">
+</label>
+
               <label class="sr-setting-row sr-setting-range"><span>Sound volume</span><input id="srSettingVolume" type="range" min="0" max="1" step="0.05"></label>
               <button type="button" id="srFullscreenButton" class="sr-settings-action">Enter fullscreen</button>
             </div>
@@ -72,6 +77,11 @@ window.SettingsPanel=(function(){
                 );
             }
         };
+        root.querySelector("#srSettingListen").onchange=()=>{
+            if(window.ReadAloud&&ReadAloud.setButtonVisible){
+                ReadAloud.setButtonVisible(root.querySelector("#srSettingListen").checked);
+            }
+        };
         root.querySelector("#srSettingVolume").oninput=event=>{
             const value=Number(event.target.value);
             if(window.AudioController)AudioController.setVolume(value);
@@ -108,6 +118,9 @@ el.querySelector("#srSettingBackgroundMedia").checked =
     window.MediaManager
         ? MediaManager.getBackgroundPlayback()
         : false;
+        const listenOk=!!(window.ReadAloud&&ReadAloud.supported&&ReadAloud.isButtonVisible);
+        el.querySelector("#srSettingListenRow").style.display=listenOk?"":"none";      /* no row on browsers that cannot speak */
+        el.querySelector("#srSettingListen").checked=listenOk?ReadAloud.isButtonVisible():false;
         el.querySelector("#srFullscreenButton").textContent=(typeof UI!=="undefined"&&UI.isFullscreen&&UI.isFullscreen())?"Exit fullscreen":"Enter fullscreen";
     };
 

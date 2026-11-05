@@ -67,9 +67,21 @@ function emit(name,...args){
 
 const fn=reader.events[name];
 
+try{
+
 if(typeof fn==="function"){
 
 fn(...args);
+
+}
+
+}finally{
+
+/* Reader.on() keeps ONE callback per event (ui.js owns them). Anything else
+   that needs to know (read-aloud) listens for these DOM events instead. */
+try{
+    document.dispatchEvent(new CustomEvent("skyreader:"+name,{detail:args}));
+}catch(e){}
 
 }
 

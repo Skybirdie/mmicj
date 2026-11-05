@@ -77,6 +77,7 @@
         ["reader_close",      "#readerCloseButton"],
         ["fullscreen",        "#viewerFullscreenButton"],      /* book or video: the section says which */
         ["reader_sound",      "#muteButton"],
+        ["reader_listen",     "#listenButton"],
         ["reader_rotate",     "#rotateButton"],
         ["reader_settings",   "#settingsButton"],
         ["reader_search",     "#topSearchButton, #searchBox"],
