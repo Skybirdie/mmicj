@@ -52,7 +52,7 @@ const KEY="mm-readaloud";
    TESTING PHASE: false = hidden until "Show Listen (read aloud) button" is ticked in Settings.
    WHEN TESTING IS FINISHED: change this one word to true and the button is visible for everybody
    (a reader who explicitly switched it off or on keeps their own choice). */
-const SHOW_BUTTON_BY_DEFAULT=false;
+const SHOW_BUTTON_BY_DEFAULT=true;
 const MAX_CHUNK=220;
 const RATE_MIN=0.6,RATE_MAX=1.8;
 
