@@ -288,8 +288,8 @@ const P1=(...t)=>lines(t,{w:300});
 }
 {
   const e=makeEnv({pages:[P1('One. Two. Three. Four. Five.'),P1('x.')],failWith:'synthesis-failed'});
-  e.button.click();await sleep(300);
-  ok(e.RA.state()==='idle'&&/not working/.test(e.toastText()),'repeated failures: gives up with a message ('+e.toastText()+')');
+  e.button.click();await sleep(1800);   /* the three cautious retries take ~1 s before it gives up */
+  ok(e.RA.state()==='idle'&&e.toastText()==='Speech is not working. Check device settings.','repeated failures: gives up with a short message ('+e.toastText()+')');
 }
 
 /* --- header / footer memory is per book --- */

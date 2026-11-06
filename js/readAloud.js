@@ -596,10 +596,10 @@ function speakList(list,from,token){
                         session++;
                         setState("idle");
                         toast(code==="not-allowed"
-                            ? "This browser blocked speech. Tap Listen again."
+                            ? "Speech was blocked. Tap Listen again."
                             : (code==="audio-busy"||code==="audio-hardware")
-                                ? "The phone's audio is busy. Close other apps using sound and tap Listen again."
-                                : speechFailedMessage(code),9000);
+                                ? "Audio is busy. Close other apps and tap Listen."
+                                : speechFailedMessage(code),6000);
                         resolve(false);
                         return;
                     }
@@ -614,13 +614,10 @@ function speakList(list,from,token){
     });
 }
 
+/* The notice is kept short so it fits the small toast; the error code and voice count go to the console for debugging. */
 function speechFailedMessage(code){
-    const n=voiceCount();
-    const head="Speech is not working on this device ("+(code||"unknown");
-    const android=typeof navigator!=="undefined"&&/android/i.test(navigator.userAgent||"");
-    if(n===0)return head+"). No voices were found: check that a text-to-speech engine is installed and turned on in the phone's settings.";
-    return head+", "+n+" voice"+(n===1?"":"s")+" found)."
-        +(android?" In the phone's settings, under Text-to-speech output, choose Speech Services by Google and install its English voice data.":"");
+    try{console.warn("[ReadAloud] speech failed:",code||"unknown",voiceCount()+" voice(s) reported");}catch(e){}
+    return "Speech is not working. Check device settings.";
 }
 
 function spreadPages(){
@@ -700,7 +697,7 @@ async function run(token,resume){
         if(!chunks.length){
             emptyStreak++;
             if(emptyStreak>=3){
-                finish(token,"No readable text on these pages.");
+                finish(token,"No readable text here.");
                 return;
             }
         }else{

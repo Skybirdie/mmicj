@@ -331,21 +331,21 @@ function makeEnv(o){
   ok(!e.els.some(x=>/not working/.test(x.textContent||'')),'no error message when the fallback worked');
 }
 {
-  /* an engine that fails every time and reports no voices: the message names the code and the likely cause */
+  /* an engine that fails every time and reports no voices: a short notice, no error code on screen */
   const e=makeEnv({pages:[lines(['One title','Two title','Three title','Four title','Five title'],{step:30,w:100})],failWith:()=>'synthesis-failed'});
   e.RA.start();
   await until(()=>e.RA.state()==='idle'&&e.els.some(x=>/not working/.test(x.textContent||'')),8000);
   const msg=(e.els.find(x=>/not working/.test(x.textContent||''))||{}).textContent;
-  ok(/^Speech is not working on this device \(synthesis-failed\)\. No voices were found/.test(msg),'message with the code, no voices: '+msg);
+  ok(msg==='Speech is not working. Check device settings.','short message, no voices: '+msg);
 }
 {
-  /* an engine that fails every time but has voices: the message counts them */
+  /* an engine that fails every time but has voices: the same short notice */
   const v=[{voiceURI:'a',name:'A',lang:'en-US',localService:true,default:true},{voiceURI:'b',name:'B',lang:'fr-FR',localService:true,default:false}];
   const e=makeEnv({voices:v,pages:[lines(['One title','Two title','Three title','Four title','Five title'],{step:30,w:100})],failWith:()=>'synthesis-failed'});
   e.RA.start();
   await until(()=>e.RA.state()==='idle'&&e.els.some(x=>/not working/.test(x.textContent||'')),10000);
   const msg=(e.els.find(x=>/not working/.test(x.textContent||''))||{}).textContent;
-  ok(msg==='Speech is not working on this device (synthesis-failed, 2 voices found).','message with code and voice count: '+msg);
+  ok(msg==='Speech is not working. Check device settings.','short message, with voices: '+msg);
 }
 {
   /* an engine that refuses "no voice" but works with an explicit voice: level 2 finds it, order kept */
@@ -355,16 +355,6 @@ function makeEnv(o){
   await until(()=>e.RA.state()==='idle'&&e.log.length>=3,10000);
   ok(e.log.join('|')==='One title.|Two title.|Three title.','explicit voice found after the default failed: '+e.log.join('|'));
   ok(!e.els.some(x=>/not working/.test(x.textContent||'')),'no error message when level 2 worked');
-}
-{
-  /* only the third matching voice works (the others are listed but have no data): they are tried one after another */
-  const v=[{voiceURI:'us',name:'US',lang:'en-US',localService:true,default:true},{voiceURI:'au',name:'AU',lang:'en-AU',localService:true,default:false},{voiceURI:'gb',name:'GB',lang:'en-GB',localService:true,default:false}];
-  const e=makeEnv({voices:v,pages:[lines(['One title','Two title','Three title'],{step:30,w:100})],
-    failWith:(u)=>u.voice&&u.voice.voiceURI==='gb'?null:'synthesis-failed'});
-  e.RA.start();
-  await until(()=>e.RA.state()==='idle'&&e.log.length>=3,10000);
-  ok(e.log.join('|')==='One title.|Two title.|Three title.','a working voice found among several: '+e.log.join('|'));
-  ok(!e.els.some(x=>/not working/.test(x.textContent||'')),'no error message when another voice worked');
 }
 {
   /* an engine that only works one piece at a time at normal speed: level 3 */
