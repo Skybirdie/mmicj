@@ -28,12 +28,11 @@ window.SettingsPanel=(function(){
   <input id="srSettingBackgroundMedia" type="checkbox">
 </label>
 
-<label class="sr-setting-row" id="srSettingListenRow">
-  <span>Show Listen (read aloud) button</span>
-  <input id="srSettingListen" type="checkbox">
-</label>
-
               <label class="sr-setting-row sr-setting-range"><span>Sound volume</span><input id="srSettingVolume" type="range" min="0" max="1" step="0.05"></label>
+              <div id="srListenRows" hidden>
+                <label class="sr-setting-row sr-setting-range"><span id="srListenRateLabel">Listen speed</span><input id="srSettingListenRate" type="range" min="0.6" max="1.8" step="0.1"></label>
+                <label class="sr-setting-row sr-setting-select"><span>Listen voice</span><select id="srSettingListenVoice"></select></label>
+              </div>
               <button type="button" id="srFullscreenButton" class="sr-settings-action">Enter fullscreen</button>
             </div>
           </section>`;
@@ -77,16 +76,21 @@ window.SettingsPanel=(function(){
                 );
             }
         };
-        root.querySelector("#srSettingListen").onchange=()=>{
-            if(window.ReadAloud&&ReadAloud.setButtonVisible){
-                ReadAloud.setButtonVisible(root.querySelector("#srSettingListen").checked);
-            }
-        };
         root.querySelector("#srSettingVolume").oninput=event=>{
             const value=Number(event.target.value);
             if(window.AudioController)AudioController.setVolume(value);
             StorageManager.setVolume(value);
         };
+        root.querySelector("#srSettingListenRate").oninput=event=>{
+            const v=ReadAloud.setRate(event.target.value);
+            root.querySelector("#srListenRateLabel").textContent="Listen speed ("+v.toFixed(1)+"\u00D7)";
+        };
+        root.querySelector("#srSettingListenRate").onchange=()=>ReadAloud.preview();
+        root.querySelector("#srSettingListenVoice").onchange=event=>{
+            ReadAloud.setVoice(event.target.value);
+            ReadAloud.preview();
+        };
+        if(window.ReadAloud)ReadAloud.onVoices(()=>fillListen(root));
         root.querySelector("#srFullscreenButton").onclick=async()=>{
             if(typeof UI!=="undefined" && UI.toggleFullscreen){
                 await UI.toggleFullscreen();
@@ -100,6 +104,33 @@ window.SettingsPanel=(function(){
             }
         };
         return root;
+    }
+
+    /* Listen (read-aloud) controls: only shown when this browser can speak */
+    function fillListen(el){
+        const box=el.querySelector("#srListenRows");
+        if(!box)return;
+        if(!window.ReadAloud||!ReadAloud.supported){box.hidden=true;return;}
+        box.hidden=false;
+        const s=ReadAloud.getSettings();
+        el.querySelector("#srSettingListenRate").value=s.rate;
+        el.querySelector("#srListenRateLabel").textContent="Listen speed ("+Number(s.rate).toFixed(1)+"\u00D7)";
+        const sel=el.querySelector("#srSettingListenVoice");
+        const lang=(navigator.language||"en").toLowerCase().split("-")[0];
+        const rank=v=>String(v.lang||"").toLowerCase().startsWith(lang)?0:1;
+        const list=ReadAloud.voices().slice().sort((a,b)=>rank(a)-rank(b)||String(a.name).localeCompare(String(b.name)));
+        sel.textContent="";
+        const first=document.createElement("option");
+        first.value="";first.textContent="Device default";
+        sel.appendChild(first);
+        for(const v of list){
+            const o=document.createElement("option");
+            o.value=v.uri;
+            o.textContent=v.name+" ("+v.lang+(v.local?"":", online")+")";
+            sel.appendChild(o);
+        }
+        sel.value=s.voice;
+        if(sel.value!==s.voice)sel.value="";
     }
 
     api.sync=function(){
@@ -118,9 +149,7 @@ el.querySelector("#srSettingBackgroundMedia").checked =
     window.MediaManager
         ? MediaManager.getBackgroundPlayback()
         : false;
-        const listenOk=!!(window.ReadAloud&&ReadAloud.supported&&ReadAloud.isButtonVisible);
-        el.querySelector("#srSettingListenRow").style.display=listenOk?"":"none";      /* no row on browsers that cannot speak */
-        el.querySelector("#srSettingListen").checked=listenOk?ReadAloud.isButtonVisible():false;
+        fillListen(el);
         el.querySelector("#srFullscreenButton").textContent=(typeof UI!=="undefined"&&UI.isFullscreen&&UI.isFullscreen())?"Exit fullscreen":"Enter fullscreen";
     };
 
