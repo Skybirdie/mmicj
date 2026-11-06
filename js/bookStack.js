@@ -721,7 +721,9 @@ api.info=function(){
         coverRightTopTrim:COVER_RIGHT_TOP_TRIM_PX,
         coverPx:COVER_PX,
         coverPxSingle:COVER_PX_SINGLE,
-        coverSlantRatio:COVER_SLANT_RATIO
+        coverSlantRatio:COVER_SLANT_RATIO,
+        leafInsetRatio:LEAF_INSET_RATIO,          /* read-only: lets the unit test follow the tuned slope */
+        leafIrregularity:LEAF_IRREGULARITY
     };
 };
 

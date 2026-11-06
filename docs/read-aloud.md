@@ -3,9 +3,9 @@
 A button in the Reader toolbar (headphones resting on a book) reads the open book aloud with the device's own voices.
 
 ## Showing the button (testing phase)
-The button is **hidden** until a reader ticks *Show Listen (read aloud) button* in Settings (gear). The choice is kept in this browser.
-To make it visible for everybody once testing is finished, change one word at the top of `js/readAloud.js`:
-`const SHOW_BUTTON_BY_DEFAULT=false;` -> `true`. (A reader who has ticked or unticked the box keeps their own choice.)
+The button is **visible by default** (`const SHOW_BUTTON_BY_DEFAULT=true;` at the top of `js/readAloud.js`) on browsers that can speak.
+A reader can switch it off with *Show Listen (read aloud) button* in Settings (gear); the choice is kept in this browser, and a reader who
+has ticked or unticked the box keeps their own choice. To hide it for everybody again (e.g. while testing something new), change that one word to `false`.
 
 ## Cost
 Zero. Nothing is sent anywhere and no extra request is made: the text of a page comes from the PDF the Reader already has open
@@ -33,7 +33,7 @@ This is the file to edit when something is read the wrong way. It only changes w
 Each rule has a short, commented list at the top of the file.
 
 - **Words**: `MMICJ` is always spelled out letter by letter (written "em em eye see jay" for the voice), wherever those letters appear and in any case
-  (MMicj, mmicj, MMICJ, mmicj.com, MMICJs, even with a space between the letters). `Liburd` -> "Lie bird", `Naphatali` -> "Nah fah tah lee".
+  (MMicj, mmicj, MMICJ, mmicj.com, MMICJs, even with a space between the letters). `Liburd` -> "Lie bird", `Naphatali` -> "Naf tah lee".
   Add a name as `["Written", "how it sounds"]`; add `{anywhere:true}` as a third item to replace it inside other words too.
 - **Abbreviations**: `e.g.` -> "for example", `i.e.` -> "that is", `etc.` -> "et cetera", `Dr.` -> "Doctor", `p.` -> "page" and so on.
   Dotted capitals not listed (`U.S.A.`, `N.B.`) are spelled out as letters ("U S A").

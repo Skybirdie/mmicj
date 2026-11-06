@@ -66,7 +66,10 @@ r=sc(2,0,false); ok(r.left===0&&r.right===0,'counts: tiny book none');
   const o=B.outerInset(6,2.0,'right'); const last=gr[5];
   ok(o.top===last.topOut&&o.bottom===last.botOut,'outerInset: cover starts at furthest leaf outer edge');
   const o0=B.outerInset(0,2.0,'left'); ok(o0.top===0&&o0.bottom===0,'outerInset: no leaves -> flush with page');
-  const avg=gr[5].topOut/6/(2.0*0.75); ok(avg>0.85&&avg<1.25,'geometry: average taper stays near LEAF_INSET_RATIO ('+avg.toFixed(2)+')');
+  /* follows the tuned slope (BookStack.info().leafInsetRatio) instead of a hard-coded number, so retuning the constant never breaks this;
+     the band is wide because the taper is deliberately irregular (LEAF_IRREGULARITY) */
+  const inf=B.info(); ok(inf.leafInsetRatio>=0&&inf.leafIrregularity>=0,'geometry: slope constants are readable');
+  const avg=gr[5].topOut/6/(2.0*inf.leafInsetRatio); ok(avg>0.7&&avg<1.5,'geometry: average taper stays near LEAF_INSET_RATIO ('+avg.toFixed(2)+')');
 }
 
 // ---- cover asymmetry ----

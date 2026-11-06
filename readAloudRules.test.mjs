@@ -42,7 +42,7 @@ function load(withRules=true){
   ok(S('(MMICJ)')==='('+MJ+')','in brackets');
   ok(!/mmicj/i.test(S('x MMicj y mmicj. MMICJ, mMiCj;')),'no written form of mmicj survives');
   ok(S('Sister Liburd and Liburd\'s book')==="Sister Lie bird and Lie bird's book",'Liburd: '+S('Sister Liburd and Liburd\'s book'));
-  ok(S('Naphatali spoke.')==='Nah fah tah lee spoke.','Naphatali');
+  ok(S('Naphatali spoke.')==='Naf tah lee spoke.','Naphatali');
   ok(S('Naphatalis')==='Naphatalis','a longer word that merely contains a name is left alone');
   ok(S('Liburdson')==='Liburdson','prefix of a longer word is left alone');
 
@@ -238,7 +238,7 @@ function makeEnv(o){
   const e=makeEnv({gap:0,pages:[lines(['Welcome to MMICJ: Naphatali Liburd, e.g. Dr. Lee — and friends.'],{w:400})]});
   e.RA.start();
   await until(()=>e.log.length>=1&&e.RA.state()==='idle');
-  ok(e.log.join('|')==='Welcome to em em eye see jay, Nah fah tah lee Lie bird, for example Doctor Lee, and friends.','the loop speaks the rule-adjusted text: '+e.log.join('|'));
+  ok(e.log.join('|')==='Welcome to em em eye see jay, Naf tah lee Lie bird, for example Doctor Lee, and friends.','the loop speaks the rule-adjusted text: '+e.log.join('|'));
 }
 {
   /* a real silence after a paragraph / title, none between sentences of one paragraph */
@@ -303,21 +303,21 @@ function makeEnv(o){
   ok(d>=GAP-30,'a longer silence follows the number ('+d+' ms)');
 }
 {
-  /* the Listen button: hidden until switched on in Settings (SHOW_BUTTON_BY_DEFAULT) */
+  /* the Listen button: visible by default (SHOW_BUTTON_BY_DEFAULT) */
   const e=makeEnv({pages:[lines(['One title'],{w:100})]});
-  ok(e.RA.isButtonVisible()===false&&e.button.hidden===true&&e.button.style.display==='none','the button starts hidden');
-  e.RA.setButtonVisible(true);
-  ok(e.RA.isButtonVisible()===true&&e.button.hidden===false&&e.button.style.display==='','ticking the setting shows it');
-  ok(JSON.parse(e.win.localStorage.getItem('mm-readaloud')).showButton===true,'the choice is remembered in this browser');
+  ok(e.RA.isButtonVisible()===true&&e.button.hidden===false&&e.button.style.display==='','the button starts visible');
+  ok(/const SHOW_BUTTON_BY_DEFAULT=true;/.test(SRC),'the initial state is one constant: SHOW_BUTTON_BY_DEFAULT');
   e.RA.start();
   await until(()=>e.RA.state()!=='idle');
   e.RA.setButtonVisible(false);
-  ok(e.button.hidden===true&&e.RA.state()==='idle','unticking hides it and stops any reading');
-  ok(/const SHOW_BUTTON_BY_DEFAULT=false;/.test(SRC),'the initial state is one constant: SHOW_BUTTON_BY_DEFAULT');
-  const v=makeEnv({src:SRC.replace('const SHOW_BUTTON_BY_DEFAULT=false;','const SHOW_BUTTON_BY_DEFAULT=true;'),pages:[lines(['One title'],{w:100})]});
-  ok(v.RA.isButtonVisible()===true&&v.button.hidden===false,'changing the constant to true makes the button visible by default');
-  v.RA.setButtonVisible(false);
-  ok(v.RA.isButtonVisible()===false,'a reader can still switch it off');
+  ok(e.button.hidden===true&&e.button.style.display==='none'&&e.RA.state()==='idle','unticking hides it and stops any reading');
+  ok(JSON.parse(e.win.localStorage.getItem('mm-readaloud')).showButton===false,'the choice is remembered in this browser');
+  e.RA.setButtonVisible(true);
+  ok(e.RA.isButtonVisible()===true&&e.button.hidden===false&&e.button.style.display==='','ticking the setting shows it again');
+  const h=makeEnv({src:SRC.replace('const SHOW_BUTTON_BY_DEFAULT=true;','const SHOW_BUTTON_BY_DEFAULT=false;'),pages:[lines(['One title'],{w:100})]});
+  ok(h.RA.isButtonVisible()===false&&h.button.hidden===true,'changing the constant to false hides the button by default');
+  h.RA.setButtonVisible(true);
+  ok(h.RA.isButtonVisible()===true,'a reader can still switch it on');
 }
 {
   /* a voice the phone rejects: the first piece is retried with the device's default voice, in order, nothing lost */

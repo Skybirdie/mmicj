@@ -47,7 +47,7 @@ Update 1.3 (individual pages in the stack)
 Update 1.4 (perspective)
 - Each leaf further from the page is shorter, top and bottom, so the stack's outline slopes down from the top
   of the current page and up from its bottom. The step is proportional to the leaf width
-  (LEAF_INSET_RATIO = 0.75 in js/bookStack.js; larger = steeper, 0 = off), with a tiny fixed irregularity.
+  (LEAF_INSET_RATIO in js/bookStack.js, tuned since to 1.5; larger = steeper, 0 = off), with a tiny fixed irregularity.
 - Replaces the earlier LEAF_INSET_STEP constant. Colours/thickness unchanged.
 
 Update 1.5 (cover looked flat)
@@ -137,3 +137,8 @@ Update 2.4 (cover gradient)  [CSS only: css/reader.css]
 - Tune in css/reader.css: --sky-stack-cover-light / --sky-stack-cover-dark (separate values for the dark theme).
   Same value for both = flat colour again. --sky-stack-cover is kept as the fallback face colour.
 - No JS change, so bookStack.js stays at 2.3; hard-refresh (or bump the ?v= on the reader.css link in index.html) to see it.
+
+Update (test follows the tuned slope)
+- bookStack.test.mjs used to hard-code the original ratio (0.75) in its "average taper" check, so it failed once the slope was
+  tuned to 1.5. BookStack.info() now also reports leafInsetRatio and leafIrregularity, and the test reads them, with a wide band
+  (0.7-1.5x) because the taper is deliberately irregular. Retuning LEAF_INSET_RATIO / LEAF_IRREGULARITY no longer breaks the test.
