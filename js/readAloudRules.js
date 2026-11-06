@@ -44,7 +44,7 @@ const api={};
 api.words=[
     ["MMICJ",     "em em eye see jay", {anywhere:true}],   /* always its letters: M M I C J */
     ["Liburd",    "Lie bird"],
-    ["Naphatali", "Nah fah tah lee"]
+    ["Naphatali", "Naf tah lee"]
 ];
 
 /*=======================================================
