@@ -4857,3 +4857,48 @@ body:not(.sky-share-mode) .sky-share-menu-panel,
 body:not(.sky-share-mode) .sky-share-menu-scrim {
     display: none !important;
 }
+
+
+/* =========================================================
+   SHARE MODE: LISTEN (READ ALOUD) BUTTON
+   js/readAloud.js shows or hides #listenButton with the
+   `hidden` attribute (its Settings choice). The toolbar rules
+   above force every .iconButton to display:flex !important, so
+   the attribute needs its own, more specific, !important rule or
+   a reader who switched Listen off would still see it here.
+   The "listening" look is repeated from css/reader.css because
+   in Share Mode the toolbar no longer sits inside #readerPanel,
+   so those #readerPanel rules do not reach it.
+   ========================================================= */
+
+body.sky-share-mode .sky-share-media-host #toolbar #listenButton[hidden],
+body.sky-share-mode.sky-share-book #toolbar #listenButton[hidden] {
+    display: none !important;
+}
+
+body.sky-share-mode .sky-share-media-host #toolbar #listenButton.is-listening,
+body.sky-share-mode.sky-share-book #toolbar #listenButton.is-listening {
+    background: #0f7a4a !important;
+    border-color: rgba(255, 255, 255, .55);
+    box-shadow: 0 0 0 3px rgba(15, 122, 74, .30), 0 5px 18px rgba(0, 0, 0, .16);
+}
+
+body.sky-share-mode .sky-share-media-host #toolbar #listenButton.is-listening svg,
+body.sky-share-mode.sky-share-book #toolbar #listenButton.is-listening svg {
+    color: #fff !important;
+}
+
+body.sky-share-mode .sky-share-media-host #toolbar #listenButton svg,
+body.sky-share-mode.sky-share-book #toolbar #listenButton svg {
+    stroke: currentColor;
+}
+
+body.sky-share-mode #toolbar #listenButton[data-state="loading"] svg {
+    animation: srListenPulse 1s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    body.sky-share-mode #toolbar #listenButton[data-state="loading"] svg {
+        animation: none;
+    }
+}

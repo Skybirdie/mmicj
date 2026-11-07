@@ -2145,7 +2145,20 @@ function stopShareLoading() {
         }
 
 
+        /*
+         * Listen (read aloud). Kept as the SAME element, never replaceButton()'d:
+         * a copy would lose the click handler and the state read-aloud keeps on
+         * it. read-aloud shows or hides it by its own setting (button.hidden),
+         * and it is first in the row, left of Mute, as in the main Reader.
+         */
+        const listen =
+            document.getElementById(
+                "listenButton"
+            );
+
+
         toolbar.replaceChildren(
+            ...(listen ? [listen] : []),
             mute,
             share,
             fullscreen,

@@ -7,6 +7,15 @@ The button is **visible by default** (`const SHOW_BUTTON_BY_DEFAULT=true;` at th
 A reader can switch it off with *Show Listen (read aloud) button* in Settings (gear); the choice is kept in this browser, and a reader who
 has ticked or unticked the box keeps their own choice. To hide it for everybody again (e.g. while testing something new), change that one word to `false`.
 
+## Share Mode
+A book opened through Share Mode (`js/shareViewer.js`) has the Listen button too: it is the first button in the Share Mode toolbar, left of Mute,
+with the same behaviour and the same Settings choice (a reader who switched Listen off sees no button there either). Videos and slideshows
+have no Listen button. Two things make this work and should be kept:
+- `bindBookControls()` in `shareViewer.js` moves the **same** `#listenButton` element into the toolbar. Do not `replaceButton()` it: a copy would lose read aloud's click handler.
+- Share Mode swaps the Mute button for a copy, so read aloud watches clicks on `#muteButton` through the document, not on the button itself.
+`css/share.css` (last section) keeps a hidden Listen button hidden and gives it the "listening" colour and the loading pulse inside Share Mode.
+Test: `node share-listen.test.mjs` (wiring checks; the button itself needs a quick look on a phone, see the checklist in the reply that came with this change).
+
 ## Cost
 Zero. Nothing is sent anywhere and no extra request is made: the text of a page comes from the PDF the Reader already has open
 (pdf.js `getTextContent`), and the voice is the browser's built-in `speechSynthesis`. Only the page(s) on screen are asked for,
@@ -81,4 +90,4 @@ Other notices: "Speech was blocked. Tap Listen again." (browser blocked speech),
 - `js/renderer.js`: `Renderer.pageText(n)` (page text from the open PDF).
 - `js/reader.js`: `emit()` now also dispatches `skyreader:<event>` DOM events (the single-slot `Reader.on` callbacks are unchanged).
 - `js/settingsPanel.js` ("Show Listen button" checkbox), `css/style.css`, `css/reader.css`, `index.html`, `js/analytics.js`: button, settings rows, styling, usage count.
-- `readAloud.test.mjs`: `node readAloud.test.mjs`.
+- `readAloud.test.mjs`: `node readAloud.test.mjs`. `share-listen.test.mjs`: `node share-listen.test.mjs` (Share Mode wiring).

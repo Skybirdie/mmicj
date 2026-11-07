@@ -132,7 +132,11 @@ function makeEnv(o={}){
   /* capture the module's own "toast" by watching its element */
   const RA=win.ReadAloud;
   const toastText=()=>doc.__toast?doc.__toast.textContent:'';
-  return {RA,Reader,Renderer,SS,doc,button,mute,win,log,toastText,store,setPage:p=>{cur=p}};
+  /* a click on the Mute button reaches read aloud through the document (as in the browser, where it bubbles up),
+     so it also works on the copy of the button that Share Mode puts in its place */
+  const clickMute=(btn)=>doc.dispatchEvent({type:'click',target:{closest:s=>s==='#muteButton'?btn:null}});
+  mute.click=()=>clickMute(mute);
+  return {RA,Reader,Renderer,SS,doc,button,mute,win,log,toastText,store,setPage:p=>{cur=p},clickMute};
 }
 const P1=(...t)=>lines(t,{w:300});
 
@@ -266,6 +270,24 @@ const P1=(...t)=>lines(t,{w:300});
   e.setPage(2);e.button.click();await sleep(70);
   e.win.AudioController.muted=true;e.mute.click();await sleep(10);
   ok(e.RA.state()==='paused','Mute button pauses the reading');
+}
+{
+  /* Share Mode replaces the Mute button with a copy: the copy must still pause the reading */
+  const pages=[P1('Cover.'),P1('M one. M two. M three. M four. M five. M six. M seven. M eight.'),P1('N.')];
+  const e=makeEnv({pages,speakMs:30});
+  e.setPage(2);e.button.click();await sleep(70);
+  const copy={};                       /* a different element object, not the one read aloud found at start-up */
+  e.win.AudioController.muted=true;e.clickMute(copy);await sleep(10);
+  ok(e.RA.state()==='paused','a replaced (cloned) Mute button still pauses the reading');
+}
+{
+  /* clicking something else, or Mute while not muted, does nothing */
+  const pages=[P1('Cover.'),P1('M one. M two. M three. M four. M five. M six. M seven. M eight.'),P1('N.')];
+  const e=makeEnv({pages,speakMs:30});
+  e.setPage(2);e.button.click();await sleep(70);
+  e.doc.dispatchEvent({type:'click',target:{closest:()=>null}});await sleep(10);
+  e.clickMute({});await sleep(10);      /* AudioController.muted is still false */
+  ok(e.RA.state()==='speaking','other clicks, and Mute turning sound on, leave the reading alone');
 }
 
 /* --- pages without text --- */

@@ -875,11 +875,16 @@ api.init=function(){
     document.addEventListener("skyreader:bookOpened",onBookChange);
     document.addEventListener("skyreader:closed",onBookChange);
 
-    /* the Mute button silences everything: stop talking when it is switched on */
-    const mute=document.getElementById("muteButton");
-    if(mute)mute.addEventListener("click",()=>setTimeout(()=>{
-        if(window.AudioController&&AudioController.isMuted&&AudioController.isMuted()&&(state==="speaking"||state==="loading"))api.pause();
-    },0));
+    /* the Mute button silences everything: stop talking when it is switched on.
+       Listens on the document (not on the button itself) because Share Mode replaces the Mute button with a copy,
+       which would drop a listener attached directly to the original. */
+    document.addEventListener("click",ev=>{
+        const t=ev.target;
+        if(!t||!t.closest||!t.closest("#muteButton"))return;
+        setTimeout(()=>{
+            if(window.AudioController&&AudioController.isMuted&&AudioController.isMuted()&&(state==="speaking"||state==="loading"))api.pause();
+        },0);
+    });
 
     /* phones stop speech when the screen locks: show "paused" instead of pretending */
     document.addEventListener("visibilitychange",()=>{
