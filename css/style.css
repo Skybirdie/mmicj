@@ -1546,15 +1546,15 @@ html[data-theme="dark"] #topBar .iconButton{
 #readerPanel #toolbar #listenButton{right:314px!important;left:auto!important;}   /* Listen (read-aloud): next slot, nothing else moves */
 
 /*
- * The outline+plus button is the "add" affordance -- visible only when
- * the current page has no bookmark. Once bookmarked, it hides entirely;
- * the filled flag (now resting on the page) becomes the only visible
- * indicator, and clicking it removes the bookmark.
+ * The outline+plus button is the "add" affordance. Once the current page is
+ * bookmarked it stays in its slot (so the toolbar has no gap) and shows a
+ * pale-yellow 12-pointed star instead. The star is an indicator only: it
+ * ignores taps (so a double-tap on "add" can't remove the bookmark) and
+ * removing a bookmark still happens on the flag resting on the page.
  */
 #readerPanel #toolbar #bookmarkAddButton.bookmarked{
-  opacity:0!important;
-  visibility:hidden!important;
-  pointer-events:none!important;
+  cursor:default;
+  border-color:color-mix(in srgb,#d9a63c 55%,transparent);
 }
 
 /*

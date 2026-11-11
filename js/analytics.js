@@ -81,7 +81,7 @@
         ["reader_rotate",     "#rotateButton"],
         ["reader_settings",   "#settingsButton"],
         ["reader_search",     "#topSearchButton, #searchBox"],
-        ["bookmark_add",      "#bookmarkAddButton"],
+        ["bookmark_add",      "#bookmarkAddButton:not(.bookmarked)"],   /* the star (already bookmarked) isn't an add */
         ["bookmark_panel",    "#bookmarkPanelButton"],
         ["bookmark_delete",   ".sr-bookmark-delete"],
         ["bookmark_open",     ".sr-bookmark-row"],

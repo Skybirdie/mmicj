@@ -761,7 +761,9 @@ function refreshBookmarkState(){
     if(dom.bookmarkAddButton){
         /* The toolbar describes the current visible reading location. */
         dom.bookmarkAddButton.classList.toggle('bookmarked',bookmarked);
-        dom.bookmarkAddButton.innerHTML=`<svg class="icon"><use href="${bookmarked?'#icon-bookmark-add-filled':'#icon-bookmark-add-outline'}"></use></svg>`;
+        /* Bookmarked: the button stays in its slot and shows a pale-yellow
+           12-pointed star instead of vanishing (no gap in the toolbar). */
+        dom.bookmarkAddButton.innerHTML=`<svg class="icon"><use href="${bookmarked?'#icon-bookmark-star':'#icon-bookmark-add-outline'}"></use></svg>`;
         dom.bookmarkAddButton.setAttribute('aria-pressed',bookmarked?'true':'false');
         dom.bookmarkAddButton.setAttribute('aria-label',bookmarked?'Page bookmarked':'Bookmark this page');
         dom.bookmarkAddButton.title=bookmarked?'Page bookmarked':'Bookmark this page';
@@ -919,6 +921,9 @@ BookmarkPanel.visible()?"true":"false"
 if(dom.bookmarkAddButton){
 
 dom.bookmarkAddButton.onclick=()=>{
+
+/* The star is an indicator only; removing a bookmark stays on the page flag. */
+if(dom.bookmarkAddButton.classList.contains('bookmarked'))return;
 
 if(!window.Bookmarks || typeof SRNavigation==="undefined" || typeof SRNavigation.bookmark!=="function")return;
 

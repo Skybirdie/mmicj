@@ -124,7 +124,7 @@ function boot() {
   const files = ["index.html", ...fs.readdirSync("js").filter(f => f.endsWith(".js") && f !== "analytics.js").map(f => path.join("js", f))];
   const text = files.map(f => fs.readFileSync(f, "utf8")).join("\n");
   const missing = [];
-  rows.forEach(r => r.sel.split(",").map(x => x.trim()).forEach(tok => { const n = tok.slice(1); if (!new RegExp("[\"'#. ]" + n.replace(/[-]/g, "\\-") + "\\b").test(text)) missing.push(r.name + ":" + tok); }));
+  rows.forEach(r => r.sel.split(",").map(x => x.trim()).forEach(tok => { const n = tok.slice(1).replace(/:.*$/, ""); if (!new RegExp("[\"'#. ]" + n.replace(/[-]/g, "\\-") + "\\b").test(text)) missing.push(r.name + ":" + tok); }));
   check("every selector in FEATURES exists somewhere in the app's own files", missing.length === 0, missing.join(" "));
 }
 

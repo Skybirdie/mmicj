@@ -65,7 +65,7 @@
 
 <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
 <link rel="icon" href="/favicon.ico" type="image/x-icon">
-<link rel="stylesheet" href="css/style.css?v=1.0.5">
+<link rel="stylesheet" href="css/style.css?v=1.0.6">
 <link rel="stylesheet" href="css/reader.css?v=1.2.1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.3.289/pdf_viewer.css">
 <link rel="manifest" href="/manifest.webmanifest">
@@ -743,6 +743,16 @@ stroke-linecap="round"
 stroke-linejoin="round"/>
 </symbol>
 
+<!-- Toolbar "this page is bookmarked" indicator: pale-yellow 12-pointed star.
+     Colours are set on the path itself so the toolbar's currentColor rules don't override them. -->
+<symbol id="icon-bookmark-star" viewBox="0 0 24 24">
+<path d="M12.00 1.60 L13.89 4.95 L17.20 2.99 L17.16 6.84 L21.01 6.80 L19.05 10.11 L22.40 12.00 L19.05 13.89 L21.01 17.20 L17.16 17.16 L17.20 21.01 L13.89 19.05 L12.00 22.40 L10.11 19.05 L6.80 21.01 L6.84 17.16 L2.99 17.20 L4.95 13.89 L1.60 12.00 L4.95 10.11 L2.99 6.80 L6.84 6.84 L6.80 2.99 L10.11 4.95 Z"
+fill="#fff3a6"
+stroke="#d9a63c"
+stroke-width="1.4"
+stroke-linejoin="round"/>
+</symbol>
+
 <symbol id="icon-muted" viewBox="0 0 24 24">
 <path d="M5 10H9L14 6V18L9 14H5Z"
 fill="currentColor"/>
@@ -795,7 +805,7 @@ stroke-linecap="round"/>
 <script src="js/reader.js"></script>
 <script src="js/navigation.js?v=n3"></script>
 <script src="js/bookmarkPanel.js"></script>
-<script src="js/ui.js?v=1.0.1"></script>
+<script src="js/ui.js?v=1.0.2"></script>
 <script src="js/readAloudRules.js?v=1.1.3"></script>
 <script src="js/readAloud.js?v=1.5.6"></script>
 <script src="js/settingsPanel.js?v=1.0.5"></script>
