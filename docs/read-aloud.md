@@ -20,6 +20,14 @@ The panel reports each stage on its own, so a reader can tell the admin exactly 
 1. **Page text**: did the browser's PDF engine return text (how many items and characters), or did it throw (the exact error)? This stage runs before any speech.
 2. **Voices**: how many the device lists, and which one is used.
 3. **Speech**: did the first words start (and after how long), or which error code came back.
+**A second chance to copy the report (nothing ever pops up over the page).** The panel is a sheet at the bottom of the screen (the toolbar with Listen is at the top
+and stays reachable), and it opens with a note telling the reader to tap *Copy report* if anything goes wrong. *Minimize* folds it into a small tab at the bottom left
+that shows the result ("Speech check: OK") and has **its own Copy button**, so one tap copies the report even if the panel was dismissed unread. The panel never opens
+by itself while someone is reading. Instead, if a problem is found while it is minimized, **the tab turns reddish orange and glows** ("Speech check: PROBLEM - tap to open")
+until the reader taps it; after that it stays reddish orange but stops glowing. (With "reduce motion" switched on in the device, the glow is a steady ring instead of a pulse.)
+When the reading ends well the tab simply shows OK in green. The latest report is kept in this browser (`mm-readaloud-check`), and a "last result" tab for it appears whenever
+the speech test document is opened again, even after the book was closed or the page reloaded; tapping Listen replaces it with a live report.
+Opening an ordinary document never shows any of this.
 The report (and the panel) also gives the browser, the pdf.js version and build (standard or legacy), and the browser features this device lacks
 (`Promise.withResolvers`, `Array.fromAsync`, `ReadableStream` async iteration ...): a missing one is a lead, not proof. Where the clipboard is not available the report is shown in a box to select and copy by hand.
 - **Which document gets it:** `api.diagnosticBooks` at the top of the "SPEECH CHECK" section in `js/readAloud.js`: the library ids, plus a file-name stem

@@ -137,9 +137,10 @@ function makeEnv(o={}){
      so it also works on the copy of the button that Share Mode puts in its place */
   const clickMute=(btn)=>doc.dispatchEvent({type:'click',target:{closest:s=>s==='#muteButton'?btn:null}});
   mute.click=()=>clickMute(mute);
-  const panel=()=>(doc.__panels||[]).filter(x=>x.className==='sr-diag'&&x.__mounted!==false).pop();
+  const shown=re=>(doc.__panels||[]).filter(x=>re.test(x.className)&&x.__mounted!==false&&x.style.display!=='none').pop();
+  const panel=()=>shown(/^sr-diag$/),chip=()=>shown(/^sr-diag-chip/);
   const press=(el,act)=>(el.listeners.click||[]).forEach(f=>f({target:{closest:()=>({getAttribute:()=>act})},stopPropagation(){}}));
-  return {RA,Reader,Renderer,SS,doc,button,mute,win,log,toastText,store,setPage:p=>{cur=p},clickMute,panel,press};
+  return {RA,Reader,Renderer,SS,doc,button,mute,win,log,toastText,store,setPage:p=>{cur=p},clickMute,panel,chip,press};
 }
 const P1=(...t)=>lines(t,{w:300});
 
@@ -421,15 +422,83 @@ const P1=(...t)=>lines(t,{w:300});
   n.press(n.panel(),'copy');await sleep(20);
   ok(/<textarea[^>]*readonly>MMICJ speech check/.test(n.panel().innerHTML)&&/Select All/.test(n.panel().innerHTML),'no clipboard access: the report is shown to select and copy by hand');
 
-  /* Close, reopen, and leaving the book */
+  /* a panel that was closed too soon: it folds into a tab, and the tab can still copy and reopen */
   const q=makeEnv({bookId:DIAG,pages:[P1x('Close me.')],single:true});
+  q.win.navigator={userAgent:'TabPhone/2',language:'en-US',clipboard:{writeText:async t=>{copied=t}}};
   q.button.click();await until(()=>q.RA.state()==='idle'&&q.log.length>0);
-  q.press(q.panel(),'close');
-  ok(!q.panel(),'Close removes the panel');
+  ok(!!q.panel()&&!q.chip()&&/Copy report/.test(q.panel().innerHTML)&&/small tab/.test(q.panel().innerHTML),'the panel tells the reader to copy the report, and that Minimize leaves a tab');
+  q.press(q.panel(),'minimize');
+  ok(!q.panel()&&!!q.chip()&&/Speech check: OK/.test(q.chip().innerHTML),'Minimize folds the panel into a small tab that shows the result');
+  copied='';
+  q.press(q.chip(),'copy');await sleep(20);
+  ok(/^MMICJ speech check/.test(copied)&&/TabPhone\/2/.test(copied)&&!!q.chip()&&/Copied/.test(q.chip().innerHTML),'the tab has its own Copy button (one tap, and the tab says it copied)');
+  q.press(q.chip(),'open');
+  ok(!!q.panel()&&!q.chip(),'tapping the tab opens the panel again');
   q.button.click();await until(()=>q.RA.state()==='idle'&&q.log.length>1);
-  ok(!!q.panel(),'tapping Listen again shows it again');
+  ok(!!q.panel(),'tapping Listen again shows the panel again');
+
+  /* minimized, then something goes wrong: nothing opens over the page; the TAB turns reddish orange and glows */
+  const r=makeEnv({bookId:DIAG,pages:[P1x('Text.'),P1x('Text.'),P1x('Text.')],single:true,textError:'Promise.withResolvers is not a function'});
+  r.win.navigator={userAgent:'RetryPhone/3',language:'en-US',clipboard:{writeText:async t=>{copied=t}}};
+  r.button.click();
+  r.press(r.panel(),'minimize');
+  ok(!r.panel()&&!!r.chip()&&!/alert/.test(r.chip().className),'(minimized at the start: a calm tab, no alert)');
+  await until(()=>r.RA.state()==='idle'&&/Couldn/.test(r.toastText()));
+  ok(!r.panel(),'a problem does NOT open the panel over the page the reader is reading');
+  ok(!!r.chip()&&/\bbad\b/.test(r.chip().className)&&/\balert\b/.test(r.chip().className)&&/PROBLEM - tap to open/.test(r.chip().innerHTML),'the minimized tab turns reddish orange (bad) and glows (alert) instead');
+  r.press(r.chip(),'copy');await sleep(20);
+  ok(/\balert\b/.test(r.chip().className)&&/Copied/.test(r.chip().innerHTML)&&/RetryPhone\/3/.test(copied),'copying from the tab works and does not clear the glow (the reader has not looked at the problem yet)');
+  r.press(r.chip(),'open');
+  ok(!!r.panel()&&!r.chip()&&/PROBLEM/.test(r.panel().innerHTML),'tapping the tab opens the panel with the problem');
+  r.press(r.panel(),'minimize');
+  ok(!!r.chip()&&/\bbad\b/.test(r.chip().className)&&!/\balert\b/.test(r.chip().className),'once it has been looked at, the tab stays reddish orange but stops glowing');
+
+  /* a problem that happens while the panel is open is already in front of the reader: no glow when it is minimized later */
+  const u2=makeEnv({bookId:DIAG,pages:[P1x('Text.'),P1x('Text.'),P1x('Text.')],single:true,textError:'boom'});
+  u2.button.click();await until(()=>u2.RA.state()==='idle'&&/Couldn/.test(u2.toastText()));
+  ok(!!u2.panel()&&/PROBLEM/.test(u2.panel().innerHTML),'(the panel was open while the problem happened, and it stays open)');
+  u2.press(u2.panel(),'minimize');
+  ok(/\bbad\b/.test(u2.chip().className)&&!/\balert\b/.test(u2.chip().className),'minimizing a problem that was already on screen: reddish orange, no glow');
+
+  /* the tab's Copy button on a device with no clipboard access: the report opens in a box to copy by hand */
+  const s2=makeEnv({bookId:DIAG,pages:[P1x('No clipboard.')],single:true});
+  s2.win.navigator={userAgent:'NoClipPhone',language:'en-US'};
+  s2.button.click();await until(()=>s2.RA.state()==='idle'&&s2.log.length>0);
+  s2.press(s2.panel(),'minimize');
+  s2.press(s2.chip(),'copy');await sleep(20);
+  ok(!!s2.panel()&&!s2.chip()&&/<textarea[^>]*readonly>MMICJ speech check/.test(s2.panel().innerHTML)&&/Select All/.test(s2.panel().innerHTML),'the tab\'s Copy without clipboard access opens the panel with the report to select');
+
+  /* minimized, and the reading ends well: the tab turns green, nothing pops up */
+  const w=makeEnv({bookId:DIAG,pages:[P1x('One short page.')],single:true});
+  w.button.click();
+  w.press(w.panel(),'minimize');
+  await until(()=>w.RA.state()==='idle'&&w.log.length>0);
+  ok(!w.panel()&&!!w.chip()&&/\bok\b/.test(w.chip().className)&&!/\balert\b/.test(w.chip().className)&&/Speech check: OK/.test(w.chip().innerHTML),'the end of the reading does not open anything: the tab just shows OK (green, no glow)');
+
+  /* the last report is kept, and comes back as a tab when the document is opened again */
+  q.doc.dispatchEvent({type:'skyreader:closed'});
+  ok(!q.panel()&&!q.chip()&&q.RA.diagnosticActive()===false&&q.RA.diagnosticSaved()===false,'closing the book removes the panel, the tab and the live report');
   q.doc.dispatchEvent({type:'skyreader:bookOpened'});
-  ok(!q.panel()&&q.RA.diagnosticActive()===false,'opening or closing a book removes the panel and the report');
+  ok(q.RA.diagnosticActive()===false&&q.RA.diagnosticSaved()===true&&!!q.chip()&&/last result: OK/.test(q.chip().innerHTML),'opening the test document again shows a tab for the last check');
+  copied='';
+  q.press(q.chip(),'copy');await sleep(20);
+  ok(/^MMICJ speech check/.test(copied)&&/TabPhone\/2/.test(copied),'the tab for the last check can copy the saved report');
+  q.press(q.chip(),'open');
+  ok(!!q.panel()&&/Last speech check/.test(q.panel().innerHTML)&&/<textarea[^>]*readonly>MMICJ speech check/.test(q.panel().innerHTML),'its panel shows the saved report to read or select');
+  q.button.click();await until(()=>q.RA.state()==='idle'&&q.log.length>2);
+  ok(q.RA.diagnosticSaved()===false&&q.RA.diagnosticActive()===true&&/^Speech check/.test(/<b>([^<]*)<\/b>/.exec(q.panel().innerHTML)[1]),'tapping Listen replaces the saved report with a live one');
+
+  /* a problem is what gets kept */
+  const z=makeEnv({bookId:DIAG,pages:[P1x('Text.'),P1x('Text.'),P1x('Text.')],single:true,textError:'boom'});
+  z.button.click();await until(()=>z.RA.state()==='idle'&&/Couldn/.test(z.toastText()));
+  z.doc.dispatchEvent({type:'skyreader:closed'});z.doc.dispatchEvent({type:'skyreader:bookOpened'});
+  ok(!!z.chip()&&/last result: PROBLEM/.test(z.chip().innerHTML)&&/\bbad\b/.test(z.chip().className)&&!/\balert\b/.test(z.chip().className),'a problem is the report that is kept ("last result: PROBLEM", reddish orange, no glow: it is an old result)');
+
+  /* an ordinary document never gets the tab */
+  const y=makeEnv({bookId:'ordinary',pages:[P1x('Plain.')],single:true});
+  y.store['mm-readaloud-check']=JSON.stringify({at:1,st:'bad',verdict:'x',text:'old report'});
+  y.doc.dispatchEvent({type:'skyreader:bookOpened'});
+  ok(!y.chip()&&!y.panel()&&y.RA.diagnosticSaved()===false,'an ordinary document never shows the saved report');
 }
 
 console.log(fails?('\n'+fails+' FAILED'):'\nall ok');

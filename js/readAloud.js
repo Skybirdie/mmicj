@@ -868,6 +868,7 @@ function diagVoices(){
 }
 
 function diagBegin(){
+    diagSaved=null;                         /* a fresh reading replaces the kept report on screen */
     if(!isDiagnosticBook()){diagHide();return;}
     let b={};
     try{b=Reader.book()||{};}catch(e){}
@@ -878,7 +879,7 @@ function diagBegin(){
     try{if(window.AudioController&&AudioController.isMuted)muted=!!AudioController.isMuted();}catch(e){}
     diag={
         t0:Date.now(),
-        open:true,showBox:false,note:"",ended:null,
+        mode:"panel",showBox:false,note:"",copied:0,ackBad:false,sig:"",ended:null,
         book:{id:String(b.id||""),title:String(b.title||"")},
         env:{
             time:new Date().toISOString(),
@@ -1017,8 +1018,16 @@ function diagReportText(){
     return L.join("\n");
 }
 
-/* ---- the panel ---- */
-let diagEl=null;
+/* ---- the panel and the tab ----
+   The panel is a sheet at the BOTTOM of the screen (the toolbar with the Listen button is at the top, and stays reachable).
+   "Minimize" folds it into a small tab at the bottom left that shows the result and has its own Copy button, so a reader who
+   closed it before reading it still has a second chance. Nothing ever pops up over the page while someone is reading: when a
+   problem is found while the panel is minimized, the TAB turns reddish orange and glows until it is tapped, and tapping it
+   opens the panel. The last report is kept in this browser too: a tab for it appears the next time the speech test document
+   is opened, even after the book was closed or the page reloaded. */
+const CHECK_KEY="mm-readaloud-check";
+let diagEl=null,chipEl=null;
+let diagSaved=null;          /* the report kept from an earlier reading, shown as a tab when the test document is opened */
 const escHtml=x=>String(x).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
 function diagStyle(){
@@ -1027,73 +1036,161 @@ function diagStyle(){
         const st=document.createElement("style");
         st.id="sr-diag-style";
         st.textContent=
-".sr-diag{position:fixed;left:8px;right:8px;top:calc(env(safe-area-inset-top,0px) + 8px);max-height:68vh;overflow:auto;z-index:2000001;box-sizing:border-box;padding:12px 14px;border-radius:14px;background:#fff;color:#1a1a1a;box-shadow:0 8px 28px rgba(0,0,0,.35);font:14px/1.4 -apple-system,system-ui,Roboto,Arial,sans-serif;-webkit-user-select:text;user-select:text}"+
+".sr-diag{position:fixed;left:8px;right:8px;bottom:calc(env(safe-area-inset-bottom,0px) + 8px);max-height:58vh;overflow:auto;z-index:2000001;box-sizing:border-box;padding:12px 14px;border-radius:14px;background:#fff;color:#1a1a1a;box-shadow:0 8px 28px rgba(0,0,0,.35);font:14px/1.4 -apple-system,system-ui,Roboto,Arial,sans-serif;-webkit-user-select:text;user-select:text}"+
 "@media (min-width:600px){.sr-diag{left:auto;width:420px;right:12px}}"+
 ".sr-diag *{box-sizing:border-box}"+
 ".sr-diag-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-size:16px}"+
 ".sr-diag-x{border:0;background:#eceff3;color:#1a1a1a;border-radius:8px;padding:6px 12px;font-size:14px}"+
-".sr-diag-verdict{padding:8px 10px;border-radius:10px;margin:6px 0 8px;font-weight:600}"+
+".sr-diag-tip{font-size:13px;color:#333;background:#fff8e1;border-radius:10px;padding:8px 10px;margin:4px 0 8px}"+
+".sr-diag-verdict{padding:8px 10px;border-radius:10px;margin:8px 0;font-weight:600}"+
 ".sr-diag-verdict.ok{background:#e3f6ea;color:#0b5d33}.sr-diag-verdict.bad{background:#fde8e6;color:#8a1c12}.sr-diag-verdict.wait{background:#eef1f5;color:#333}"+
 ".sr-diag-row{display:flex;gap:8px;margin:6px 0}"+
 ".sr-diag-st{flex:none;width:64px;text-align:center;border-radius:8px;font-size:12px;font-weight:700;padding:3px 4px;height:max-content;color:#fff}"+
 ".sr-diag-st.ok{background:#0f7a4a}.sr-diag-st.bad{background:#c0392b}.sr-diag-st.wait{background:#8a95a1}"+
 ".sr-diag-env{font-size:12px;color:#444;margin-top:8px;word-break:break-word}"+
-".sr-diag-copy{width:100%;margin-top:10px;padding:10px;border:0;border-radius:10px;background:#0f7a4a;color:#fff;font-weight:600;font-size:15px}"+
+".sr-diag-copy{width:100%;margin:2px 0 4px;padding:10px;border:0;border-radius:10px;background:#0f7a4a;color:#fff;font-weight:600;font-size:15px}"+
 ".sr-diag-note{margin-top:6px;font-size:13px;color:#0b5d33}"+
-".sr-diag-box{width:100%;height:130px;margin-top:8px;font:12px/1.3 monospace}";
+".sr-diag-box{width:100%;height:130px;margin-top:8px;font:12px/1.3 monospace}"+
+".sr-diag-chip{position:fixed;left:10px;bottom:calc(env(safe-area-inset-bottom,0px) + 10px);z-index:2000001;display:flex;align-items:stretch;border-radius:999px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,.35);font:600 13px/1.2 -apple-system,system-ui,Roboto,Arial,sans-serif}"+
+".sr-diag-chip button{border:0;color:#fff;font:inherit;padding:9px 12px}"+
+".sr-diag-chip .sr-diag-main{background:#8a95a1;padding-left:14px}.sr-diag-chip.ok .sr-diag-main{background:#0f7a4a}.sr-diag-chip.bad .sr-diag-main{background:#d94418}"+
+".sr-diag-chip .sr-diag-tabcopy{background:#1a1a1a;padding-right:14px}"+
+/* a problem found while the tab is minimized: the tab glows (a slow pulse) until it is tapped; it never opens by itself */
+"@keyframes sr-diag-glow{0%{box-shadow:0 0 0 0 rgba(255,106,40,.8),0 4px 16px rgba(0,0,0,.35)}70%{box-shadow:0 0 0 14px rgba(255,106,40,0),0 4px 16px rgba(0,0,0,.35)}100%{box-shadow:0 0 0 0 rgba(255,106,40,0),0 4px 16px rgba(0,0,0,.35)}}"+
+".sr-diag-chip.alert{animation:sr-diag-glow 1.6s ease-out infinite}"+
+"@media (prefers-reduced-motion:reduce){.sr-diag-chip.alert{animation:none;box-shadow:0 0 0 4px rgba(255,120,50,.65),0 4px 16px rgba(0,0,0,.35)}}";
         (document.head||document.documentElement||document.body).appendChild(st);
     }catch(e){}
 }
 
-function diagRender(){
-    if(!diag||!diag.open)return;
-    const S=diagSummary(),d=diag;
-    if(!diagEl){
-        diagStyle();
-        diagEl=document.createElement("div");
-        diagEl.className="sr-diag";
-        diagEl.setAttribute("role","dialog");
-        diagEl.setAttribute("aria-label","Speech check");
-        /* taps on the panel must not reach the reader underneath (they would turn pages or hide the toolbar) */
-        ["pointerdown","pointerup","touchstart","touchend","mousedown","mouseup"].forEach(t=>diagEl.addEventListener(t,ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();}));
-        diagEl.addEventListener("click",ev=>{
-            if(ev&&ev.stopPropagation)ev.stopPropagation();
-            const t=ev&&ev.target,a=t&&t.closest&&t.closest("[data-act]");
-            const act=a&&a.getAttribute&&a.getAttribute("data-act");
-            if(act==="close")diagClose();
-            else if(act==="copy")diagCopy();
-        });
-        document.body.appendChild(diagEl);
-    }
-    const rows=S.rows.map(r=>
-        '<div class="sr-diag-row"><span class="sr-diag-st '+r.st+'">'+(r.st==="ok"?"OK":r.st==="bad"?"PROBLEM":"...")+'</span><div><b>'+escHtml(r.label)+'</b><br>'+escHtml(r.text)+'</div></div>').join("");
-    diagEl.innerHTML=
-        '<div class="sr-diag-head"><b>Speech check</b><button type="button" class="sr-diag-x" data-act="close">Close</button></div>'+
-        '<div class="sr-diag-verdict '+S.st+'">'+escHtml(S.verdict)+(d.ended?'<br><span style="font-weight:400">'+escHtml(d.ended)+'</span>':'')+'</div>'+
-        rows+
-        '<div class="sr-diag-env">'+escHtml(d.env.ua)+'<br>pdf.js '+escHtml(d.env.pdfjs)+'<br>Browser lacks: '+escHtml(d.env.lacks.length?d.env.lacks.join(", "):"none of the features checked")+'</div>'+
-        '<button type="button" class="sr-diag-copy" data-act="copy">Copy report</button>'+
-        (d.note?'<div class="sr-diag-note">'+escHtml(d.note)+'</div>':'')+
-        (d.showBox?'<textarea class="sr-diag-box" readonly>'+escHtml(diagReportText())+'</textarea>':'');
+/* what the panel shows: the live report of this reading, or the one kept from an earlier reading */
+function diagView(){
+    if(diag){const S=diagSummary();return {live:true,st:S.st,verdict:S.verdict,text:diagReportText(),state:diag};}
+    if(diagSaved)return {live:false,st:diagSaved.st,verdict:diagSaved.verdict,text:diagSaved.text,state:diagSaved};
+    return null;
 }
 
-function diagClose(){
-    if(diag)diag.open=false;
-    if(diagEl){try{if(diagEl.parentNode)diagEl.parentNode.removeChild(diagEl);}catch(e){}diagEl=null;}
+/* keep the latest report in this browser (when something new is known), for the "last check" tab */
+function diagSave(V){
+    const d=V.state;
+    if(V.st==="wait"&&!d.ended)return;
+    const sig=V.st+"|"+(d.ended||"")+"|"+d.pages.length+"|"+d.speech.errors.length+"|"+(d.speech.started===null?0:1);
+    if(sig===d.sig)return;
+    d.sig=sig;
+    try{localStorage.setItem(CHECK_KEY,JSON.stringify({at:Date.now(),st:V.st,verdict:V.verdict,text:V.text}));}catch(e){}
+}
+
+function diagWhen(at){
+    try{return at?new Date(at).toLocaleString():"";}catch(e){return "";}
+}
+
+function diagMake(cls,label){
+    const el=document.createElement("div");
+    el.className=cls;
+    if(label){el.setAttribute("role","dialog");el.setAttribute("aria-label",label);}
+    /* taps on these must not reach the reader underneath (they would turn pages or hide the toolbar) */
+    ["pointerdown","pointerup","touchstart","touchend","mousedown","mouseup"].forEach(t=>el.addEventListener(t,ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();}));
+    el.addEventListener("click",ev=>{
+        if(ev&&ev.stopPropagation)ev.stopPropagation();
+        const t=ev&&ev.target,a=t&&t.closest&&t.closest("[data-act]");
+        const act=a&&a.getAttribute&&a.getAttribute("data-act");
+        const V=diagView();
+        if(!V||!act)return;
+        if(act==="minimize"){V.state.mode="chip";diagRender();}
+        else if(act==="open"){V.state.mode="panel";diagRender();}
+        else if(act==="copy")diagCopy();
+    });
+    document.body.appendChild(el);
+    return el;
+}
+
+function diagRender(){
+    const V=diagView();
+    if(!V){diagRemoveEls();return;}
+    const st=V.state;
+    if(V.live)diagSave(V);
+    /* a problem the reader has had in front of them (the panel was open while it was showing) is "seen" */
+    if(st.mode==="panel"&&V.st==="bad")st.ackBad=true;
+    diagStyle();
+    if(!diagEl)diagEl=diagMake("sr-diag","Speech check");
+    if(!chipEl)chipEl=diagMake("sr-diag-chip","");
+
+    const copied=st.copied&&Date.now()-st.copied<2500;
+    if(st.mode==="chip"){
+        const label=V.live?(V.st==="ok"?"OK":V.st==="bad"?"PROBLEM - tap to open":"checking..."):"last result: "+(V.st==="ok"?"OK":V.st==="bad"?"PROBLEM":"unknown");
+        /* reddish orange all the time while there is a problem; it also glows until the reader has looked at it */
+        const alert=V.live&&V.st==="bad"&&!st.ackBad;
+        chipEl.className="sr-diag-chip "+V.st+(alert?" alert":"");
+        chipEl.innerHTML=
+            '<button type="button" class="sr-diag-main" data-act="open">Speech check: '+escHtml(label)+'</button>'+
+            '<button type="button" class="sr-diag-tabcopy" data-act="copy">'+(copied?"Copied":"Copy")+'</button>';
+    }else{
+        let body;
+        if(V.live){
+            const S=diagSummary(),d=diag;
+            const rows=S.rows.map(r=>
+                '<div class="sr-diag-row"><span class="sr-diag-st '+r.st+'">'+(r.st==="ok"?"OK":r.st==="bad"?"PROBLEM":"...")+'</span><div><b>'+escHtml(r.label)+'</b><br>'+escHtml(r.text)+'</div></div>').join("");
+            body=
+                '<div class="sr-diag-verdict '+S.st+'">'+escHtml(S.verdict)+(d.ended?'<br><span style="font-weight:400">'+escHtml(d.ended)+'</span>':'')+'</div>'+
+                rows+
+                '<div class="sr-diag-env">'+escHtml(d.env.ua)+'<br>pdf.js '+escHtml(d.env.pdfjs)+'<br>Browser lacks: '+escHtml(d.env.lacks.length?d.env.lacks.join(", "):"none of the features checked")+'</div>';
+        }else{
+            body=
+                '<div class="sr-diag-verdict '+V.st+'">'+escHtml(V.verdict)+'</div>'+
+                '<div class="sr-diag-env">This report was saved on '+escHtml(diagWhen(diagSaved.at))+', the last time the speech test document was read on this device.</div>';
+        }
+        diagEl.innerHTML=
+            '<div class="sr-diag-head"><b>'+(V.live?"Speech check":"Last speech check")+'</b><button type="button" class="sr-diag-x" data-act="minimize">Minimize</button></div>'+
+            '<div class="sr-diag-tip">If anything goes wrong, tap <b>Copy report</b> and send it to the admin. <b>Minimize</b> shrinks this box to a small tab at the bottom of the screen. The tab has its own Copy button, and it turns reddish orange and glows if a problem is found: tap it to open this box again.</div>'+
+            '<button type="button" class="sr-diag-copy" data-act="copy">'+(copied?"Report copied":"Copy report")+'</button>'+
+            (st.note?'<div class="sr-diag-note">'+escHtml(st.note)+'</div>':'')+
+            body+
+            (st.showBox?'<textarea class="sr-diag-box" readonly>'+escHtml(V.text)+'</textarea>':'');
+    }
+    diagEl.style.display=st.mode==="chip"?"none":"";
+    chipEl.style.display=st.mode==="chip"?"":"none";
+}
+
+function diagRemoveEls(){
+    [diagEl,chipEl].forEach(el=>{try{if(el&&el.parentNode)el.parentNode.removeChild(el);}catch(e){}});
+    diagEl=null;chipEl=null;
 }
 
 function diagHide(){
-    diagClose();
     diag=null;
+    diagSaved=null;
+    diagRemoveEls();
+}
+
+/* the report of an earlier reading comes back as a tab when the speech test document is opened */
+function diagShowSaved(){
+    if(!isDiagnosticBook())return;
+    let s=null;
+    try{s=JSON.parse(localStorage.getItem(CHECK_KEY)||"null");}catch(e){}
+    if(!s||typeof s.text!=="string"||!s.text)return;
+    diagSaved={
+        st:s.st==="ok"||s.st==="bad"?s.st:"wait",
+        verdict:String(s.verdict||""),text:s.text,at:Number(s.at)||0,
+        mode:"chip",showBox:true,note:"",copied:0
+    };
+    diagRender();
 }
 
 function diagCopy(){
-    if(!diag)return;
-    const text=diagReportText();
+    const V=diagView();
+    if(!V)return;
+    const st=V.state,text=V.text;
     const done=ok=>{
-        if(!diag)return;
-        diag.note=ok?"Report copied. Paste it into a message to the admin.":"It could not be copied automatically. Press and hold the text below, choose Select All, then Copy.";
-        diag.showBox=!ok;
+        if(diagView()!==null&&diagView().state!==st)return;      /* another report took over meanwhile */
+        if(ok){
+            st.copied=Date.now();
+            st.note="Report copied. Paste it into a message to the admin.";
+            setTimeout(()=>diagRender(),2600);
+        }else{
+            st.note="It could not be copied automatically. Press and hold the text below, choose Select All, then Copy.";
+            st.showBox=true;
+            st.mode="panel";
+        }
         diagRender();
     };
     const fallback=()=>{
@@ -1120,6 +1217,7 @@ function diagCopy(){
 
 api.diagnosticReport=()=>diagReportText();
 api.diagnosticActive=()=>!!diag;
+api.diagnosticSaved=()=>!!diagSaved;
 
 /*-------------------------------------------------------
   Button, state and notices
@@ -1185,10 +1283,11 @@ function onPageChanged(){
     },450);
 }
 
-function onBookChange(){
+function onBookChange(ev){
     diagHide();
     api.stop();
     resetBookMemory();
+    if(ev&&ev.type==="skyreader:bookOpened")diagShowSaved();      /* the last speech check comes back as a tab */
 }
 
 /* the headphones button is shown only when the reader switched it on in Settings
