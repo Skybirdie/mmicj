@@ -1019,7 +1019,7 @@ function diagReportText(){
 }
 
 /* ---- the panel and the tab ----
-   The panel is a sheet at the BOTTOM of the screen (the toolbar with the Listen button is at the top, and stays reachable).
+   The panel is a sheet at the BOTTOM of the screen, just above the page indicator bar (the toolbar with the Listen button is at the top, and stays reachable).
    "Minimize" folds it into a small tab at the bottom left that shows the result and has its own Copy button, so a reader who
    closed it before reading it still has a second chance. Nothing ever pops up over the page while someone is reading: when a
    problem is found while the panel is minimized, the TAB turns reddish orange and glows until it is tapped, and tapping it
@@ -1036,6 +1036,7 @@ function diagStyle(){
         const st=document.createElement("style");
         st.id="sr-diag-style";
         st.textContent=
+/* bottom: only the fallback; diagPlace() puts them just above the page indicator bar */
 ".sr-diag{position:fixed;left:8px;right:8px;bottom:calc(env(safe-area-inset-bottom,0px) + 8px);max-height:58vh;overflow:auto;z-index:2000001;box-sizing:border-box;padding:12px 14px;border-radius:14px;background:#fff;color:#1a1a1a;box-shadow:0 8px 28px rgba(0,0,0,.35);font:14px/1.4 -apple-system,system-ui,Roboto,Arial,sans-serif;-webkit-user-select:text;user-select:text}"+
 "@media (min-width:600px){.sr-diag{left:auto;width:420px;right:12px}}"+
 ".sr-diag *{box-sizing:border-box}"+
@@ -1104,6 +1105,39 @@ function diagMake(cls,label){
     return el;
 }
 
+/* Both the panel and the tab sit IMMEDIATELY ABOVE the page indicator bar (#statusBar), measured where it really is, so they follow
+   it on every screen size and in Share Mode (where the bar is fixed above the welcome banner) as well as in the normal Reader.
+   They may cover a little of the page; the pages do not reach the bottom. With no bar to measure, the stylesheet's default is used. */
+const DIAG_GAP=6;
+let diagPlaceTimer=0,diagWatching=false;
+function diagPlace(){
+    try{
+        if(!diagEl&&!chipEl)return;
+        let bottom="";
+        const bar=document.getElementById&&document.getElementById("statusBar");
+        if(bar&&bar.getBoundingClientRect){
+            const r=bar.getBoundingClientRect();
+            const vh=(document.documentElement&&document.documentElement.clientHeight)||window.innerHeight||0;
+            if(r&&r.height>0&&vh>0&&r.top>0&&r.top<=vh)bottom=Math.round(vh-r.top+DIAG_GAP)+"px";
+        }
+        [diagEl,chipEl].forEach(el=>{if(el)el.style.bottom=bottom;});
+    }catch(e){}
+}
+function diagPlaceSoon(){                       /* once more after the layout has settled */
+    if(diagPlaceTimer)return;
+    diagPlaceTimer=setTimeout(()=>{diagPlaceTimer=0;diagPlace();},350);
+}
+function diagWatch(){                           /* keep following the bar when the screen turns or resizes */
+    if(diagWatching)return;
+    diagWatching=true;
+    try{
+        if(window.addEventListener)["resize","orientationchange"].forEach(t=>window.addEventListener(t,diagPlace));
+        if(window.visualViewport&&window.visualViewport.addEventListener)window.visualViewport.addEventListener("resize",diagPlace);
+        const bar=document.getElementById("statusBar");
+        if(bar&&typeof ResizeObserver!=="undefined")new ResizeObserver(diagPlace).observe(bar);
+    }catch(e){}
+}
+
 function diagRender(){
     const V=diagView();
     if(!V){diagRemoveEls();return;}
@@ -1149,6 +1183,9 @@ function diagRender(){
     }
     diagEl.style.display=st.mode==="chip"?"none":"";
     chipEl.style.display=st.mode==="chip"?"":"none";
+    diagWatch();
+    diagPlace();
+    diagPlaceSoon();
 }
 
 function diagRemoveEls(){

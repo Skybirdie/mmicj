@@ -89,7 +89,8 @@ function makeEnv(o={}){
       setAttribute(k,v){this.attrs[k]=v},getAttribute(k){return this.attrs[k]},addEventListener(t,f){(this.listeners[t]=this.listeners[t]||[]).push(f)},
       click(){(this.listeners.click||[]).forEach(f=>f({}))},use:{attrs:{},setAttribute(k,v){this.attrs[k]=v}},querySelector(){return this.use},hidden:false,title:''};return el};
   const button=mkEl(),mute=mkEl();
-  const doc={readyState:'complete',getElementById:id=>id==='listenButton'?button:id==='muteButton'?mute:null,visibilityState:'visible',
+  const doc={readyState:'complete',getElementById:id=>id==='listenButton'?button:id==='muteButton'?mute:id==='statusBar'?(o.statusBar||null):null,
+    documentElement:{clientHeight:o.viewH||800,appendChild(){}},visibilityState:'visible',
     createElement(){const e=mkEl();e.className='';return e},body:{appendChild(e){e.__mounted=true;e.parentNode={removeChild(x){x.__mounted=false}};if(/toast/.test(e.className||''))doc.__toast=e;else(doc.__panels=doc.__panels||[]).push(e)}},
     addEventListener(t,f){(docListeners[t]=docListeners[t]||[]).push(f)},
     dispatchEvent(ev){(docListeners[ev.type]||[]).forEach(f=>f(ev))}};
@@ -493,6 +494,23 @@ const P1=(...t)=>lines(t,{w:300});
   z.button.click();await until(()=>z.RA.state()==='idle'&&/Couldn/.test(z.toastText()));
   z.doc.dispatchEvent({type:'skyreader:closed'});z.doc.dispatchEvent({type:'skyreader:bookOpened'});
   ok(!!z.chip()&&/last result: PROBLEM/.test(z.chip().innerHTML)&&/\bbad\b/.test(z.chip().className)&&!/\balert\b/.test(z.chip().className),'a problem is the report that is kept ("last result: PROBLEM", reddish orange, no glow: it is an old result)');
+
+  /* placement: immediately above the page indicator bar, wherever that bar is */
+  const bar={top:740,height:44,getBoundingClientRect(){return{top:bar.top,height:bar.height,bottom:bar.top+bar.height}}};
+  const pl=makeEnv({bookId:DIAG,statusBar:bar,viewH:800,pages:[P1x('Placed.')],single:true});
+  pl.button.click();await until(()=>pl.RA.state()==='idle'&&pl.log.length>0);
+  ok(pl.panel().style.bottom==='66px','the panel sits just above the page indicator bar (bar top 740 in an 800 high screen: 60 + a 6 px gap = '+pl.panel().style.bottom+')');
+  pl.press(pl.panel(),'minimize');
+  ok(pl.chip().style.bottom==='66px','the minimized tab sits just above the page indicator bar too ('+pl.chip().style.bottom+')');
+  bar.top=700;                                   /* the bar moves (a taller bar, a rotated screen ...) */
+  pl.press(pl.chip(),'open');pl.press(pl.panel(),'minimize');
+  ok(pl.chip().style.bottom==='106px','it follows the bar when the bar moves ('+pl.chip().style.bottom+')');
+  const nb=makeEnv({bookId:DIAG,pages:[P1x('No bar.')],single:true});
+  nb.button.click();await until(()=>nb.RA.state()==='idle'&&nb.log.length>0);
+  ok(nb.panel().style.bottom==='','with no page indicator bar to measure, the stylesheet default is used');
+  const hb=makeEnv({bookId:DIAG,statusBar:{getBoundingClientRect:()=>({top:0,height:0})},pages:[P1x('Hidden bar.')],single:true});
+  hb.button.click();await until(()=>hb.RA.state()==='idle'&&hb.log.length>0);
+  ok(hb.panel().style.bottom==='','a bar that is not showing (no size) is ignored: the stylesheet default is used');
 
   /* an ordinary document never gets the tab */
   const y=makeEnv({bookId:'ordinary',pages:[P1x('Plain.')],single:true});

@@ -20,8 +20,8 @@ The panel reports each stage on its own, so a reader can tell the admin exactly 
 1. **Page text**: did the browser's PDF engine return text (how many items and characters), or did it throw (the exact error)? This stage runs before any speech.
 2. **Voices**: how many the device lists, and which one is used.
 3. **Speech**: did the first words start (and after how long), or which error code came back.
-**A second chance to copy the report (nothing ever pops up over the page).** The panel is a sheet at the bottom of the screen (the toolbar with Listen is at the top
-and stays reachable), and it opens with a note telling the reader to tap *Copy report* if anything goes wrong. *Minimize* folds it into a small tab at the bottom left
+**A second chance to copy the report (nothing ever pops up over the page).** The panel is a sheet at the bottom of the screen, **immediately above the page indicator bar**
+(`#statusBar`, measured where it really is, so it follows the bar on every screen size and in Share Mode; the toolbar with Listen is at the top and stays reachable), and it opens with a note telling the reader to tap *Copy report* if anything goes wrong. *Minimize* folds it into a small tab at the bottom left
 that shows the result ("Speech check: OK") and has **its own Copy button**, so one tap copies the report even if the panel was dismissed unread. The panel never opens
 by itself while someone is reading. Instead, if a problem is found while it is minimized, **the tab turns reddish orange and glows** ("Speech check: PROBLEM - tap to open")
 until the reader taps it; after that it stays reddish orange but stops glowing. (With "reduce motion" switched on in the device, the glow is a steady ring instead of a pulse.)
