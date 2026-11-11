@@ -35,7 +35,12 @@ function load(withRules=true){
   ok(S('MMicj')===MJ,'MMicj (the way it is usually written) -> letters: '+S('MMicj'));
   ok(S('mmicj and Mmicj and MmIcJ and MMICJ')===[MJ,'and',MJ,'and',MJ,'and',MJ].join(' '),'any capitals of mmicj: '+S('mmicj and Mmicj and MmIcJ and MMICJ'));
   ok(S("MMICJ's library")==="em em eye see jay's library",'MMICJ possessive');
-  ok(S('Visit mmicj.com today')==='Visit '+MJ+'.com today','inside an address: '+S('Visit mmicj.com today'));
+  ok(S('Visit mmicj.com today')==='Visit '+MJ+' dot com today','inside an address the dot is a word, apart from the letters (a voice spells "jay.com" as j-a-y): '+S('Visit mmicj.com today'));
+  ok(S('at mmicj.com.')==='at '+MJ+' dot com.'&&S('Go to MMICJ.COM now')==='Go to '+MJ+' dot COM now','an address at the end of a sentence, and in capitals');
+  ok(S('www.mmicj.com/books')==='w w w dot '+MJ+' dot com/books','www. and a path after the address');
+  ok(S('mmicj.com, mmicj.org and MMICJs')===MJ+' dot com, '+MJ+' dot org and '+MJ+' s','several addresses, and the plural, in one sentence: '+S('mmicj.com, mmicj.org and MMICJs'));
+  ok(S('Visit MMICJ.Come and see')==='Visit '+MJ+'.Come and see','"MMICJ.Come" (a missing space after a full stop) is not an address');
+  ok(S('Visit MMICJ daily for Holy Spirit guided content at mmicj.com')==='Visit '+MJ+' daily for Holy Spirit guided content at '+MJ+' dot com','the closing line of the speech test document');
   ok(S('the mmicj-admin portal')==='the '+MJ+' admin portal','joined with a hyphen: '+S('the mmicj-admin portal'));
   ok(S('MMICJs library')===MJ+' s library','glued to a plural s: '+S('MMICJs library'));
   ok(S('MM icj and MM\u00ADicj')===MJ+' and '+MJ,'a space or soft hyphen between its letters: '+S('MM icj and MM\u00ADicj'));
@@ -308,7 +313,7 @@ function makeEnv(o){
   const e=makeEnv({rules:false,pages:[lines(['Welcome to MMicj: peace; love \u2014 joy, and well-known mmicj.com.'],{w:500})]});
   e.RA.start();
   await until(()=>e.RA.state()==='idle'&&e.log.length>=1);
-  ok(e.log.join('|')==='Welcome to em em eye see jay, peace, love, joy, and well known em em eye see jay.com.','no rules file: '+e.log.join('|'));
+  ok(e.log.join('|')==='Welcome to em em eye see jay, peace, love, joy, and well known em em eye see jay dot com.','no rules file: '+e.log.join('|'));
 }
 {
   /* the safety net: a rule that fails does not let raw text through */

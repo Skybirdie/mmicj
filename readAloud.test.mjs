@@ -90,7 +90,7 @@ function makeEnv(o={}){
       click(){(this.listeners.click||[]).forEach(f=>f({}))},use:{attrs:{},setAttribute(k,v){this.attrs[k]=v}},querySelector(){return this.use},hidden:false,title:''};return el};
   const button=mkEl(),mute=mkEl();
   const doc={readyState:'complete',getElementById:id=>id==='listenButton'?button:id==='muteButton'?mute:null,visibilityState:'visible',
-    createElement(){const e=mkEl();e.className='';return e},body:{appendChild(e){e.__mounted=true;doc.__toast=e}},
+    createElement(){const e=mkEl();e.className='';return e},body:{appendChild(e){e.__mounted=true;e.parentNode={removeChild(x){x.__mounted=false}};if(/toast/.test(e.className||''))doc.__toast=e;else(doc.__panels=doc.__panels||[]).push(e)}},
     addEventListener(t,f){(docListeners[t]=docListeners[t]||[]).push(f)},
     dispatchEvent(ev){(docListeners[ev.type]||[]).forEach(f=>f(ev))}};
   /* fake speechSynthesis: speaks queued utterances one at a time, like a browser */
@@ -102,6 +102,7 @@ function makeEnv(o={}){
       this.speaking=true;this.cur=u;this.pending=this.queue.length>0;
       this.timer=setTimeout(()=>{
         if(o.failWith){u.onerror&&u.onerror({error:o.failWith});this._next();return}
+        u.onstart&&u.onstart({});
         log.push({text:u.text,rate:u.rate,voice:u.voice&&u.voice.voiceURI});
         u.onend&&u.onend({});
         this._next();
@@ -115,13 +116,13 @@ function makeEnv(o={}){
   let cur=1,flipping=false;
   const spreadOf=p=>{if(o.single)return{start:p,end:p};if(p===1)return{start:1,end:1};const s=p%2===0?p:p-1;return{start:s,end:Math.min(N,s+1)}};
   const Reader={nextCalls:0,open:true,
-    isOpen:()=>Reader.open,pages:()=>N,page:()=>cur,book:()=>({id:o.bookId||'book-1'}),
+    isOpen:()=>Reader.open,pages:()=>N,page:()=>cur,book:()=>({id:o.bookId||'book-1',title:o.bookTitle||'',media:o.media||''}),
     spread:()=>spreadOf(cur),
     next(){Reader.nextCalls++;if(flipping)return false;
       if(win.AudioController.playPageCurl){const r=win.AudioController.playPageCurl();if(r!==false)win.__turnSounds++}const sp=spreadOf(cur);if(sp.end>=N)return false;flipping=true;
       setTimeout(()=>{cur=sp.end+1;flipping=false;doc.dispatchEvent({type:'skyreader:pageChanged',detail:[cur,N]})},o.flipMs??10);return true},
     goTo(p){cur=p;doc.dispatchEvent({type:'skyreader:pageChanged',detail:[cur,N]})}};
-  const Renderer={calls:[],async pageText(p){Renderer.calls.push(p);await sleep(1);return pages[p-1]}};
+  const Renderer={calls:[],async pageText(p){Renderer.calls.push(p);await sleep(1);if(o.textError)throw new TypeError(o.textError);return pages[p-1]}};
   const store={};
   const win={document:doc,localStorage:{getItem:k=>store[k]??null,setItem:(k,v)=>store[k]=String(v)},addEventListener(){},
     Reader,Renderer,CustomEvent:class{constructor(t,d){this.type=t;this.detail=d&&d.detail}},
@@ -136,7 +137,9 @@ function makeEnv(o={}){
      so it also works on the copy of the button that Share Mode puts in its place */
   const clickMute=(btn)=>doc.dispatchEvent({type:'click',target:{closest:s=>s==='#muteButton'?btn:null}});
   mute.click=()=>clickMute(mute);
-  return {RA,Reader,Renderer,SS,doc,button,mute,win,log,toastText,store,setPage:p=>{cur=p},clickMute};
+  const panel=()=>(doc.__panels||[]).filter(x=>x.className==='sr-diag'&&x.__mounted!==false).pop();
+  const press=(el,act)=>(el.listeners.click||[]).forEach(f=>f({target:{closest:()=>({getAttribute:()=>act})},stopPropagation(){}}));
+  return {RA,Reader,Renderer,SS,doc,button,mute,win,log,toastText,store,setPage:p=>{cur=p},clickMute,panel,press};
 }
 const P1=(...t)=>lines(t,{w:300});
 
@@ -342,6 +345,91 @@ const P1=(...t)=>lines(t,{w:300});
   e.button.click();await sleep(300);
   ok(e.log.length>0&&e.log.every(x=>x.rate===1.4&&x.voice==='v2'),'speech uses the chosen speed and voice');
   ok(e.RA.voices().length===2&&e.RA.voices()[1].local===false,'voice list is exposed to the settings panel');
+}
+
+
+/* --- speech check: extra diagnostics for the speech test document ONLY --- */
+{
+  const P1x=s=>lines([s],{w:400});
+  const DIAG='book-mwb6vj0c-dl8l';
+
+  /* an ordinary document: no panel at all, the short notices as before */
+  const a=makeEnv({pages:[P1x('A short page of text.')],single:true});
+  a.button.click();await until(()=>a.RA.state()==='idle'&&a.log.length>0);
+  ok(!a.panel()&&a.RA.diagnosticActive()===false&&a.RA.diagnosticReport()==='','an ordinary document: no speech check panel, no report');
+
+  const b=makeEnv({pages:[null,null,null,null],single:true});
+  b.button.click();await until(()=>b.RA.state()==='idle');
+  ok(!b.panel()&&b.toastText()==='No readable text here.','an ordinary document with no text: the short notice, no panel ('+b.toastText()+')');
+
+  const c=makeEnv({pages:[P1x('Text.'),P1x('Text.'),P1x('Text.')],single:true,textError:'boom'});
+  c.button.click();await until(()=>c.RA.state()==='idle');
+  ok(!c.panel()&&c.toastText()==='Couldn\'t read this page\'s text.','an ordinary document whose text cannot be read: it says so, briefly, instead of "no readable text" ('+c.toastText()+')');
+
+  /* the test document, found by its library id */
+  const e=makeEnv({bookId:DIAG,bookTitle:'Read Aloud Speech Test',pages:[P1x('First test sentence is here.')],single:true});
+  e.win.navigator={userAgent:'TestPhone/1.0 (iPhone)',language:'en-US'};
+  e.button.click();
+  await until(()=>e.RA.state()==='idle'&&e.log.length>0);
+  const pe=e.panel();
+  ok(!!pe&&e.RA.diagnosticActive()===true,'the test document (by id): the speech check panel appears');
+  ok(/Speech check/.test(pe.innerHTML)&&/Working: the text was read and speech started\./.test(pe.innerHTML),'the panel says it is working when all three stages worked');
+  const rep=e.RA.diagnosticReport();
+  ok(/^MMICJ speech check/.test(rep)&&/page 1: ok, 1 items/.test(rep)&&/Voices: 2 - Voice One \(en-US, on device\); Voice Two \(en-GB, online\)/.test(rep)&&/Device: TestPhone\/1\.0/.test(rep)&&/Speech: started after/.test(rep)&&/Document: Read Aloud Speech Test \(book-mwb6vj0c-dl8l\)/.test(rep),'the report names the document, device, voices, page text and speech');
+  ok(/pdf\.js: not loaded/.test(rep)&&/Browser lacks:/.test(rep),'the report states the pdf.js build and the browser features that are missing');
+
+  /* found by file name, so a re-upload (new hash) or a new id still works */
+  const f=makeEnv({bookId:'other-id',media:'https://media.mmicj.com/books/Read-Aloud-Speech-Test-ffff00000000.pdf',pages:[P1x('Words here.')],single:true});
+  f.button.click();await until(()=>f.RA.state()==='idle'&&f.log.length>0);
+  ok(!!f.panel(),'the test document (by file name) gets the panel too');
+
+  /* the page text cannot be read: the panel says which stage failed, with the real error */
+  const g=makeEnv({bookId:DIAG,pages:[P1x('Text.'),P1x('Text.'),P1x('Text.')],single:true,textError:'Promise.withResolvers is not a function'});
+  g.button.click();await until(()=>g.RA.state()==='idle'&&/Couldn/.test(g.toastText()));
+  const pg=g.panel(),rg=g.RA.diagnosticReport();
+  ok(/PROBLEM/.test(pg.innerHTML)&&/Reading the page text failed on this device, before speech/.test(pg.innerHTML),'text extraction failure: the panel blames the PDF engine, not the voice');
+  ok(/ERROR TypeError: Promise\.withResolvers is not a function/.test(rg)&&/Ended: The text of the pages could not be read\./.test(rg),'text extraction failure: the real error is in the report');
+  ok(g.toastText()==='Couldn\'t read this page\'s text.','text extraction failure: the short notice is still short');
+  ok(g.Renderer.calls.length>=3,'a page that failed is asked for again, not remembered as empty ('+g.Renderer.calls.length+' requests)');
+
+  /* a page that really has no text */
+  const h=makeEnv({bookId:DIAG,pages:[{height:800,items:[]},{height:800,items:[]},{height:800,items:[]},{height:800,items:[]}],single:true});
+  h.button.click();await until(()=>h.RA.state()==='idle');
+  ok(/The page has no readable text layer\./.test(h.panel().innerHTML)&&h.toastText()==='No readable text here.','no text layer: told apart from a failure to read');
+
+  /* the voice fails */
+  const k=makeEnv({bookId:DIAG,pages:[lines(['One title','Two title','Three title','Four title','Five title'],{step:30,w:100})],failWith:'synthesis-failed'});
+  k.button.click();await until(()=>k.RA.state()==='idle'&&/Speech is not working/.test(k.toastText()),10000);
+  ok(/The text was read, but the voice failed \(synthesis-failed\)\./.test(k.panel().innerHTML)&&/error: synthesis-failed/.test(k.RA.diagnosticReport()),'voice failure: the panel names the speech error');
+  ok(k.toastText()==='Speech is not working. Check device settings.','voice failure: the short notice is unchanged');
+
+  /* nothing the document says can inject markup into the panel */
+  const x=makeEnv({bookId:DIAG,pages:[P1x('Text.'),P1x('Text.'),P1x('Text.')],single:true,textError:'<img src=x onerror=alert(1)>'});
+  x.button.click();await until(()=>x.RA.state()==='idle');
+  ok(!/<img/.test(x.panel().innerHTML)&&/&lt;img/.test(x.panel().innerHTML),'error text is escaped in the panel');
+
+  /* Copy report */
+  let copied='';
+  const m=makeEnv({bookId:DIAG,pages:[P1x('Copy me please.')],single:true});
+  m.win.navigator={userAgent:'CopyPhone/9',language:'en-US',clipboard:{writeText:async t=>{copied=t}}};
+  m.button.click();await until(()=>m.RA.state()==='idle'&&m.log.length>0);
+  m.press(m.panel(),'copy');await sleep(20);
+  ok(/^MMICJ speech check/.test(copied)&&/CopyPhone\/9/.test(copied)&&/Report copied/.test(m.panel().innerHTML),'Copy report puts the whole report on the clipboard and says so');
+  const n=makeEnv({bookId:DIAG,pages:[P1x('No clipboard here.')],single:true});
+  n.win.navigator={userAgent:'OldPhone',language:'en-US'};
+  n.button.click();await until(()=>n.RA.state()==='idle'&&n.log.length>0);
+  n.press(n.panel(),'copy');await sleep(20);
+  ok(/<textarea[^>]*readonly>MMICJ speech check/.test(n.panel().innerHTML)&&/Select All/.test(n.panel().innerHTML),'no clipboard access: the report is shown to select and copy by hand');
+
+  /* Close, reopen, and leaving the book */
+  const q=makeEnv({bookId:DIAG,pages:[P1x('Close me.')],single:true});
+  q.button.click();await until(()=>q.RA.state()==='idle'&&q.log.length>0);
+  q.press(q.panel(),'close');
+  ok(!q.panel(),'Close removes the panel');
+  q.button.click();await until(()=>q.RA.state()==='idle'&&q.log.length>1);
+  ok(!!q.panel(),'tapping Listen again shows it again');
+  q.doc.dispatchEvent({type:'skyreader:bookOpened'});
+  ok(!q.panel()&&q.RA.diagnosticActive()===false,'opening or closing a book removes the panel and the report');
 }
 
 console.log(fails?('\n'+fails+' FAILED'):'\nall ok');

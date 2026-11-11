@@ -13,6 +13,22 @@ An arrow between two points is a step from one to the next and is never describe
 Arrows pointing any other way (`←`, `↔`) are only a pause. A `>` between numbers (`5 > 3`) is left alone. Word's autocorrect turns a typed `-->` into `→`; both work.
 To change the word, or to use a pause only, edit `api.arrowSays` in `js/readAloudRules.js` ("then", or "" for a pause only).
 
+## Speech check (the speech test document)
+One document in the library is the **speech test document** (`read-aloud-speech-test-....pdf`, library id `book-mwb6vj0c-dl8l`). Only while it is open,
+tapping Listen also shows a small **Speech check** panel with a *Copy report* button. Every other document keeps the short notices.
+The panel reports each stage on its own, so a reader can tell the admin exactly where it fails:
+1. **Page text**: did the browser's PDF engine return text (how many items and characters), or did it throw (the exact error)? This stage runs before any speech.
+2. **Voices**: how many the device lists, and which one is used.
+3. **Speech**: did the first words start (and after how long), or which error code came back.
+The report (and the panel) also gives the browser, the pdf.js version and build (standard or legacy), and the browser features this device lacks
+(`Promise.withResolvers`, `Array.fromAsync`, `ReadableStream` async iteration ...): a missing one is a lead, not proof. Where the clipboard is not available the report is shown in a box to select and copy by hand.
+- **Which document gets it:** `api.diagnosticBooks` at the top of the "SPEECH CHECK" section in `js/readAloud.js`: the library ids, plus a file-name stem
+  (`read-aloud-speech-test`), so a re-upload (new hash in the name) or a changed id still works. No need to rename the id in `published.json`;
+  to add another document, add its id to that list.
+- Page text that could not be read is no longer remembered as an empty page: it is asked for again the next time.
+- In every document, "the engine failed on this page" now says **"Couldn't read this page's text."**; "No readable text here." is kept for pages that really have no text.
+Test: `node readAloud.test.mjs` (the "speech check" section).
+
 ## Share Mode
 A book opened through Share Mode (`js/shareViewer.js`) has the Listen button too: it is the first button in the Share Mode toolbar, left of Mute,
 with the same behaviour and the same Settings choice (a reader who switched Listen off sees no button there either). Videos and slideshows
@@ -48,7 +64,7 @@ This is the file to edit when something is read the wrong way. It only changes w
 Each rule has a short, commented list at the top of the file.
 
 - **Words**: `MMICJ` is always spelled out letter by letter (written "em em eye see jay" for the voice), wherever those letters appear and in any case
-  (MMicj, mmicj, MMICJ, mmicj.com, MMICJs, even with a space between the letters). `Liburd` -> "Lie bird", `Naphatali` -> "Naff tah lee" (written "Naff", a real word, because some iPhone voices spell out an unfamiliar
+  (MMicj, mmicj, MMICJ, mmicj.com, MMICJs, even with a space between the letters). `mmicj.com` -> "em em eye see jay dot com" (the dot is said as a word, apart from the name: a voice that meets "jay.com" spells the word out as j-a-y), `Liburd` -> "Lie bird", `Naphatali` -> "Naff tah lee" (written "Naff", a real word, because some iPhone voices spell out an unfamiliar
   three-letter token like "Naf" as letters).
   Add a name as `["Written", "how it sounds"]`; add `{anywhere:true}` as a third item to replace it inside other words too.
 - **Abbreviations**: `e.g.` -> "for example", `i.e.` -> "that is", `etc.` -> "et cetera", `Dr.` -> "Doctor", `p.` -> "page" and so on.
@@ -82,7 +98,7 @@ If the engine reports a voice / language / synthesis error, Listen starts that p
 If speech still fails, the notice is kept short: "Speech is not working. Check device settings." The error code and the number of voices
 the device reports are written to the browser console (`[ReadAloud] speech failed: ...`) for debugging.
 Other notices: "Speech was blocked. Tap Listen again." (browser blocked speech), "Audio is busy. Close other apps and tap Listen."
-(another app is using sound), "No readable text here." (three empty spreads in a row), "Finished reading."
+(another app is using sound), "No readable text here." (three spreads in a row with no text on them), "Couldn't read this page's text." (the browser's PDF engine failed on the page, which is not the same as there being no text), "Finished reading."
 
 ## Limits
 - A page with no text layer (a scan, a picture) is skipped; three empty spreads in a row stop with a note.

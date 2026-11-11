@@ -424,6 +424,8 @@ let restartTimer=0;
 const live=[];               /* keeps utterances referenced (Safari drops unreferenced ones) */
 let ctx={book:null,seen:new Map(),page:0};
 const textCache=new Map();
+let extractErrors=0;         /* pages whose text could not be read in this run (the browser's PDF engine threw, which is not the same as "no text") */
+let diag=null;               /* the speech check report: exists only while the speech test document is open */
 
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 
@@ -442,8 +444,9 @@ function resetBookMemory(){
 async function chunksForPage(p){
     if(textCache.has(p))return textCache.get(p);
     if(!window.Renderer||typeof Renderer.pageText!=="function")return [];
-    let data=null;
-    try{data=await Renderer.pageText(p);}catch(e){data=null;}
+    let data=null,err=null;
+    const t0=Date.now();
+    try{data=await Renderer.pageText(p);}catch(e){data=null;err=e||new Error("unknown error");extractErrors++;}
     ctx.page=p;
     const chunks=[];
     const R=window.ReadAloudRules;      /* optional: js/readAloudRules.js (how things are said) */
@@ -471,8 +474,11 @@ async function chunksForPage(p){
         /* a real silence after every paragraph, title or line that stands alone */
         if(lastOfParagraph>=0)chunks[lastOfParagraph].gap=gap;
     }
-    textCache.set(p,chunks);
-    if(textCache.size>14)textCache.delete(textCache.keys().next().value);
+    if(diag)diagPage(p,data,err,Date.now()-t0,chunks.length);
+    if(!err){                           /* a page that could not be read is tried again next time, not remembered as empty */
+        textCache.set(p,chunks);
+        if(textCache.size>14)textCache.delete(textCache.keys().next().value);
+    }
     return chunks;
 }
 
@@ -481,7 +487,7 @@ async function chunksForPage(p){
    and no colon, semicolon or dash is ever left in the text for the voice to pronounce. */
 function basicEnforce(t){
     return String(t==null?"":t)
-        .replace(/m[\s\u00AD\u200B-\u200D\u2060\uFEFF]?m[\s\u00AD\u200B-\u200D\u2060\uFEFF]?i[\s\u00AD\u200B-\u200D\u2060\uFEFF]?c[\s\u00AD\u200B-\u200D\u2060\uFEFF]?j/gi," em em eye see jay ")
+        .replace(/(m[\s\u00AD\u200B-\u200D\u2060\uFEFF]?m[\s\u00AD\u200B-\u200D\u2060\uFEFF]?i[\s\u00AD\u200B-\u200D\u2060\uFEFF]?c[\s\u00AD\u200B-\u200D\u2060\uFEFF]?j)(\.(?=[a-z]{2,24}(?![a-z0-9])))?/gi,(m,name,dot)=>dot?" em em eye see jay dot ":" em em eye see jay ")
         .replace(/\s*[:;\uFF1A\uFF1B\u037E]\s*/g,", ")
         .replace(/\s*(?:--+|[\u2012-\u2015])\s*/g,", ")
         .replace(/\s+[-\u2010\u2011]+\s+/g,", ")
@@ -545,6 +551,7 @@ function makeUtterance(text){
     u.rate=level>=3?1:settings.rate;
     const v=level===0?chosenVoice():level>=2?autoVoice():null;
     if(v){u.voice=v;u.lang=v.lang;}
+    if(diag)diagUtterance(v,u);
     return u;
 }
 
@@ -562,6 +569,7 @@ function speakList(list,from,token){
             while(token===session&&!dead&&next<total&&next-ended<=(level>=3?1:2)&&holdAt<0){
                 const i=next++;
                 const u=makeUtterance(list[i].text);
+                if(diag)u.onstart=()=>{if(token===session&&!dead)diagStarted(i);};
                 const gapMs=list[i].gap>0&&i<total-1?Math.round(list[i].gap/settings.rate):0;
                 if(gapMs>0)holdAt=i;
                 const finish=()=>{
@@ -578,6 +586,7 @@ function speakList(list,from,token){
                     if(token!==session||dead)return;
                     const code=ev&&ev.error;
                     if(code==="canceled"||code==="interrupted")return;
+                    if(diag)diagSpeechError(code);
                     /* a voice / language the phone cannot use: start this piece again with the device's default voice */
                     if(level<3&&RECOVERABLE.indexOf(code)>=0){
                         if(level===2&&voiceTry<Math.min(candidateVoices().length,6)-1)voiceTry++;      /* the next voice */
@@ -595,6 +604,7 @@ function speakList(list,from,token){
                     if(code==="not-allowed"||code==="audio-busy"||code==="audio-hardware"||errorRun>=3){
                         session++;
                         setState("idle");
+                        if(diag)diagEnded("Speech stopped with the error: "+(code||"unknown"));
                         toast(code==="not-allowed"
                             ? "Speech was blocked. Tap Listen again."
                             : (code==="audio-busy"||code==="audio-hardware")
@@ -697,7 +707,10 @@ async function run(token,resume){
         if(!chunks.length){
             emptyStreak++;
             if(emptyStreak>=3){
-                finish(token,"No readable text here.");
+                /* "the browser could not read the page" and "the page has no text" are different problems */
+                const failed=extractErrors>0;
+                if(diag)diagEnded(failed?"The text of the pages could not be read.":"The pages have no readable text.");
+                finish(token,failed?"Couldn't read this page's text.":"No readable text here.");
                 return;
             }
         }else{
@@ -707,7 +720,7 @@ async function run(token,resume){
             if(token!==session||!ok)return;
         }
 
-        if(sp.end>=Reader.pages()){finish(token,"Finished reading.");return;}
+        if(sp.end>=Reader.pages()){if(diag)diagEnded("Reached the end of the document.");finish(token,"Finished reading.");return;}
 
         setState("loading");
         const moved=await turnPage(sp.start,token);
@@ -736,12 +749,13 @@ function begin(resume){
     const token=session;
     cancelSpeech();
     errorRun=0;
+    extractErrors=0;
     setState("loading");
     /* some browsers drop a speak() issued in the same tick as cancel() */
     setTimeout(()=>{if(token===session)run(token,resume);},SS.speaking?120:0);
 }
 
-api.start=function(){begin(null);};
+api.start=function(){diagBegin();begin(null);};
 
 api.pause=function(){
     if(state!=="speaking"&&state!=="loading")return;
@@ -764,6 +778,7 @@ api.stop=function(){
     clearTimeout(restartTimer);
     cancelSpeech();
     setState("idle");
+    if(diag&&!diag.ended)diagEnded("Stopped.");
 };
 
 api.toggle=function(){
@@ -784,6 +799,327 @@ api.preview=function(){
     if(live.length>6)live.shift();
     setTimeout(()=>{try{SS.speak(u);}catch(e){}},SS.speaking?120:0);
 };
+
+/*=======================================================
+  SPEECH CHECK - extra diagnostics for the speech test document ONLY
+
+  Every other document keeps the short notices. When the speech test
+  document is open (found by its library id, or by its file name, which
+  survives a re-upload), tapping Listen also shows a small panel that
+  reports each stage on its own, with a "Copy report" button:
+     1. the text of the pages   (did the browser's PDF engine give any?)
+     2. the voices              (how many, which one is used)
+     3. the speech              (did the first words start, or which error)
+  plus the browser, the pdf.js build and the features this browser lacks.
+  To point it at another document, edit api.diagnosticBooks.
+=======================================================*/
+
+api.diagnosticBooks={
+    ids:["book-mwb6vj0c-dl8l","speech-test"],
+    fileStem:"read-aloud-speech-test"
+};
+
+function isDiagnosticBook(){
+    try{
+        const b=window.Reader&&Reader.book&&Reader.book();
+        if(!b)return false;
+        const D=api.diagnosticBooks;
+        if(D.ids.indexOf(String(b.id))>=0)return true;
+        const hay=(String(b.media||"")+" "+String(b.url||"")+" "+String(b.file||"")).toLowerCase();
+        return !!D.fileStem&&hay.indexOf(String(D.fileStem).toLowerCase())>=0;
+    }catch(e){return false;}
+}
+
+/* browser features newer PDF engines may rely on; a missing one is a lead, not proof */
+function featureGaps(){
+    const lacks=[];
+    const need=(ok,name)=>{if(!ok)lacks.push(name);};
+    try{
+        need(typeof Map!=="undefined"&&typeof Map.prototype.getOrInsertComputed==="function","Map.getOrInsertComputed");
+        need(typeof Promise.try==="function","Promise.try");
+        need(typeof Promise.withResolvers==="function","Promise.withResolvers");
+        need(typeof Array.fromAsync==="function","Array.fromAsync");
+        need(typeof Uint8Array!=="undefined"&&typeof Uint8Array.prototype.toHex==="function","Uint8Array.toHex");
+        need(typeof structuredClone==="function","structuredClone");
+        need(typeof ReadableStream!=="undefined"&&typeof Symbol!=="undefined"&&Symbol.asyncIterator in ReadableStream.prototype,"ReadableStream async iteration");
+        need(typeof Intl!=="undefined"&&typeof Intl.Segmenter==="function","Intl.Segmenter");
+    }catch(e){}
+    return lacks;
+}
+
+function pdfInfo(){
+    try{
+        const L=window.pdfjsLib;
+        if(!L)return "not loaded";
+        let build="standard";
+        try{if(/\/legacy\//.test(String(L.GlobalWorkerOptions.workerSrc||"")))build="legacy";}catch(e){}
+        return (L.version||"unknown version")+" ("+build+" build)";
+    }catch(e){return "unknown";}
+}
+
+function describeVoice(v){
+    return v?(v.name||v.voiceURI||"voice")+" ("+(v.lang||"?")+(v.localService?", on device":", online")+")":"device default voice";
+}
+
+function diagVoices(){
+    let list=[];
+    try{list=SS?(SS.getVoices()||[]):[];}catch(e){}
+    return {count:list.length,list:list.slice(0,8).map(describeVoice)};
+}
+
+function diagBegin(){
+    if(!isDiagnosticBook()){diagHide();return;}
+    let b={};
+    try{b=Reader.book()||{};}catch(e){}
+    const nav=typeof navigator!=="undefined"?navigator:{};
+    let standalone="unknown";
+    try{standalone=!!(nav.standalone||(window.matchMedia&&window.matchMedia("(display-mode: standalone)").matches));}catch(e){}
+    let muted="unknown";
+    try{if(window.AudioController&&AudioController.isMuted)muted=!!AudioController.isMuted();}catch(e){}
+    diag={
+        t0:Date.now(),
+        open:true,showBox:false,note:"",ended:null,
+        book:{id:String(b.id||""),title:String(b.title||"")},
+        env:{
+            time:new Date().toISOString(),
+            ua:String(nav.userAgent||"unknown"),
+            lang:String(nav.language||"unknown"),
+            secure:typeof window.isSecureContext==="boolean"?window.isSecureContext:"unknown",
+            standalone:standalone,
+            muted:muted,
+            pdfjs:pdfInfo(),
+            lacks:featureGaps()
+        },
+        pages:[],
+        speech:{started:null,pieces:0,voice:"",level:0,rate:0,errors:[]}
+    };
+    diagRender();
+}
+
+function diagPage(p,data,err,ms,pieces){
+    if(!diag)return;
+    const r={page:p,ms:ms,pieces:pieces};
+    if(err){
+        r.state="error";
+        r.error=((err&&err.name)||"Error")+": "+String((err&&err.message)||err).slice(0,200);
+    }else if(data===null){
+        r.state="skipped";                      /* the book closed or changed while it was being read */
+    }else{
+        const items=(data.items||[]);
+        r.items=items.length;
+        r.chars=items.reduce((n,it)=>n+String(it.s||"").trim().length,0);
+        r.state=r.chars>0?"ok":"empty";
+    }
+    const at=diag.pages.findIndex(x=>x.page===p);
+    if(at>=0)diag.pages[at]=r;else diag.pages.push(r);
+    if(diag.pages.length>12)diag.pages.shift();
+    diagRender();
+}
+
+function diagUtterance(v,u){
+    if(!diag)return;
+    diag.speech.voice=describeVoice(v);
+    diag.speech.level=level;
+    diag.speech.rate=u.rate;
+}
+
+function diagStarted(i){
+    if(!diag)return;
+    if(diag.speech.started===null)diag.speech.started=Date.now()-diag.t0;
+    diag.speech.pieces=Math.max(diag.speech.pieces,i+1);
+    diagRender();
+}
+
+function diagSpeechError(code){
+    if(!diag)return;
+    diag.speech.errors.push({code:String(code||"unknown"),level:level,voice:diag.speech.voice});
+    if(diag.speech.errors.length>12)diag.speech.errors.shift();
+    diagRender();
+}
+
+function diagEnded(text){
+    if(!diag)return;
+    diag.ended=text;
+    diagRender();
+}
+
+/* the three stages and the overall verdict, from what was actually observed */
+function diagSummary(){
+    const d=diag,v=diagVoices();
+    const okPages=d.pages.filter(x=>x.state==="ok");
+    const errPages=d.pages.filter(x=>x.state==="error");
+    const emptyPages=d.pages.filter(x=>x.state==="empty");
+    const rows=[];
+
+    /* 1. the text of the pages */
+    if(okPages.length){
+        const r=okPages[0];
+        rows.push({key:"text",st:"ok",label:"Page text",
+            text:"Page "+r.page+": "+r.items+" text items, "+r.chars+" characters."+(errPages.length?" Page "+errPages[0].page+" failed (see report).":"")});
+    }else if(errPages.length){
+        rows.push({key:"text",st:"bad",label:"Page text",
+            text:"Could not read the text of page "+errPages[0].page+". "+errPages[0].error+". This happens inside the browser's PDF engine, before any speech."});
+    }else if(emptyPages.length){
+        rows.push({key:"text",st:"bad",label:"Page text",text:"Page "+emptyPages[0].page+" gave no text (0 characters), so there is nothing to speak."});
+    }else{
+        rows.push({key:"text",st:"wait",label:"Page text",text:"Waiting for the first page."});
+    }
+
+    /* 2. the voices */
+    if(!SS)rows.push({key:"voices",st:"bad",label:"Voices",text:"This browser has no speech support."});
+    else if(!v.count)rows.push({key:"voices",st:"bad",label:"Voices",text:"The device reports no voices. Some phones list them a moment late: tap Listen again."});
+    else rows.push({key:"voices",st:"ok",label:"Voices",text:v.count+" found."+(d.speech.voice?" Using "+d.speech.voice+".":"")});
+
+    /* 3. the speech */
+    const sp=d.speech;
+    if(sp.started!==null)rows.push({key:"speech",st:"ok",label:"Speech",text:"Started after "+sp.started+" ms."+(sp.errors.length?" Errors on the way: "+sp.errors.map(e=>e.code).join(", ")+".":"")});
+    else if(sp.errors.length)rows.push({key:"speech",st:"bad",label:"Speech",text:"The voice failed: "+sp.errors.map(e=>e.code).join(", ")+"."});
+    else rows.push({key:"speech",st:"wait",label:"Speech",text:"Waiting for the first words."});
+
+    /* the verdict */
+    let verdict,st;
+    if(!SS){verdict="This browser cannot speak.";st="bad";}
+    else if(!okPages.length&&errPages.length){verdict="Reading the page text failed on this device, before speech. That points to the browser's PDF engine, not the voice.";st="bad";}
+    else if(!okPages.length&&emptyPages.length){verdict="The page has no readable text layer.";st="bad";}
+    else if(sp.started!==null){verdict="Working: the text was read and speech started.";st="ok";}
+    else if(sp.errors.length){verdict="The text was read, but the voice failed ("+sp.errors[sp.errors.length-1].code+").";st="bad";}
+    else{verdict="Checking...";st="wait";}
+    return {rows:rows,verdict:verdict,st:st,voices:v};
+}
+
+function diagReportText(){
+    if(!diag)return "";
+    const d=diag,S=diagSummary(),sp=d.speech;
+    const L=[];
+    L.push("MMICJ speech check");
+    L.push("Result: "+S.verdict);
+    if(d.ended)L.push("Ended: "+d.ended);
+    L.push("Time: "+d.env.time);
+    L.push("Document: "+(d.book.title||"?")+" ("+d.book.id+")");
+    L.push("Device: "+d.env.ua);
+    L.push("Language: "+d.env.lang);
+    L.push("pdf.js: "+d.env.pdfjs);
+    L.push("Browser lacks: "+(d.env.lacks.length?d.env.lacks.join(", "):"none of the features checked"));
+    L.push("Secure page: "+d.env.secure+"; installed app: "+d.env.standalone+"; app muted: "+d.env.muted);
+    L.push("Speech support: "+(SS?"yes":"no"));
+    L.push("Voices: "+S.voices.count+(S.voices.list.length?" - "+S.voices.list.join("; "):""));
+    L.push("Settings: speed "+settings.rate+", saved voice "+(settings.voice||"automatic"));
+    L.push("Pages:");
+    if(!d.pages.length)L.push("  (none read yet)");
+    d.pages.forEach(r=>{
+        if(r.state==="error")L.push("  page "+r.page+": ERROR "+r.error+" ("+r.ms+" ms)");
+        else if(r.state==="skipped")L.push("  page "+r.page+": skipped (the book changed or closed)");
+        else if(r.state==="empty")L.push("  page "+r.page+": no text ("+r.items+" items, 0 characters, "+r.ms+" ms)");
+        else L.push("  page "+r.page+": ok, "+r.items+" items, "+r.chars+" characters, "+r.pieces+" pieces to speak, "+r.ms+" ms");
+    });
+    L.push("Speech: "+(sp.started!==null?"started after "+sp.started+" ms":"did not start")+"; pieces spoken so far: "+sp.pieces+"; voice: "+(sp.voice||"none yet")+"; fallback level: "+sp.level+"; speed: "+(sp.rate||settings.rate));
+    sp.errors.forEach(e=>L.push("  error: "+e.code+" (level "+e.level+", "+(e.voice||"no voice")+")"));
+    return L.join("\n");
+}
+
+/* ---- the panel ---- */
+let diagEl=null;
+const escHtml=x=>String(x).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+function diagStyle(){
+    try{
+        if(document.getElementById&&document.getElementById("sr-diag-style"))return;
+        const st=document.createElement("style");
+        st.id="sr-diag-style";
+        st.textContent=
+".sr-diag{position:fixed;left:8px;right:8px;top:calc(env(safe-area-inset-top,0px) + 8px);max-height:68vh;overflow:auto;z-index:2000001;box-sizing:border-box;padding:12px 14px;border-radius:14px;background:#fff;color:#1a1a1a;box-shadow:0 8px 28px rgba(0,0,0,.35);font:14px/1.4 -apple-system,system-ui,Roboto,Arial,sans-serif;-webkit-user-select:text;user-select:text}"+
+"@media (min-width:600px){.sr-diag{left:auto;width:420px;right:12px}}"+
+".sr-diag *{box-sizing:border-box}"+
+".sr-diag-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-size:16px}"+
+".sr-diag-x{border:0;background:#eceff3;color:#1a1a1a;border-radius:8px;padding:6px 12px;font-size:14px}"+
+".sr-diag-verdict{padding:8px 10px;border-radius:10px;margin:6px 0 8px;font-weight:600}"+
+".sr-diag-verdict.ok{background:#e3f6ea;color:#0b5d33}.sr-diag-verdict.bad{background:#fde8e6;color:#8a1c12}.sr-diag-verdict.wait{background:#eef1f5;color:#333}"+
+".sr-diag-row{display:flex;gap:8px;margin:6px 0}"+
+".sr-diag-st{flex:none;width:64px;text-align:center;border-radius:8px;font-size:12px;font-weight:700;padding:3px 4px;height:max-content;color:#fff}"+
+".sr-diag-st.ok{background:#0f7a4a}.sr-diag-st.bad{background:#c0392b}.sr-diag-st.wait{background:#8a95a1}"+
+".sr-diag-env{font-size:12px;color:#444;margin-top:8px;word-break:break-word}"+
+".sr-diag-copy{width:100%;margin-top:10px;padding:10px;border:0;border-radius:10px;background:#0f7a4a;color:#fff;font-weight:600;font-size:15px}"+
+".sr-diag-note{margin-top:6px;font-size:13px;color:#0b5d33}"+
+".sr-diag-box{width:100%;height:130px;margin-top:8px;font:12px/1.3 monospace}";
+        (document.head||document.documentElement||document.body).appendChild(st);
+    }catch(e){}
+}
+
+function diagRender(){
+    if(!diag||!diag.open)return;
+    const S=diagSummary(),d=diag;
+    if(!diagEl){
+        diagStyle();
+        diagEl=document.createElement("div");
+        diagEl.className="sr-diag";
+        diagEl.setAttribute("role","dialog");
+        diagEl.setAttribute("aria-label","Speech check");
+        /* taps on the panel must not reach the reader underneath (they would turn pages or hide the toolbar) */
+        ["pointerdown","pointerup","touchstart","touchend","mousedown","mouseup"].forEach(t=>diagEl.addEventListener(t,ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();}));
+        diagEl.addEventListener("click",ev=>{
+            if(ev&&ev.stopPropagation)ev.stopPropagation();
+            const t=ev&&ev.target,a=t&&t.closest&&t.closest("[data-act]");
+            const act=a&&a.getAttribute&&a.getAttribute("data-act");
+            if(act==="close")diagClose();
+            else if(act==="copy")diagCopy();
+        });
+        document.body.appendChild(diagEl);
+    }
+    const rows=S.rows.map(r=>
+        '<div class="sr-diag-row"><span class="sr-diag-st '+r.st+'">'+(r.st==="ok"?"OK":r.st==="bad"?"PROBLEM":"...")+'</span><div><b>'+escHtml(r.label)+'</b><br>'+escHtml(r.text)+'</div></div>').join("");
+    diagEl.innerHTML=
+        '<div class="sr-diag-head"><b>Speech check</b><button type="button" class="sr-diag-x" data-act="close">Close</button></div>'+
+        '<div class="sr-diag-verdict '+S.st+'">'+escHtml(S.verdict)+(d.ended?'<br><span style="font-weight:400">'+escHtml(d.ended)+'</span>':'')+'</div>'+
+        rows+
+        '<div class="sr-diag-env">'+escHtml(d.env.ua)+'<br>pdf.js '+escHtml(d.env.pdfjs)+'<br>Browser lacks: '+escHtml(d.env.lacks.length?d.env.lacks.join(", "):"none of the features checked")+'</div>'+
+        '<button type="button" class="sr-diag-copy" data-act="copy">Copy report</button>'+
+        (d.note?'<div class="sr-diag-note">'+escHtml(d.note)+'</div>':'')+
+        (d.showBox?'<textarea class="sr-diag-box" readonly>'+escHtml(diagReportText())+'</textarea>':'');
+}
+
+function diagClose(){
+    if(diag)diag.open=false;
+    if(diagEl){try{if(diagEl.parentNode)diagEl.parentNode.removeChild(diagEl);}catch(e){}diagEl=null;}
+}
+
+function diagHide(){
+    diagClose();
+    diag=null;
+}
+
+function diagCopy(){
+    if(!diag)return;
+    const text=diagReportText();
+    const done=ok=>{
+        if(!diag)return;
+        diag.note=ok?"Report copied. Paste it into a message to the admin.":"It could not be copied automatically. Press and hold the text below, choose Select All, then Copy.";
+        diag.showBox=!ok;
+        diagRender();
+    };
+    const fallback=()=>{
+        let ok=false;
+        try{
+            const ta=document.createElement("textarea");
+            ta.value=text;ta.setAttribute("readonly","");
+            ta.style.position="fixed";ta.style.opacity="0";
+            document.body.appendChild(ta);
+            ta.select();if(ta.setSelectionRange)ta.setSelectionRange(0,text.length);
+            ok=!!document.execCommand&&document.execCommand("copy");
+            document.body.removeChild(ta);
+        }catch(e){}
+        done(ok);
+    };
+    try{
+        if(typeof navigator!=="undefined"&&navigator.clipboard&&navigator.clipboard.writeText){
+            navigator.clipboard.writeText(text).then(()=>done(true),fallback);
+            return;
+        }
+    }catch(e){}
+    fallback();
+}
+
+api.diagnosticReport=()=>diagReportText();
+api.diagnosticActive=()=>!!diag;
 
 /*-------------------------------------------------------
   Button, state and notices
@@ -850,6 +1186,7 @@ function onPageChanged(){
 }
 
 function onBookChange(){
+    diagHide();
     api.stop();
     resetBookMemory();
 }

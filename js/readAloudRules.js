@@ -12,7 +12,8 @@
    is a pure function (no page, no network, no cost).
 
    1. WORDS       a word that should be said another way (names, acronyms).
-                  MMICJ is spelled out wherever it appears, in any letter case
+                  MMICJ is spelled out wherever it appears, in any letter case;
+                  mmicj.com is "em em eye see jay dot com"
    2. ABBREVIATIONS  "e.g." -> "for example", "Dr." -> "Doctor", "U.S." -> "U S"
    3. PUNCTUATION colons, semicolons and dashes are never spoken, they only
                   separate what is before from what is after them.
@@ -142,7 +143,12 @@ function compile(){
             if(o.anywhere){
                 /* the letters in a row, with at most one space / soft hyphen / zero-width mark between two of them */
                 const between="[\\s\\u00AD\\u200B-\\u200D\\u2060\\uFEFF]?";
-                return {anywhere:true,re:new RegExp(Array.from(String(w[0])).map(esc).join(between),"giu"),say:String(w[1])};
+                const letters=Array.from(String(w[0])).map(esc).join(between);
+                return {
+                    anywhere:true,re:new RegExp(letters,"giu"),say:String(w[1]),
+                    /* mmicj.com / www.mmicj.com: the name followed by a dot and a short lower-case or upper-case ending */
+                    dom:new RegExp("((?:www\\.)?)("+letters+")\\.(?=[a-z]{2,24}(?![\\p{L}\\p{N}]))","giu")
+                };
             }
             return {
                 re:new RegExp("(^|[^"+LET+"])("+esc(w[0])+")(?![" + LET + "])","giu"),
@@ -163,6 +169,14 @@ function words(t){
     const isLet=c=>!!c&&/[\p{L}\p{N}]/u.test(c);
     for(const w of compiled.words){
         if(w.anywhere){
+            /* A web address: a voice meets "jay.com" and spells the word letter by letter ("j a y dot com").
+               Say the dot as a word, apart from the name: mmicj.com -> "em em eye see jay dot com".
+               "MMICJ.Come" (a missing space after a full stop) is not an address and is left as it was. */
+            if(w.dom)t=t.replace(w.dom,(m,www,name,off,str)=>{
+                const ending=(str.slice(off+m.length).match(/^[A-Za-z]+/)||[""])[0];
+                if(ending!==ending.toLowerCase()&&ending!==ending.toUpperCase())return m;
+                return (www?"w w w dot ":"")+name+" dot ";
+            });
             /* spoken form gets its own spaces when it was glued to other letters (MMICJs -> "... jay s") */
             t=t.replace(w.re,(m,off,str)=>(isLet(str.charAt(off-1))?" ":"")+w.say+(isLet(str.charAt(off+m.length))?" ":""));
         }else t=t.replace(w.re,(m,pre)=>pre+w.say);
