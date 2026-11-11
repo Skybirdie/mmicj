@@ -7,6 +7,12 @@ The button is **visible by default** (`const SHOW_BUTTON_BY_DEFAULT=true;` at th
 A reader can switch it off with *Show Listen (read aloud) button* in Settings (gear); the choice is kept in this browser, and a reader who
 has ticked or unticked the box keeps their own choice. To hide it for everybody again (e.g. while testing something new), change that one word to `false`.
 
+## Arrows
+An arrow between two points is a step from one to the next and is never described ("rightward arrow"). `Settings → General`, `Menu --> Settings`,
+`A => B`, and a spaced `>` between two words (`Settings > General > Software Update`) are said as a short pause plus a word: "Settings, then General, then Software Update".
+Arrows pointing any other way (`←`, `↔`) are only a pause. A `>` between numbers (`5 > 3`) is left alone. Word's autocorrect turns a typed `-->` into `→`; both work.
+To change the word, or to use a pause only, edit `api.arrowSays` in `js/readAloudRules.js` ("then", or "" for a pause only).
+
 ## Share Mode
 A book opened through Share Mode (`js/shareViewer.js`) has the Listen button too: it is the first button in the Share Mode toolbar, left of Mute,
 with the same behaviour and the same Settings choice (a reader who switched Listen off sees no button there either). Videos and slideshows
@@ -42,7 +48,8 @@ This is the file to edit when something is read the wrong way. It only changes w
 Each rule has a short, commented list at the top of the file.
 
 - **Words**: `MMICJ` is always spelled out letter by letter (written "em em eye see jay" for the voice), wherever those letters appear and in any case
-  (MMicj, mmicj, MMICJ, mmicj.com, MMICJs, even with a space between the letters). `Liburd` -> "Lie bird", `Naphatali` -> "Naf tah lee".
+  (MMicj, mmicj, MMICJ, mmicj.com, MMICJs, even with a space between the letters). `Liburd` -> "Lie bird", `Naphatali` -> "Naff tah lee" (written "Naff", a real word, because some iPhone voices spell out an unfamiliar
+  three-letter token like "Naf" as letters).
   Add a name as `["Written", "how it sounds"]`; add `{anywhere:true}` as a third item to replace it inside other words too.
 - **Abbreviations**: `e.g.` -> "for example", `i.e.` -> "that is", `etc.` -> "et cetera", `Dr.` -> "Doctor", `p.` -> "page" and so on.
   Dotted capitals not listed (`U.S.A.`, `N.B.`) are spelled out as letters ("U S A").

@@ -42,8 +42,26 @@ function load(withRules=true){
   ok(S('(MMICJ)')==='('+MJ+')','in brackets');
   ok(!/mmicj/i.test(S('x MMicj y mmicj. MMICJ, mMiCj;')),'no written form of mmicj survives');
   ok(S('Sister Liburd and Liburd\'s book')==="Sister Lie bird and Lie bird's book",'Liburd: '+S('Sister Liburd and Liburd\'s book'));
-  ok(S('Naphatali spoke.')==='Naf tah lee spoke.','Naphatali');
+  ok(S('Naphatali spoke.')==='Naff tah lee spoke.','Naphatali ("Naff": a real word, so no voice spells it out as letters)');
   ok(S('Naphatalis')==='Naphatalis','a longer word that merely contains a name is left alone');
+
+  /* ---- arrows: steps from one point to the next, never described (sentences from the speech test document) ---- */
+  ok(S('Open Google play \u2192 Search \u201cSpeech Services by Google\u201d \u2192 install/update.')
+     ==='Open Google play, then Search \u201cSpeech Services by Google\u201d, then install/update.','arrow: steps one after another');
+  ok(S('check Settings \u2192 MMicj, and ensure it has permission')==='check Settings, then em em eye see jay, and ensure it has permission','arrow: then a word with its own rule');
+  ok(S('Settings > General > Software Update to install')==='Settings, then General, then Software Update to install','a spaced \">\" between words is a step as well');
+  ok(S('Menu --> Settings --> Listen')==='Menu, then Settings, then Listen','typed "-->" (not "greater than", not a dash)');
+  ok(S('Menu->Settings')==='Menu, then Settings'&&S('A => B')==='A, then B'&&S('A ==> B')==='A, then B','"->", "=>" and "==>" too');
+  ok(S('Settings \u21D2 Accessibility \u2794 Spoken Content')==='Settings, then Accessibility, then Spoken Content','other right-pointing arrows');
+  ok(S('Back \u2190 Home')==='Back, Home'&&S('Pick A <--> B')==='Pick A, B','arrows pointing another way, or both ways: only a pause');
+  ok(S('Next \u2192')==='Next,'&&S('Next \u2192',true)==='Next.','an arrow at the end of the piece: only a pause, then the full stop');
+  ok(S('\u2192 Start here')==='Start here','an arrow at the start of the piece adds nothing');
+  ok(S('Is 5 > 3 true?')==='Is 5 > 3 true?','a ">" between numbers (maths) is left alone');
+  ok(!/arrow/i.test(S('A \u2192 B')),'"arrow" is never said');
+  ok(w.ReadAloudRules.enforce('A \u2192 B')==='A, then B','arrows are also fixed by the last pass before the voice (enforce)');
+  w.ReadAloudRules.arrowSays='';
+  ok(S('Settings \u2192 General \u2192 Software Update')==='Settings, General, Software Update','arrowSays set to "": a pause only');
+  w.ReadAloudRules.arrowSays='then';
   ok(S('Liburdson')==='Liburdson','prefix of a longer word is left alone');
 
   /* abbreviations */
@@ -238,7 +256,15 @@ function makeEnv(o){
   const e=makeEnv({gap:0,pages:[lines(['Welcome to MMICJ: Naphatali Liburd, e.g. Dr. Lee — and friends.'],{w:400})]});
   e.RA.start();
   await until(()=>e.log.length>=1&&e.RA.state()==='idle');
-  ok(e.log.join('|')==='Welcome to em em eye see jay, Naf tah lee Lie bird, for example Doctor Lee, and friends.','the loop speaks the rule-adjusted text: '+e.log.join('|'));
+  ok(e.log.join('|')==='Welcome to em em eye see jay, Naff tah lee Lie bird, for example Doctor Lee, and friends.','the loop speaks the rule-adjusted text: '+e.log.join('|'));
+}
+{
+  /* the arrows and the name from the speech test document, through the whole loop (page text -> rules -> voice) */
+  const e=makeEnv({gap:0,pages:[lines(['Updates: open Google play \u2192 Search \u201cSpeech Services by Google\u201d \u2192 install/update.','Settings > General > Software Update to install any updates','Apostle Naphatali De Souza welcomes you.'],{w:520})]});
+  e.RA.start();
+  await until(()=>e.log.length>=1&&e.RA.state()==='idle');
+  const said=e.log.join('|');
+  ok(!/arrow|greater|\u2192|>/i.test(said)&&/Google play, then Search/.test(said)&&/Settings, then General, then Software Update/.test(said)&&/Naff tah lee/.test(said),'the speech test document\'s arrows and name reach the voice as steps: '+said);
 }
 {
   /* a real silence after a paragraph / title, none between sentences of one paragraph */

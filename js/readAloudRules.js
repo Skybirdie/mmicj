@@ -15,7 +15,8 @@
                   MMICJ is spelled out wherever it appears, in any letter case
    2. ABBREVIATIONS  "e.g." -> "for example", "Dr." -> "Doctor", "U.S." -> "U S"
    3. PUNCTUATION colons, semicolons and dashes are never spoken, they only
-                  separate what is before from what is after them
+                  separate what is before from what is after them.
+                  Arrows (→ --> => and " > " between words) are steps: "Settings, then General"
    4. LISTS       "apples, pears and oranges" -> "apples, pears, and oranges"
    5. NUMBERS     "16 For God so loved": the number is spoken on its own, then a real
                   silent gap (GAPS.number), then the sentence
@@ -44,8 +45,19 @@ const api={};
 api.words=[
     ["MMICJ",     "em em eye see jay", {anywhere:true}],   /* always its letters: M M I C J */
     ["Liburd",    "Lie bird"],
-    ["Naphatali", "Naf tah lee"]
+    /* "Naff": a real English word. Some iPhone voices spell out an unfamiliar three-letter token
+       ("Naf" was said as "en a f"), but say a dictionary word normally. Said the same way: "naf". */
+    ["Naphatali", "Naff tah lee"]
 ];
+
+/*=======================================================
+  EDIT HERE (1b/4) - ARROWS
+  An arrow between two points ("Settings → General", "Menu --> Settings", "A => B", and also
+  "Settings > General > Software Update" with spaces) is a step from one point to the next. It is
+  never described ("rightward arrow"); it is said as a short pause, followed by this word.
+  Write "" for a pause only: "Settings, General". Arrows pointing any other way are only a pause.
+=======================================================*/
+api.arrowSays="then";
 
 /*=======================================================
   EDIT HERE (2/4) - ABBREVIATIONS
@@ -199,9 +211,25 @@ function splitLead(t){
     return {num:m[1],rest:rest};
 }
 
+/* Arrows are steps from one point to the next, never described. Pointing right (and "-->", "=>", and a
+   spaced ">" between two words): a pause and api.arrowSays ("Settings, then General"). Any other arrow
+   (left, up, both ways): only a pause. At the very start of the piece nothing is added; at the very end,
+   only a pause. Runs before the dash rules, which would otherwise read "-->" as a dash and "greater than". */
+function arrows(t){
+    const say=api.arrowSays?String(api.arrowSays).trim():"";
+    const step=(m,off,str)=>off===0?"":(off+m.length>=str.length?",":(say?", "+say+" ":", "));
+    const stop=(m,off,str)=>off===0?"":(off+m.length>=str.length?"":", ");
+    t=t.replace(/\s*<[-=]+>?\s*/g,stop);                                                        /* <--  <-->  <== */
+    t=t.replace(/\s*(?:[-=]+>|[\u2192\u21A6\u21D2\u21E8\u27F6\u27F9\u27FC\u2794\u2799-\u27A1\u27A2\u2B95])\s*/g,step);   /* -->  =>  → ⇒ ⟶ ➔ ➡ */
+    t=t.replace(/\s*[\u2190-\u21FF\u27F0-\u27FF\u2B00-\u2B11]\s*/g,stop);                            /* every other arrow */
+    t=t.replace(/([\p{L}.)\u201D"'\u2019])\s+>\s+(?=[\p{L}(\u201C"'\u2018])/gu,(m,pre,off,str)=>pre+(say?", "+say+" ":", "));  /* Settings > General */
+    return t;
+}
+
 /* Whatever is left of a colon, semicolon or dash after the rules below is removed here as well.
    They are never said: they separate. (The same pass runs once more, last of all, in api.enforce.) */
 function sweep(t){
+    t=arrows(t);
     t=t.replace(/\s*(?:--+|[\u2012-\u2015\u2E3A\u2E3B\uFE58])\s*/g,", ");                /* long and short dashes, double hyphen */
     t=t.replace(/\s+[-\u2010\u2011]+\s+/g,", ");                                /* a spaced hyphen: " - " */
     t=t.replace(/([\p{L}\p{N}])[-\u2010\u2011]+(?=[\p{L}\p{N}])/gu,"$1 ");      /* well-known, COVID-19, e-mail */
@@ -214,6 +242,7 @@ function sweep(t){
    short, even pause that every voice understands. Chapter:verse and times (3:16, 10:30)
    become two numbers ("3 16"); 5-10 and 3:16-18 are read "5 to 10", "3 16 to 18". */
 function separators(t,atEnd){
+    t=arrows(t);
     t=t.replace(/(\d)\s*[\u2012\u2013]\s*(\d)/g,"$1\u0001$2");                       /* 5 - 10 (en dash between numbers) */
     t=t.replace(/(^|[^\d\-])(\d{1,4})-(\d{1,4})(?![\d\-])/g,"$1$2\u0001$3");        /* 5-10, 16-18, 1914-1918 (hyphen between two numbers) */
     t=t.replace(/\s*(?:--+|[\u2012-\u2015\u2E3A\u2E3B\uFE58])\s*/g,", ");           /* dashes, long and short */
