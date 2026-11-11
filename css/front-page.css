@@ -527,6 +527,33 @@ html[data-theme="dark"] #frontPage{
 }
 .front-menu-switch .icon{width:20px;height:20px;flex:0 0 20px;}
 
+/* "You are here": the item for the page currently showing (AppSwitcher sets
+   .active and aria-pressed="true"). Stronger than the hover tint so the two
+   are never confused: green tint, green border, bolder label, and a dot. */
+#frontPage{--front-menu-current:#0D723B;}
+html[data-theme="dark"] #frontPage{--front-menu-current:#ACE1AF;}
+
+.front-menu-switch.active,
+.front-menu-switch[aria-pressed="true"]{
+    background:linear-gradient(135deg,
+        color-mix(in srgb,var(--front-menu-current) 30%,transparent),
+        color-mix(in srgb,var(--front-menu-current) 14%,transparent));
+    border-color:var(--front-menu-current);
+    font-weight:700;
+    cursor:default;
+}
+.front-menu-switch.active::after,
+.front-menu-switch[aria-pressed="true"]::after{
+    content:"";
+    flex:0 0 auto;
+    width:8px;
+    height:8px;
+    margin-left:auto;
+    border-radius:50%;
+    background:var(--front-menu-current);
+    box-shadow:0 0 6px var(--front-menu-current);
+}
+
 @media (max-width:700px){
     .front-wave{height:15dvh;}
     .front-door-label{font-size:clamp(10px,2.8vw,15px);bottom:12%;padding:5px 8px;}

@@ -74,7 +74,7 @@
 <link rel="stylesheet" href="css/library.css">
 <link rel="stylesheet" href="css/video.css?v=1.0.7">
 <link rel="stylesheet" href="css/slideshow.css?v=1.1.5">
-<link rel="stylesheet" href="css/front-page.css?v=fs5">
+<link rel="stylesheet" href="css/front-page.css?v=fs6">
 <link rel="stylesheet" href="css/item-share.css?v=is1">
 <link rel="stylesheet" href="css/share.css?v=sm3">
 
@@ -296,6 +296,11 @@ body.sky-share-mode #workspacePrimaryLogo {
     </button>
 
     <nav id="frontMenuPanel" aria-label="Media section navigation">
+        <!-- The Front Page itself. AppSwitcher marks it .active / aria-pressed like the others,
+             and css/front-page.css gives that state a "you are here" highlight. -->
+        <button type="button" class="front-menu-switch" data-app-target="front" aria-pressed="false">
+            <svg class="icon" aria-hidden="true"><use href="#icon-front-page"></use></svg><span>The 7 Arms</span>
+        </button>
         <button type="button" class="front-menu-switch" data-app-target="reader" aria-pressed="false">
             <svg class="icon" aria-hidden="true"><use href="#icon-open-book"></use></svg><span>Books</span>
         </button>
@@ -591,6 +596,7 @@ body.sky-share-mode #workspacePrimaryLogo {
 
 
 <symbol id="icon-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+<symbol id="icon-front-page" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2" fill="currentColor"/><path d="M12.00 6.80L12.00 2.40M16.07 8.76L19.51 6.01M17.07 13.16L21.36 14.14M14.26 16.69L16.17 20.65M9.74 16.69L7.83 20.65M6.93 13.16L2.64 14.14M7.93 8.76L4.49 6.01" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
 <symbol id="icon-video" viewBox="0 0 24 24"><rect x="3" y="5" width="13" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="m16 9 5-3v12l-5-3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
 <symbol id="icon-slideshow" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="m8 14 3-4 2.5 3 2-2.5L19 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 21h8M12 18v3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
 
@@ -886,7 +892,8 @@ document.addEventListener("DOMContentLoaded", function(){
 
         if(!target) return;
 
-        if(window.AppSwitcher)
+        /* Tapping the page you are already on just closes the menu. */
+        if(target.getAttribute("aria-pressed")!=="true" && window.AppSwitcher)
             AppSwitcher.show(target.dataset.appTarget);
 
         close();
