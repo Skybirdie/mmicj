@@ -89,7 +89,7 @@ function makeEnv(o={}){
       setAttribute(k,v){this.attrs[k]=v},getAttribute(k){return this.attrs[k]},addEventListener(t,f){(this.listeners[t]=this.listeners[t]||[]).push(f)},
       click(){(this.listeners.click||[]).forEach(f=>f({}))},use:{attrs:{},setAttribute(k,v){this.attrs[k]=v}},querySelector(){return this.use},hidden:false,title:''};return el};
   const button=mkEl(),mute=mkEl();
-  const doc={readyState:'complete',getElementById:id=>id==='listenButton'?button:id==='muteButton'?mute:id==='statusBar'?(o.statusBar||null):null,
+  const doc={readyState:'complete',getElementById:id=>id==='listenButton'?button:id==='muteButton'?mute:id==='statusBar'?(o.statusBar||null):id==='readerPanel'?(o.readerPanel||null):null,
     documentElement:{clientHeight:o.viewH||800,appendChild(){}},visibilityState:'visible',
     createElement(){const e=mkEl();e.className='';return e},body:{appendChild(e){e.__mounted=true;e.parentNode={removeChild(x){x.__mounted=false}};if(/toast/.test(e.className||''))doc.__toast=e;else(doc.__panels=doc.__panels||[]).push(e)}},
     addEventListener(t,f){(docListeners[t]=docListeners[t]||[]).push(f)},
@@ -520,6 +520,18 @@ const P1=(...t)=>lines(t,{w:300});
   const hb=makeEnv({bookId:DIAG,statusBar:{getBoundingClientRect:()=>({top:0,height:0})},pages:[P1x('Hidden bar.')],single:true});
   hb.button.click();await until(()=>hb.RA.state()==='idle'&&hb.log.length>0);
   ok(hb.panel().style.bottom==='','a bar that is not showing (no size) is ignored: the stylesheet default is used');
+
+  /* the tab stays inside the viewer area: left edge follows the reader panel (library column on its left) */
+  const rpan={left:360,width:900,getBoundingClientRect(){return{left:rpan.left,width:rpan.width}}};
+  const vl=makeEnv({bookId:DIAG,readerPanel:rpan,pages:[P1x('Wide.')],single:true});
+  vl.button.click();await until(()=>vl.RA.state()==='idle'&&vl.log.length>0);
+  vl.press(vl.panel(),'minimize');
+  ok(vl.chip().style.left==='370px','desktop: the tab starts 10 px inside the viewer area, clear of the library column ('+vl.chip().style.left+')');
+  rpan.left=0;rpan.width=1280;                    /* library column closed / phone: reader starts at the screen edge */
+  vl.press(vl.chip(),'open');vl.press(vl.panel(),'minimize');
+  ok(vl.chip().style.left==='','reader at the screen edge: the stylesheet default (10 px) is used ('+vl.chip().style.left+')');
+  ok(nb.chip()===undefined||nb.chip().style.left==='','no reader panel to measure: the stylesheet default is used');
+  ok(/\.sr-diag,\.sr-diag-chip\{z-index:1800\}/.test(SRC)&&/body\.sky-share-mode \.sr-diag-chip\{z-index:2000001\}/.test(SRC),'the tab is layered below the library/Settings (1800 < 1900 < 100000), keeping the top layer only in Share Mode');
 
   /* an ordinary document never gets the tab */
   const y=makeEnv({bookId:'ordinary',pages:[P1x('Plain.')],single:true});

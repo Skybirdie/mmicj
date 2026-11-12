@@ -1039,7 +1039,7 @@ function diagStyle(){
         st.id="sr-diag-style";
         st.textContent=
 /* bottom: only the fallback; diagPlace() puts them just above the page indicator bar */
-".sr-diag{position:fixed;left:8px;right:8px;bottom:calc(env(safe-area-inset-bottom,0px) + 8px);max-height:58vh;overflow:auto;z-index:2000001;box-sizing:border-box;padding:12px 14px;border-radius:14px;background:#fff;color:#1a1a1a;box-shadow:0 8px 28px rgba(0,0,0,.35);font:14px/1.4 -apple-system,system-ui,Roboto,Arial,sans-serif;-webkit-user-select:text;user-select:text}"+
+".sr-diag{position:fixed;left:8px;right:8px;bottom:calc(env(safe-area-inset-bottom,0px) + 8px);max-height:58vh;overflow:auto;box-sizing:border-box;padding:12px 14px;border-radius:14px;background:#fff;color:#1a1a1a;box-shadow:0 8px 28px rgba(0,0,0,.35);font:14px/1.4 -apple-system,system-ui,Roboto,Arial,sans-serif;-webkit-user-select:text;user-select:text}"+
 "@media (min-width:600px){.sr-diag{left:auto;width:420px;right:12px}}"+
 ".sr-diag *{box-sizing:border-box}"+
 ".sr-diag-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-size:16px}"+
@@ -1054,7 +1054,14 @@ function diagStyle(){
 ".sr-diag-copy{width:100%;margin:2px 0 4px;padding:10px;border:0;border-radius:10px;background:#0f7a4a;color:#fff;font-weight:600;font-size:15px}"+
 ".sr-diag-note{margin-top:6px;font-size:13px;color:#0b5d33}"+
 ".sr-diag-box{width:100%;height:130px;margin-top:8px;font:12px/1.3 monospace}"+
-".sr-diag-chip{position:fixed;left:10px;bottom:calc(env(safe-area-inset-bottom,0px) + 10px);z-index:2000001;display:flex;align-items:stretch;border-radius:999px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,.35);font:600 13px/1.2 -apple-system,system-ui,Roboto,Arial,sans-serif}"+
+/* Stacking: in the normal app the panel and tab sit above the reader but BELOW the library (z-index 1900, which is also the phone drawer) and the
+   Settings dialog (100000), so neither can paint over a menu. In book fullscreen the whole app is raised to 99999, so they follow it up to just
+   under Settings. Share Mode has no such menus and its own layers sit above 1000000, so it keeps the old top layer. */
+".sr-diag,.sr-diag-chip{z-index:1800}"+
+"body:has(#app.viewerFocus) .sr-diag,body:has(#app.viewerFocus) .sr-diag-chip{z-index:99999}"+
+"body.sky-share-mode .sr-diag,body.sky-share-mode .sr-diag-chip{z-index:2000001}"+
+/* left: only the fallback; diagPlace() moves the tab to the left edge of the viewer area so it never covers the library column */
+".sr-diag-chip{position:fixed;left:10px;bottom:calc(env(safe-area-inset-bottom,0px) + 10px);display:flex;align-items:stretch;border-radius:999px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,.35);font:600 13px/1.2 -apple-system,system-ui,Roboto,Arial,sans-serif}"+
 ".sr-diag-chip button{border:0;color:#fff;font:inherit;padding:9px 12px}"+
 ".sr-diag-chip .sr-diag-main{background:#8a95a1;padding-left:14px}.sr-diag-chip.ok .sr-diag-main{background:#0f7a4a}.sr-diag-chip.bad .sr-diag-main{background:#d94418}"+
 ".sr-diag-chip .sr-diag-tabcopy{background:#1a1a1a;padding-right:14px}"+
@@ -1123,6 +1130,18 @@ function diagPlace(){
             if(r&&r.height>0&&vh>0&&r.top>0&&r.top<=vh)bottom=Math.round(vh-r.top+DIAG_GAP)+"px";
         }
         [diagEl,chipEl].forEach(el=>{if(el)el.style.bottom=bottom;});
+        /* the tab keeps to the viewer area: its left edge follows the reader panel, so on a wide screen it sits to the right of the
+           library column instead of on top of it (on a phone the reader starts at the screen edge and the stylesheet default is used) */
+        if(chipEl){
+            let left="";
+            const rp=document.getElementById&&document.getElementById("readerPanel");
+            if(rp&&rp.getBoundingClientRect){
+                const r=rp.getBoundingClientRect();
+                const vw=(document.documentElement&&document.documentElement.clientWidth)||window.innerWidth||0;
+                if(r&&r.width>0&&r.left>0&&(!vw||r.left<vw))left=Math.round(r.left+10)+"px";
+            }
+            chipEl.style.left=left;
+        }
     }catch(e){}
 }
 function diagPlaceSoon(){                       /* once more after the layout has settled */
@@ -1136,7 +1155,12 @@ function diagWatch(){                           /* keep following the bar when t
         if(window.addEventListener)["resize","orientationchange"].forEach(t=>window.addEventListener(t,diagPlace));
         if(window.visualViewport&&window.visualViewport.addEventListener)window.visualViewport.addEventListener("resize",diagPlace);
         const bar=document.getElementById("statusBar");
-        if(bar&&typeof ResizeObserver!=="undefined")new ResizeObserver(diagPlace).observe(bar);
+        const rp=document.getElementById("readerPanel");        /* the library column opening or closing changes where the viewer area starts */
+        if(typeof ResizeObserver!=="undefined"){
+            const ro=new ResizeObserver(diagPlace);
+            if(bar)ro.observe(bar);
+            if(rp)ro.observe(rp);
+        }
     }catch(e){}
 }
 
