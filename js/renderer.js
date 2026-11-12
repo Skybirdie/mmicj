@@ -1680,6 +1680,46 @@ renderer.goTo=async function(page){
  page) or null if the book changed or closed meanwhile.
 -------------------------------------------------------*/
 
+/*
+ pdf.js 6's page.getTextContent() loops over a ReadableStream with
+ "for await", which Safari / WebKit (every browser on an iPhone) cannot do
+ unless js/streamPolyfill.js has patched it in. So the stream is read here
+ by hand with getReader(), which every browser has. If that way fails for
+ any reason, getTextContent() is tried once as a second way, and the first
+ error is the one reported if both fail.
+*/
+async function readTextContent(page){
+    if(typeof page.streamTextContent!=="function"){
+        return page.getTextContent();
+    }
+
+    try{
+        const reader=page.streamTextContent().getReader();
+        const items=[];
+
+        try{
+            for(;;){
+                const step=await reader.read();
+                if(step.done) break;
+                const chunk=step.value;
+                if(chunk && chunk.items){
+                    for(const item of chunk.items) items.push(item);
+                }
+            }
+        }finally{
+            try{reader.releaseLock();}catch(error){}
+        }
+
+        return {items:items};
+    }catch(firstError){
+        try{
+            return await page.getTextContent();
+        }catch(secondError){
+            throw firstError;
+        }
+    }
+}
+
 renderer.pageText=async function(number){
     if(!pdf) return null;
 
@@ -1687,7 +1727,7 @@ renderer.pageText=async function(number){
 
     const token=openToken;
     const page=await getPage(number);
-    const content=await page.getTextContent();
+    const content=await readTextContent(page);
 
     if(token!==openToken || !pdf) return null;
 

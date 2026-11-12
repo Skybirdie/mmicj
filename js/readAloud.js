@@ -889,7 +889,8 @@ function diagBegin(){
             standalone:standalone,
             muted:muted,
             pdfjs:pdfInfo(),
-            lacks:featureGaps()
+            lacks:featureGaps(),
+            patched:(window.mmicjPolyfilled&&window.mmicjPolyfilled.slice)?window.mmicjPolyfilled.slice():[]
         },
         pages:[],
         speech:{started:null,pieces:0,voice:"",level:0,rate:0,errors:[]}
@@ -1001,6 +1002,7 @@ function diagReportText(){
     L.push("Language: "+d.env.lang);
     L.push("pdf.js: "+d.env.pdfjs);
     L.push("Browser lacks: "+(d.env.lacks.length?d.env.lacks.join(", "):"none of the features checked"));
+    if(d.env.patched&&d.env.patched.length)L.push("Patched by the app: "+d.env.patched.join(", "));
     L.push("Secure page: "+d.env.secure+"; installed app: "+d.env.standalone+"; app muted: "+d.env.muted);
     L.push("Speech support: "+(SS?"yes":"no"));
     L.push("Voices: "+S.voices.count+(S.voices.list.length?" - "+S.voices.list.join("; "):""));
@@ -1167,7 +1169,7 @@ function diagRender(){
             body=
                 '<div class="sr-diag-verdict '+S.st+'">'+escHtml(S.verdict)+(d.ended?'<br><span style="font-weight:400">'+escHtml(d.ended)+'</span>':'')+'</div>'+
                 rows+
-                '<div class="sr-diag-env">'+escHtml(d.env.ua)+'<br>pdf.js '+escHtml(d.env.pdfjs)+'<br>Browser lacks: '+escHtml(d.env.lacks.length?d.env.lacks.join(", "):"none of the features checked")+'</div>';
+                '<div class="sr-diag-env">'+escHtml(d.env.ua)+'<br>pdf.js '+escHtml(d.env.pdfjs)+'<br>Browser lacks: '+escHtml(d.env.lacks.length?d.env.lacks.join(", "):"none of the features checked")+(d.env.patched&&d.env.patched.length?'<br>Patched by the app: '+escHtml(d.env.patched.join(", ")):'')+'</div>';
         }else{
             body=
                 '<div class="sr-diag-verdict '+V.st+'">'+escHtml(V.verdict)+'</div>'+

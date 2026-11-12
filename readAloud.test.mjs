@@ -380,6 +380,15 @@ const P1=(...t)=>lines(t,{w:300});
   ok(/^MMICJ speech check/.test(rep)&&/page 1: ok, 1 items/.test(rep)&&/Voices: 2 - Voice One \(en-US, on device\); Voice Two \(en-GB, online\)/.test(rep)&&/Device: TestPhone\/1\.0/.test(rep)&&/Speech: started after/.test(rep)&&/Document: Read Aloud Speech Test \(book-mwb6vj0c-dl8l\)/.test(rep),'the report names the document, device, voices, page text and speech');
   ok(/pdf\.js: not loaded/.test(rep)&&/Browser lacks:/.test(rep),'the report states the pdf.js build and the browser features that are missing');
 
+  /* when the app patched a missing browser feature itself (js/streamPolyfill.js), the report says so */
+  ok(!/Patched by the app/.test(rep),'no "Patched by the app" line when nothing was patched');
+  const pp=makeEnv({bookId:DIAG,bookTitle:'Read Aloud Speech Test',pages:[P1x('First test sentence is here.')],single:true});
+  pp.win.mmicjPolyfilled=['ReadableStream async iteration'];
+  pp.button.click();
+  await until(()=>pp.RA.state()==='idle'&&pp.log.length>0);
+  ok(/Patched by the app: ReadableStream async iteration/.test(pp.RA.diagnosticReport()),'the report says when the app patched ReadableStream async iteration');
+  ok(/Patched by the app: ReadableStream async iteration/.test(pp.panel().innerHTML),'and so does the panel');
+
   /* found by file name, so a re-upload (new hash) or a new id still works */
   const f=makeEnv({bookId:'other-id',media:'https://media.mmicj.com/books/Read-Aloud-Speech-Test-ffff00000000.pdf',pages:[P1x('Words here.')],single:true});
   f.button.click();await until(()=>f.RA.state()==='idle'&&f.log.length>0);

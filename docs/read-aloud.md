@@ -37,6 +37,17 @@ The report (and the panel) also gives the browser, the pdf.js version and build 
 - In every document, "the engine failed on this page" now says **"Couldn't read this page's text."**; "No readable text here." is kept for pages that really have no text.
 Test: `node readAloud.test.mjs` (the "speech check" section).
 
+## iPhone / Safari: "Couldn't read this page's text" (ReadableStream async iteration)
+pdf.js 6 reads a page's text with `for await (const chunk of stream)`. Safari / WebKit (every browser on an iPhone, Chrome "CriOS" included) has no
+async iteration on `ReadableStream`, so pages still drew but reading their text failed with `TypeError: undefined is not a function (near '...t of e...')`
+(the speech check reported "Browser lacks: ReadableStream async iteration"). Fixed two ways, so either one alone is enough:
+- `js/streamPolyfill.js` (loaded in `index.html` **before** pdf.js) adds `ReadableStream.prototype.values` / `[Symbol.asyncIterator]` only where missing. Browsers that have it are untouched.
+  The standard pdf.js build is kept (no switch to the legacy build, no extra download).
+- `Renderer.pageText` (`readTextContent()` in `js/renderer.js`) no longer calls `getTextContent()`: it reads `page.streamTextContent()` by hand with `getReader()`,
+  and falls back to `getTextContent()` once if that fails (the first error is reported if both fail).
+The speech check report now has a **"Patched by the app: ..."** line when the polyfill was needed, so "Browser lacks" no longer looks like an unresolved problem.
+Test: `node streamPolyfill.test.mjs`.
+
 ## Share Mode
 A book opened through Share Mode (`js/shareViewer.js`) has the Listen button too: it is the first button in the Share Mode toolbar, left of Mute,
 with the same behaviour and the same Settings choice (a reader who switched Listen off sees no button there either). Videos and slideshows
@@ -118,7 +129,7 @@ Other notices: "Speech was blocked. Tap Listen again." (browser blocked speech),
 ## Files
 - `js/readAloud.js` (new): text tidying, speech loop, button, state.
 - `js/readAloudRules.js` (new): how things are said (see above). `readAloudRules.test.mjs`: `node readAloudRules.test.mjs` (also covers the loop, the number gap, the safety net and the button setting).
-- `js/renderer.js`: `Renderer.pageText(n)` (page text from the open PDF).
+- `js/renderer.js`: `Renderer.pageText(n)` (page text from the open PDF, read with `getReader()`). `js/streamPolyfill.js` (new): ReadableStream async iteration for Safari.
 - `js/reader.js`: `emit()` now also dispatches `skyreader:<event>` DOM events (the single-slot `Reader.on` callbacks are unchanged).
 - `js/settingsPanel.js` ("Show Listen button" checkbox), `css/style.css`, `css/reader.css`, `index.html`, `js/analytics.js`: button, settings rows, styling, usage count.
 - `readAloud.test.mjs`: `node readAloud.test.mjs`. `share-listen.test.mjs`: `node share-listen.test.mjs` (Share Mode wiring).
