@@ -530,14 +530,23 @@ html[data-theme="dark"] #frontPage{
 /* "You are here": the item for the page currently showing (AppSwitcher sets
    .active and aria-pressed="true"). Stronger than the hover tint so the two
    are never confused: green tint, green border, bolder label, and a dot. */
-#frontPage{--front-menu-current:#0D723B;}
-html[data-theme="dark"] #frontPage{--front-menu-current:#ACE1AF;}
+#frontPage{
+    --front-menu-current:#0D723B;
+    /* Light mode: lighter than the menu panel (near-white), not a darker tint. */
+    --front-menu-current-bg:linear-gradient(135deg,rgba(255,255,255,.30),rgba(255,255,255,.14));
+    --front-menu-current-dot:#00d95f;
+}
+html[data-theme="dark"] #frontPage{
+    --front-menu-current:#ACE1AF;
+    --front-menu-current-bg:linear-gradient(135deg,
+        color-mix(in srgb,#ACE1AF 30%,transparent),
+        color-mix(in srgb,#ACE1AF 14%,transparent));
+    --front-menu-current-dot:#ACE1AF;
+}
 
 .front-menu-switch.active,
 .front-menu-switch[aria-pressed="true"]{
-    background:linear-gradient(135deg,
-        color-mix(in srgb,var(--front-menu-current) 30%,transparent),
-        color-mix(in srgb,var(--front-menu-current) 14%,transparent));
+    background:var(--front-menu-current-bg);
     border-color:var(--front-menu-current);
     font-weight:700;
     cursor:default;
@@ -550,8 +559,8 @@ html[data-theme="dark"] #frontPage{--front-menu-current:#ACE1AF;}
     height:8px;
     margin-left:auto;
     border-radius:50%;
-    background:var(--front-menu-current);
-    box-shadow:0 0 6px var(--front-menu-current);
+    background:var(--front-menu-current-dot);
+    box-shadow:0 0 7px var(--front-menu-current-dot);
 }
 
 @media (max-width:700px){
