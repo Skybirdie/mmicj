@@ -1758,7 +1758,9 @@ html[data-theme="dark"] #readerPanel #toolbar .iconButton{
 .sr-settings-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.38);backdrop-filter:blur(5px);}
 .sr-settings-dialog{position:relative;width:min(420px,100%);max-height:min(720px,90dvh);overflow:auto;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:22px;box-shadow:0 24px 70px rgba(0,0,0,.25);transform:translateY(10px) scale(.98);transition:transform .22s ease;}
 .sr-settings-panel.visible .sr-settings-dialog{transform:none;}
-.sr-settings-header{display:flex;align-items:center;justify-content:space-between;padding:18px 20px;border-bottom:1px solid var(--line);}
+/* Sticky: the header (and its close button) stays at the top of the dialog's own scroll area, so the
+   menu can be closed from anywhere in a long list. It needs its own background to cover what scrolls under it. */
+.sr-settings-header{position:sticky;top:0;z-index:2;display:flex;align-items:center;justify-content:space-between;padding:18px 20px;border-bottom:1px solid var(--line);background:var(--panel);}
 .sr-settings-header h2{font-size:20px;}
 .sr-settings-close{width:34px;height:34px;border:0;border-radius:50%;background:transparent;font-size:26px;line-height:1;cursor:pointer;color:inherit;}
 .sr-settings-close:hover{background:color-mix(in srgb,var(--text) 8%,transparent);}
@@ -1774,6 +1776,9 @@ html[data-theme="dark"] #readerPanel #toolbar .iconButton{
 .sr-setting-select span{flex:0 0 auto;}
 .sr-setting-select select{flex:1;min-width:0;max-width:65%;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);color:var(--text);font:inherit;text-overflow:ellipsis;}
 .sr-settings-action{width:100%;margin-top:18px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--panel2);color:var(--text);cursor:pointer;font:inherit;}
+.sr-settings-action.sr-soundcheck-button{margin-top:12px;}
+/* when a finished check scrolls its result into view, leave room for the sticky header above it */
+#srSoundCheckBox{scroll-margin-top:84px;}
 
 /* ---------- Welcome / focus ---------- */
 

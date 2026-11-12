@@ -61,6 +61,22 @@ window.AudioController=(function(){
                 return true;
             }catch(e){return false;}
         }
+        /* Same as play(), but reports what the browser said (used only by the Settings "Test sounds" check).
+           play() swallows a refused play on purpose; this one hands the reason back. */
+        playChecked(){
+            if(muted)return Promise.resolve({ok:false,err:"muted"});
+            if(this.failed||!this.players.length)return Promise.resolve({ok:false,err:"the sound file did not load"});
+            const p=this.next();
+            try{
+                p.pause();
+                p.currentTime=0;
+                p.volume=masterVolume*this.volumeScale;
+                const result=p.play();
+                if(result&&typeof result.then==='function')return result.then(()=>({ok:true}),e=>({ok:false,err:(e&&e.name)||String(e)}));
+                return Promise.resolve({ok:true});
+            }catch(e){return Promise.resolve({ok:false,err:(e&&e.name)||String(e)});}
+        }
+        info(){return {url:this.url,ready:this.ready,failed:this.failed,states:this.players.map(p=>p.readyState),codes:this.players.map(p=>(p.error&&p.error.code)||0)};}
         stop(){this.players.forEach(p=>{try{p.pause();p.currentTime=0;}catch(e){}});}
         setVolume(v){this.players.forEach(p=>p.volume=v*this.volumeScale);}
     }
@@ -68,6 +84,8 @@ window.AudioController=(function(){
     function emit(event,data){const list=listeners.get(event);if(list)list.forEach(fn=>{try{fn(data);}catch(e){}});}
     audio.register=function(name,url,poolSize=3,volumeScale=1){if(!name||!url)return false;sounds.set(name,new AudioPool(url,poolSize,volumeScale));return true;};
     audio.play=function(name){const pool=sounds.get(name);return pool?pool.play():false;};
+    audio.playChecked=function(name){const pool=sounds.get(name);return pool?pool.playChecked():Promise.resolve({ok:false,err:"not registered"});};
+    audio.info=function(){return Array.from(sounds,([name,pool])=>Object.assign({name:name},pool.info()));};
     audio.preload=function(){return Promise.allSettled(Array.from(sounds.values(),pool=>pool.preload()));};
     audio.ready=function(name){const pool=sounds.get(name);return pool?pool.readyPromise:Promise.resolve(false);};
     audio.has=function(name){return sounds.has(name);};
@@ -117,7 +135,7 @@ window.AudioController=(function(){
     audio.readerClosed=function(){emit("readerClosed");};
     audio.pageChanged=function(page){emit("pageChanged",page);};
     audio.initialize=function(){audio.preload();};
-    audio.version="1.1.1";
+    audio.version="1.2.0";
 
     function unlock(){
         if(unlocked)return;

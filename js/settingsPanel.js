@@ -4,6 +4,17 @@ window.SettingsPanel=(function(){
     const api={};
     let root=null;
 
+    /* The button's words follow the browser's real fullscreen state, read at the moment they are
+       needed. UI.isFullscreen() is only updated by the fullscreenchange listener in js/ui.js, which
+       had not run yet when this button re-read it right after a click, so the words lagged one
+       change behind ("Enter fullscreen" stayed after entering). The toggle itself exits whenever
+       document.fullscreenElement is set, so this uses the same test and always matches what a tap does. */
+    function syncFullscreenLabel(){
+        if(!root)return;
+        const b=root.querySelector("#srFullscreenButton");
+        if(b)b.textContent=document.fullscreenElement?"Exit fullscreen":"Enter fullscreen";
+    }
+
     function ensure(){
         if(root)return root;
         root=document.createElement("div");
@@ -33,6 +44,8 @@ window.SettingsPanel=(function(){
   <input id="srSettingListen" type="checkbox">
 </label>
               <label class="sr-setting-row sr-setting-range"><span>Sound volume</span><input id="srSettingVolume" type="range" min="0" max="1" step="0.05"></label>
+              <button type="button" id="srSoundCheckButton" class="sr-settings-action sr-soundcheck-button">Test sounds</button>
+              <div id="srSoundCheckBox" hidden></div>
               <div id="srListenRows" hidden>
                 <label class="sr-setting-row sr-setting-range"><span id="srListenRateLabel">Listen speed</span><input id="srSettingListenRate" type="range" min="0.6" max="1.8" step="0.1"></label>
                 <label class="sr-setting-row sr-setting-select"><span>Listen voice</span><select id="srSettingListenVoice"></select></label>
@@ -93,6 +106,15 @@ window.SettingsPanel=(function(){
             if(window.AudioController)AudioController.setVolume(value);
             StorageManager.setVolume(value);
         };
+        /* "Test sounds": runs every sound test by itself and builds a report to copy (js/soundCheck.js) */
+        root.querySelector("#srSoundCheckButton").onclick=async()=>{
+            const b=root.querySelector("#srSoundCheckButton");
+            if(!window.SoundCheck||b.disabled)return;
+            b.disabled=true;
+            b.textContent="Testing sounds...";
+            try{await SoundCheck.run(root.querySelector("#srSoundCheckBox"));}
+            finally{b.disabled=false;b.textContent="Test sounds again";}
+        };
         root.querySelector("#srSettingListenRate").oninput=event=>{
             const v=ReadAloud.setRate(event.target.value);
             root.querySelector("#srListenRateLabel").textContent="Listen speed ("+v.toFixed(1)+"\u00D7)";
@@ -115,6 +137,8 @@ window.SettingsPanel=(function(){
                 api.sync();
             }
         };
+        /* Esc, a viewer's own fullscreen button, or leaving by any other route also changes the state */
+        document.addEventListener("fullscreenchange",syncFullscreenLabel);
         return root;
     }
 
@@ -162,12 +186,13 @@ el.querySelector("#srSettingBackgroundMedia").checked =
         ? MediaManager.getBackgroundPlayback()
         : false;
 
+        el.querySelector("#srSoundCheckButton").style.display=window.SoundCheck?"":"none";       /* no button if the check script did not load */
         const listenOk=!!(window.ReadAloud&&ReadAloud.supported&&ReadAloud.isButtonVisible);
         el.querySelector("#srSettingListenRow").style.display=listenOk?"":"none";      /* no row on browsers that cannot speak */
         el.querySelector("#srSettingListen").checked=listenOk?ReadAloud.isButtonVisible():false;
 
         fillListen(el);
-        el.querySelector("#srFullscreenButton").textContent=(typeof UI!=="undefined"&&UI.isFullscreen&&UI.isFullscreen())?"Exit fullscreen":"Enter fullscreen";
+        syncFullscreenLabel();
     };
 
     api.show=function(){
