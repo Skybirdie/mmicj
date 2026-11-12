@@ -44,6 +44,7 @@ window.SettingsPanel=(function(){
   <input id="srSettingListen" type="checkbox">
 </label>
               <label class="sr-setting-row sr-setting-range"><span>Sound volume</span><input id="srSettingVolume" type="range" min="0" max="1" step="0.05"></label>
+              <p id="srSoundCheckTip" class="sr-soundcheck-tip">For a fair test, turn your device volume up and make sure the right speaker is selected.</p>
               <button type="button" id="srSoundCheckButton" class="sr-settings-action sr-soundcheck-button">Test sounds</button>
               <div id="srSoundCheckBox" hidden></div>
               <div id="srListenRows" hidden>
@@ -186,6 +187,7 @@ el.querySelector("#srSettingBackgroundMedia").checked =
         ? MediaManager.getBackgroundPlayback()
         : false;
 
+        el.querySelector("#srSoundCheckTip").style.display=window.SoundCheck?"":"none";
         el.querySelector("#srSoundCheckButton").style.display=window.SoundCheck?"":"none";       /* no button if the check script did not load */
         const listenOk=!!(window.ReadAloud&&ReadAloud.supported&&ReadAloud.isButtonVisible);
         el.querySelector("#srSettingListenRow").style.display=listenOk?"":"none";      /* no row on browsers that cannot speak */

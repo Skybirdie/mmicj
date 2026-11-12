@@ -16,8 +16,8 @@ ok(/SoundCheck\.run\(root\.querySelector\("#srSoundCheckBox"\)\)/.test(SET),'the
 ok(/b\.disabled=true[\s\S]{0,200}finally\{b\.disabled=false/.test(SET),'the button cannot be tapped twice while a test runs');
 ok(/#srSoundCheckButton"\)\.style\.display=window\.SoundCheck/.test(SET),'no button if the check script did not load');
 ok(/\.sr-settings-action\.sr-soundcheck-button\{margin-top:12px/.test(CSS)&&CSS.indexOf('.sr-settings-action.sr-soundcheck-button')>CSS.indexOf('.sr-settings-action{'),'its spacing rule comes after the general button rule (so it wins)');
-ok(/js\/audio\.js\?v=2\.1\.1"><\/script>\s*<script src="js\/soundCheck\.js\?v=1\.0\.1"/.test(INDEX),'index.html loads soundCheck.js right after audio.js (audio.js version bumped)');
-ok(/js\/settingsPanel\.js\?v=1\.0\.7/.test(INDEX)&&/css\/style\.css\?v=1\.0\.8/.test(INDEX),'settingsPanel.js and style.css versions bumped (browsers fetch the new copies)');
+ok(/js\/audio\.js\?v=2\.1\.1"><\/script>\s*<script src="js\/soundCheck\.js\?v=1\.0\.2"/.test(INDEX),'index.html loads soundCheck.js right after audio.js (audio.js version bumped)');
+ok(/js\/settingsPanel\.js\?v=1\.0\.8/.test(INDEX)&&/css\/style\.css\?v=1\.0\.9/.test(INDEX),'settingsPanel.js and style.css versions bumped (browsers fetch the new copies)');
 ok(/audio\.version="1\.2\.0"/.test(AUDIO),'audio.js version bumped');
 const eff=(SLIDE.match(/const EFFECT_URL = "([^"]+)"/)||[])[1],fb=(SLIDE.match(/const EFFECT_FALLBACK_URL = "([^"]+)"/)||[])[1],mm=(SLIDE.match(/const MUSIC_MANIFEST_URL = "([^"]+)"/)||[])[1];
 ok(SC.indexOf('effect:"'+eff+'"')>=0&&SC.indexOf('fallback:"'+fb+'"')>=0&&SC.indexOf('musicManifest:"'+mm+'"')>=0,'the slideshow effect, fallback and music list match js/slideshowViewer.js ('+eff+', '+fb+', '+mm+')');
@@ -104,7 +104,7 @@ async function runIt(o){const e=makeEnv(o);const t0=Date.now();await e.SoundChec
   ok(/^MMICJ sound check/.test(rep)&&/Heard the sounds: yes/.test(rep),'Copy report: title and "heard: yes"');
   ok(/pageTurn5 \(assets\/audio\/pageturn5\.mp3\): ok 1\.4 s, \d+ ms; app preload ok/.test(rep),'the report gives each file: result, length, time and the app\'s preload');
   ok(/slideEffect \(assets\/audio\/slide\.mp3\): ok/.test(rep)&&/slideFallback/.test(rep),'the report includes the slideshow effect files');
-  ok(/Device: TestPhone\/1\.0/.test(rep)&&/autoplay policy/.test(rep)&&/iOS audio session/.test(rep)&&/App sound code: v1\.2\.0; sounds muted: false; volume: 35%/.test(rep),'the report gives the device, autoplay policy, audio session, app version, mute and volume');
+  ok(/Device: TestPhone\/1\.0/.test(rep)&&/autoplay policy/.test(rep)&&/iOS audio session/.test(rep)&&/App sound code: v1\.2\.0; sounds muted: false; app sound volume: 35% \(please check device or external speaker volumes separately\)/.test(rep),'the report gives the device, autoplay policy, audio session, app version, mute and volume');
   ok(/Slideshow music: 5 tracks listed/.test(rep),'the report lists the music');
   ok(!/Problems:/.test(rep),'no Problems section');
   ok(e.SoundCheck.report()===rep||/Heard the sounds: yes/.test(e.SoundCheck.report()),'SoundCheck.report() returns the latest report');
@@ -116,7 +116,7 @@ async function runIt(o){const e=makeEnv(o);const t0=Date.now();await e.SoundChec
   const t=text(e.box.innerHTML);
   ok(/PROBLEM: The reader did not hear the sounds/.test(t),'answering No is the verdict');
   ok(/ring \/ silent switch/.test(t),'on an iPhone it points at the ring / silent switch');
-  ok(/this device ignores page volume/.test(t),'and notes that the device ignores page volume');
+  ok(/ignores the app(?:&#39;|')s sound volume/.test(t),'and notes that the device ignores page volume');
   e.press('copy');await new Promise(r=>setTimeout(r,10));
   ok(/Heard the sounds: NO/.test(e.ctx.__copied[0])&&/Hints:/.test(e.ctx.__copied[0]),'the report says NO and carries the hint');
 }

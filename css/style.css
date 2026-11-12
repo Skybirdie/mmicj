@@ -1777,6 +1777,9 @@ html[data-theme="dark"] #readerPanel #toolbar .iconButton{
 .sr-setting-select select{flex:1;min-width:0;max-width:65%;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);color:var(--text);font:inherit;text-overflow:ellipsis;}
 .sr-settings-action{width:100%;margin-top:18px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--panel2);color:var(--text);cursor:pointer;font:inherit;}
 .sr-settings-action.sr-soundcheck-button{margin-top:12px;}
+/* the one-line tip above "Test sounds": small, muted, close to its button */
+.sr-soundcheck-tip{margin:12px 0 0;font-size:11.5px;line-height:1.4;color:var(--muted);text-wrap:balance;}
+.sr-soundcheck-tip + .sr-settings-action.sr-soundcheck-button{margin-top:8px;}
 /* when a finished check scrolls its result into view, leave room for the sticky header above it */
 #srSoundCheckBox{scroll-margin-top:84px;}
 

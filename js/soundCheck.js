@@ -29,6 +29,7 @@ window.SoundCheck=(function(){
         musicManifest:"assets/slideshowMusic/manifest.json",
         musicDir:"assets/slideshowMusic/"
     };
+    const NOTE="please check device or external speaker volumes separately";
     const STAGES=[
         ["device","Device"],
         ["files","Sound files"],
@@ -126,8 +127,10 @@ window.SoundCheck=(function(){
             if(e.muted===true)bad.push("sounds are switched off in Settings (Page-turn sound)");
             if(e.volume===0)bad.push("sound volume is at 0");
         }
-        const line=(e.ua.length>60?e.ua.slice(0,60)+"...":e.ua)+(e.volumeSettable===false?"; this device ignores page volume":"");
-        setStage("device",bad.length?"bad":"ok",bad.length?bad.join("; "):"Volume "+e.volume+"%, sound on. "+line);
+        const line=(e.ua.length>60?e.ua.slice(0,60)+"...":e.ua);
+        /* the browser can only see the app's own volume setting, never the device's or an external speaker's */
+        const vol=e.volumeSettable===false?"This device ignores the app's sound volume ("+NOTE+")":"App sound volume "+e.volume+"% ("+NOTE+")";
+        setStage("device",bad.length?"bad":"ok",bad.length?bad.join("; "):"Sound on. "+vol+". "+line);
     }
 
     async function stageFiles(){
@@ -208,7 +211,7 @@ window.SoundCheck=(function(){
         const out=[],e=S.env,st=S.stage;
         const noErrors=Object.keys(st).every(k=>st[k].st!=="bad");
         if(e.muted===true)out.push("Turn on \"Page-turn sound\" in Settings.");
-        if(S.heard===false&&noErrors)out.push("Everything played without an error but was not heard: check the device volume"+(e.apple?", the ring / silent switch":"")+", Bluetooth or headphone output, and whether another app is holding the audio.");
+        if(S.heard===false&&noErrors)out.push("Everything played without an error but was not heard: check the device volume"+(e.apple?", the ring / silent switch":"")+", Bluetooth or headphone output (the sound may be going to a connected speaker that is off, out of range or turned down), and whether another app is holding the audio.");
         else if(S.heard===false&&e.apple)out.push("On an iPhone the ring / silent switch also silences these sounds.");
         if(st.slide&&st.slide.st==="bad"&&S.slide&&S.slide.err&&/NotAllowed|blocked/.test(S.slide.err))out.push("The browser blocks a sound that no tap started, so a slideshow that moves on by itself will be silent here (a patch candidate: start the slideshow sound from the Play tap).");
         return out;
@@ -231,7 +234,7 @@ window.SoundCheck=(function(){
         L.push("Device: "+e.ua);
         L.push("Language: "+e.lang+"; secure page: "+e.secure+"; installed app: "+e.standalone+"; online: "+e.online+"; page visible: "+e.visible);
         L.push("MP3 support: "+e.mp3+"; page can set volume: "+e.volumeSettable+"; audio context: "+e.context+"; autoplay policy: "+e.autoplay+"; iOS audio session: "+e.audioSession);
-        L.push("App sound code: "+e.appCode+"; sounds muted: "+e.muted+"; volume: "+e.volume+"%");
+        L.push("App sound code: "+e.appCode+"; sounds muted: "+e.muted+"; app sound volume: "+e.volume+"% ("+NOTE+")");
         L.push("");
         L.push("Files, played silently (and the app's own preload):");
         if(!S.files||!S.files.length)L.push(" - not tested");
@@ -367,6 +370,6 @@ window.SoundCheck=(function(){
         try{el.scrollIntoView({block:"nearest",behavior:"smooth"});}catch(e){}
     };
     api.isRunning=()=>running;
-    api.version="1.0.1";
+    api.version="1.0.2";
     return api;
 })();

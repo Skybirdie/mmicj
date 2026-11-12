@@ -6,6 +6,9 @@ asks one question and offers **Copy report**, the same way the speech check work
 ## What the panel shows (soundCheck.js 1.0.1)
 Directly under the button, top to bottom: the progress / result line (small gap above it), a tiny plain **See details / See less** toggle (chevron only, no border or colour; the per-stage rows are collapsed until asked and keep their open/closed state while the test runs), and, once finished, "Did you hear any sounds just now?", one row of **Yes / No / Copy report**, then "If something went wrong, tap Copy report and send it to us." The chosen Yes/No stays marked and can be changed. The detail rows use 11.5px text with 14px between them.
 
+## About the volume figure
+The browser can only read the app's own Sound volume setting, never the device's or a Bluetooth / external speaker's volume. So the Device line and the report say "App sound volume 35% (please check device or external speaker volumes separately)" (on iPhones, which ignore page volume: "This device ignores the app's sound volume ..."). A one-line tip above the button asks the reader to raise the device volume and pick the right speaker before testing, and the hint after a "No" says the sound may be going to a connected speaker that is off, out of range or turned down. The "Did you hear any sounds?" answer is the only real check of what comes out of the speaker.
+
 ## What runs (no further taps)
 1. **Device**: browser, installed-app mode, whether sounds are switched on (Settings -> Page-turn sound), the volume, whether the page can set volume at all (iPhones ignore it), the autoplay policy, audio context, iOS audio session.
 2. **Sound files**: *every* app sound registered in `js/audio.js` (select, curl, five page turns, close, library open) plus the slideshow effect and its fallback are **played silently**. That proves the file is there, decodes and plays, and the app's own preload state is read too. No sound is made.
