@@ -1,0 +1,76 @@
+/* =========================================================
+   Installed-app frame (loaded LAST, after share.css)
+
+   Every rule is scoped to html.mm-installed, a class js/installedFrame.js
+   adds ONLY when the app runs as an installed app (standalone window).
+   In a normal browser tab none of this matches, so nothing changes there.
+
+   --mm-app-h is the measured visible height of the window (set by
+   js/installedFrame.js). Where it is not set yet, the fallback is 100%
+   of the parent / initial containing block, which is the same basis the
+   Front Page already uses (inset:0) and which does not overshoot the
+   way 100dvh can in a standalone window.
+
+   Problem fixed: #app was sized 100vw x 100dvh. When that came out taller
+   than the visible window, <body> (flex-centred, overflow:hidden)
+   cropped it equally top and bottom, hiding the top bar, the page
+   indicator / status bar and the welcome bar under the device bars.
+   ========================================================= */
+
+/* ---- Reader / main shell ---- */
+html.mm-installed,
+html.mm-installed body{
+    height:var(--mm-app-h,100%);
+    min-height:0;
+}
+
+html.mm-installed #app{
+    width:100%;
+    height:var(--mm-app-h,100%);
+    min-height:0;
+}
+
+/* style.css re-declares #app's height inside this breakpoint */
+@media (max-width:999px){
+    html.mm-installed #app{
+        height:var(--mm-app-h,100%);
+        min-height:0;
+    }
+}
+
+/* Book / viewer focus: fixed to the window, same height source */
+html.mm-installed #app.viewerFocus{
+    width:100%!important;
+    height:var(--mm-app-h,100%)!important;
+    min-height:0!important;
+}
+
+/* Phone library drawer (left pull-out) */
+@media (max-width:999px){
+    html.mm-installed #libraryPanel{
+        height:var(--mm-app-h,100%)!important;
+        min-height:0!important;
+    }
+}
+
+/* ---- Video and Slideshow sections (position:fixed; inset:0) ----
+   Same height source, and the section starts below the device's top
+   bar when the system reports one (env() is 0 where there is none).
+   The bottom is already handled: their welcome bar is offset by
+   env(safe-area-inset-bottom) and now sits at the true window bottom. */
+html.mm-installed .video-section,
+html.mm-installed .slideshow-section{
+    width:100%;
+    height:var(--mm-app-h,100%);
+    padding-top:env(safe-area-inset-top,0px);
+}
+
+/* Slideshow stage cap: measured height instead of 100dvh */
+html.mm-installed .slideshow-stage{
+    max-height:calc(var(--mm-app-h,100dvh) - var(--slideshow-topbar-height) - 110px);
+}
+@media (max-width:700px){
+    html.mm-installed .slideshow-stage{
+        max-height:calc(var(--mm-app-h,100dvh) - var(--slideshow-topbar-height) - 82px);
+    }
+}

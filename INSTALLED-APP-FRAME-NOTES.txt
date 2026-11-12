@@ -1,0 +1,20 @@
+Installed app stays inside the device's top and bottom bars
+============================================================
+Changed files (drop into the project, same paths):
+  index.html                 (2 lines: links css/installed-frame.css and js/installedFrame.js)
+  css/installed-frame.css    NEW
+  js/installedFrame.js       NEW
+
+Cause: #app was sized 100vw x 100dvh. In an installed (standalone) window that
+can be taller than the visible window; <body> is flex-centred with overflow:hidden,
+so the overshoot was cropped equally at the top and bottom, hiding the top bar,
+the page indicator / status bar and the welcome bar under the device bars.
+
+Fix: when installed, js/installedFrame.js measures the real visible height
+(smaller of layout viewport and window inner height) into --mm-app-h and keeps it
+updated on resize / rotation. installed-frame.css sizes #app, #app.viewerFocus,
+the phone library drawer, the Video and Slideshow sections and the slideshow stage
+from it. Video/Slideshow also start below the device top bar (env(safe-area-inset-top)).
+
+Not affected: regular browser tabs (no class, no variable, no rule matches), Front Page,
+Share Mode, storage, network, Worker. Rollback = remove the two lines from index.html.
