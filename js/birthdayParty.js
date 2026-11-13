@@ -1,7 +1,7 @@
 "use strict";
 
 /* =========================================================
-   Front Page birthday party  (js/birthdayParty.js  v1.0.0)
+   Front Page birthday party  (js/birthdayParty.js  v1.1.0)
    with css/birthday-party.css
 
    A tiny celebration row above the bottom doors of the Front Page:
@@ -65,6 +65,7 @@
     const LEAVE_MS       = 500;     /* fade-out before the row is removed */
 
     const DEMO_NAMES = ["Ava", "Marcus", "Joy", "Daniel", "Hannah"];
+    const DEMO_MEMBERS_FILE = GIF_FOLDER + "members-demo.json";   /* ?birthdaydemo=members */
 
     /* ---------------------------------------------------------
        Pure helpers (no page needed; tested in birthdayParty.test.mjs)
@@ -137,7 +138,28 @@
         ).map(f => f.trim());
     }
 
-    const CORE = {cleanNames, alphabetical, shuffled, plan, gifDeck, manifestFiles,
+    /* From a members list ({name, birthday:"YYYY-MM-DD" | "MM-DD"}) the names
+       whose birthday is `date` (default: now, device time). A 29 February
+       birthday is celebrated on 28 February in years that have no 29th. */
+    function birthdaysToday(members, date){
+        const now = date || new Date();
+        const month = now.getMonth() + 1;
+        const day = now.getDate();
+        const y = now.getFullYear();
+        const leap = (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+        const out = [];
+        (Array.isArray(members) ? members : []).forEach(m => {
+            const match = m && /(?:^|-)(\d{2})-(\d{2})$/.exec(String(m.birthday || "").trim());
+            if(!match) return;
+            const mm = +match[1], dd = +match[2];
+            const hit = (mm === month && dd === day) ||
+                        (!leap && mm === 2 && dd === 29 && month === 2 && day === 28);
+            if(hit) out.push(m.name);
+        });
+        return out;
+    }
+
+    const CORE = {cleanNames, alphabetical, shuffled, plan, gifDeck, manifestFiles, birthdaysToday,
                   NAME_MS, GIF_MS, MIN_PARTY_MS};
 
     /* ---------------------------------------------------------
@@ -429,12 +451,21 @@
         _core:         CORE
     };
 
-    /* ?birthdaydemo=1  or  ?birthdaydemo=Ann,Marcus,Joy */
+    /* Test-only: read the fake members file and celebrate whoever has a
+       birthday today (this is the same filtering the real data will use). */
+    function demoFromMembersFile(){
+        return fetch(DEMO_MEMBERS_FILE, {cache:"no-store"})
+            .then(r => r.ok ? r.json() : {members:[]})
+            .catch(() => ({members:[]}))
+            .then(json => setCelebrants(birthdaysToday(json && json.members), {force:true}));
+    }
+
+    /* ?birthdaydemo=1  |  ?birthdaydemo=Ann,Marcus,Joy  |  ?birthdaydemo=members */
     try{
         const value = new URLSearchParams(window.location.search).get("birthdaydemo");
         if(value !== null){
             const names = (value === "" || value === "1") ? DEMO_NAMES : value.split(",");
-            const start = () => demo(names);
+            const start = () => value === "members" ? demoFromMembersFile() : demo(names);
             if(document.readyState === "loading"){
                 document.addEventListener("DOMContentLoaded", start, {once:true});
             }else{

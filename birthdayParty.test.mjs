@@ -51,6 +51,15 @@ const one = C.gifDeck(['only.gif']); ok(one.next() === 'only.gif' && one.next() 
 ok(JSON.stringify(C.manifestFiles(['a.gif', '../x.gif', 'sub/b.gif', ' c.gif ', 5, ''])) === JSON.stringify(['a.gif', 'c.gif']), 'manifest keeps plain file names only');
 ok(C.manifestFiles({}).length === 0, 'manifest survives bad JSON');
 
+/* birthdays today */
+const M = [{name:'A',birthday:'1990-11-13'},{name:'B',birthday:'11-13'},{name:'C',birthday:'1990-11-14'},{name:'D'},{name:'E',birthday:'garbage'},null];
+ok(C.birthdaysToday(M, new Date(2026,10,13)).join() === 'A,B', 'birthdaysToday matches month-day, with or without a year, and skips bad rows');
+const L = [{name:'Leap',birthday:'2000-02-29'}];
+ok(C.birthdaysToday(L, new Date(2027,1,28)).join() === 'Leap', '29 Feb birthday is celebrated on 28 Feb in a non-leap year');
+ok(C.birthdaysToday(L, new Date(2027,2,1)).length === 0, '...and not on 1 March');
+ok(C.birthdaysToday(L, new Date(2028,1,28)).length === 0 && C.birthdaysToday(L, new Date(2028,1,29)).join() === 'Leap', 'in a leap year it is celebrated on the 29th only');
+ok(C.birthdaysToday('nope').length === 0, 'birthdaysToday survives a non-list');
+
 /* nothing happens without a front page */
 ok(w.BirthdayParty.setCelebrants(['Ann']) === false && !w.BirthdayParty.isRunning(), 'no page / no names: nothing starts');
 

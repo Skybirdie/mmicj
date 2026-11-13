@@ -1,0 +1,10 @@
+{
+  "_note": "DEMO ONLY - fake people. Birthdays on 11-13 match on 13 November (device date). Delete before go-live.",
+  "members": [
+    { "name": "Joy Demo",                         "birthday": "1990-11-13", "added": "2022-03-05", "phone": "+1-555-0101", "email": "joy.demo@example.com" },
+    { "name": "Nathaniel Testwell",               "birthday": "1984-11-13", "added": "2019-11-13", "phone": "+1-555-0102", "email": "nathaniel@example.com" },
+    { "name": "Bartholomew Fitzgerald-Williams",  "birthday": "1978-11-13", "added": "2021-06-20", "phone": "+1-555-0103", "email": "bart@example.com" },
+    { "name": "Not Today One",                    "birthday": "1992-03-02", "added": "2023-01-10", "phone": "+1-555-0104", "email": "one@example.com" },
+    { "name": "Not Today Two",                    "birthday": "1988-12-25", "added": "2020-09-01", "phone": "+1-555-0105", "email": "two@example.com" }
+  ]
+}

@@ -1,10 +1,12 @@
-Birthday party (Front Page) - visual side, v1.0.0
+Birthday party (Front Page) - visual side, v1.1.0
 =================================================
 
 New files
   js/birthdayParty.js            the row + popup + clock
   css/birthday-party.css         all of its styling
   assets/birthday/manifest.json  list of the gif file names in assets/birthday/
+  assets/birthday/members-demo.json  DEMO ONLY: 3 fake members with a 13 Nov birthday + 2 who are not
+                                 (delete before go-live; it is a public file)
   birthdayParty.test.mjs         run: node birthdayParty.test.mjs
 Changed file
   index.html                     +1 <link> (after front-page.css), +1 <script> (after frontShare.js)
@@ -16,6 +18,9 @@ Adding a gif: drop it in assets/birthday/ AND add its file name to manifest.json
 (a static site cannot list a folder, so the list is how the app learns the names).
 
 Preview now, no data needed
+  open the app with ?birthdaydemo=members   reads members-demo.json and celebrates whoever has a
+                                            birthday TODAY (device date). The 3 fake birthdays are 13 Nov,
+                                            so on any other day use the two options below.
   open the app with ?birthdaydemo=1               sample names
                     ?birthdaydemo=Ann,Marcus,Joy  your own names
   or in the browser console: BirthdayParty.demo()
