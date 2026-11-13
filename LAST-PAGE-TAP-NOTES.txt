@@ -1,0 +1,3 @@
+Last-page tap no longer reopens the book from page one
+Changed file: js/navigation.js (one added line + comment in the "skyreader:last-page-click" handler)
+Rollback: remove the line  suppressClickUntil=Date.now()+600;

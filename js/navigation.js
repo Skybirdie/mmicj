@@ -204,6 +204,14 @@ document.addEventListener("skyreader:last-page-click",()=>{
        not close the book here. */
     if(document.body && document.body.classList.contains("sky-share-mode")) return;
     if(Reader.isOpen() && !busy){
+        /* Closing happens on pointerup, but the browser still sends the tap's
+           own click afterwards, and by then the viewer landing is already
+           showing under the finger. That click used to hit the landing's
+           "Read Again" card (this very book, which always starts at page 1)
+           and reopen the book from the beginning. The swipe-to-close path
+           already swallows that click through suppressClickUntil; the direct
+           last-page tap now does the same. */
+        suppressClickUntil=Date.now()+600;
         navigation.closeMagazine();
     }
 });
