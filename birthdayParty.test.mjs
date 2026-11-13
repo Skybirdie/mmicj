@@ -99,6 +99,50 @@ ok(pop(box(390, 844, 327.6, 126.6)) === 'center', 'phone: popup centered');
 const pw = C.choosePopup(box(1440, 900, 675, 90));
 ok(pw.width <= 400 && pw.left + pw.width + 18 <= 382.5 + 1, 'side popup stays clear of the centerpiece');
 
+/* ---- welcome / birthday / anniversary from members ---- */
+const NOW = new Date(2026, 10, 13);                       /* 13 Nov 2026 */
+const mem = [
+  {name:'New Today',   birthday:'1990-01-01', added:'2026-11-13'},
+  {name:'New 6d',      birthday:'1990-01-01', added:'2026-11-07'},
+  {name:'Old 7d',      birthday:'1990-01-01', added:'2026-11-06'},
+  {name:'Future',      birthday:'1990-01-01', added:'2026-11-20'},
+  {name:'One Year',    birthday:'1990-01-01', added:'2025-11-13'},
+  {name:'Five Years',  birthday:'1990-01-01', added:'2021-11-13'},
+  {name:'Ten Years',   birthday:'1990-01-01', added:'2016-11-13'},
+  {name:'Not Today',   birthday:'11-14',      added:'2020-11-14'},
+  {name:'Born Today',  birthday:'1985-11-13', added:'2020-03-03'},
+  {name:'No Dates'}, {name:'Bad', birthday:'x', added:'13/11/2020'}, null, {birthday:'11-13', added:'2020-11-13'}
+];
+const cel = C.celebrationsFromMembers(mem, NOW);
+ok(cel.welcome.map(e => e.name).join() === 'New Today,New 6d', 'welcome: added today or in the previous 6 days (7 days), not 7+ days ago, not future');
+ok(cel.birthday.join() === 'Born Today', 'birthday: month/day is today');
+ok(cel.anniversary.map(e => e.name + ':' + e.years).join() === 'One Year:1,Five Years:5,Ten Years:10', 'anniversary: add-date month/day is today, years counted, joined-today is not an anniversary');
+ok(C.celebrationsFromMembers('nope', NOW).welcome.length === 0, 'celebrationsFromMembers survives a non-list');
+ok(C.celebrationsFromMembers([{name:'L', added:'2020-02-29'}], new Date(2027, 1, 28)).anniversary[0].years === 7, '29 Feb add date is an anniversary on 28 Feb in a non-leap year');
+ok(C.celebrationsFromMembers([{name:'Y', added:'2025-12-31'}], new Date(2026, 0, 2)).welcome.length === 1, 'welcome window crosses a year end');
+
+/* entries */
+ok(JSON.stringify(C.cleanEntries([{name:' Ann ', years:3}, {name:'ann', years:4}, {name:'Bo', years:0}, {name:'Cy'}, 'Di', {name:'Ed', years:'5'}], 'anniversary')) === JSON.stringify([{name:'Ann', years:3}, {name:'Ed', years:5}]), 'anniversary entries need >= 1 whole year; duplicates dropped');
+ok(JSON.stringify(C.cleanEntries(['Ann', {name:'Bo'}, ''], 'welcome')) === JSON.stringify([{name:'Ann'}, {name:'Bo'}]), 'welcome entries accept names or {name}');
+
+/* anniversary wording */
+ok(C.milestoneText(1) === null && C.milestoneText(4) === null && C.milestoneText(7) === null, 'non-milestone years have no special text');
+ok(C.milestoneText(5) === 'Half a decade!' && C.milestoneText(10) === 'A whole decade!', '5 and 10 years have special text');
+ok(C.milestoneText(15) === '15 years strong!' && C.milestoneText(30) === '30 years strong!', 'other multiples of 5 get the generic milestone text');
+ok(C.yearsLabel(1) === '1 year' && C.yearsLabel(3) === '3 years', 'years label is singular/plural');
+ok(C.entryTitle('anniversary', {years:10}) === '10-YEAR ANNIVERSARY' && C.entryTitle('anniversary', {years:3}) === 'HAPPY ANNIVERSARY', 'milestones change the title');
+ok(C.entryTitle('birthday', {}) === 'HAPPY BIRTHDAY' && C.entryTitle('welcome', {}) === 'WELCOME', 'titles for birthday and welcome');
+const beats = C.makeBeats('anniversary', [{name:'Ann', years:3}, {name:'Bo', years:10}]);
+ok(beats.length === 3 && beats[0].main === 'Ann' && beats[0].extra === '3 years', 'regular anniversary: one beat, name + years');
+ok(beats[1].main === 'Bo' && beats[1].extra === '' && beats[2].main === '\u2605 A whole decade!' && beats[2].entry.name === 'Bo', 'milestone: two beats, the name then its special text');
+ok(C.makeBeats('birthday', [{name:'A'}, {name:'B'}]).length === 2 && C.makeBeats('welcome', [{name:'A'}])[0].extra === '', 'birthday / welcome: one beat per name, no extra');
+ok(C.plan(C.makeBeats('anniversary', [{name:'Bo', years:10}]).length).total === 10000, 'a lone milestone (2 beats) still lasts at least 10 s');
+
+/* demo dates (relative to today) */
+const dm = C.resolveDemoMembers([{name:'a', birthday:'today', added:'today-2d'}, {name:'b', added:'today-5y'}, {name:'c', added:'2020-01-01'}], NOW);
+ok(dm[0].birthday === '1990-11-13' && dm[0].added === '2026-11-11' && dm[1].added === '2021-11-13' && dm[2].added === '2020-01-01', 'demo date tokens resolve relative to today');
+ok(C.ORDER.join() === 'welcome,birthday,anniversary' && C.GAP_MS === 3000, 'order is welcome > birthday > anniversary with a 3 s gap');
+
 /* nothing happens without a front page */
 ok(w.BirthdayParty.setCelebrants(['Ann']) === false && !w.BirthdayParty.isRunning(), 'no page / no names: nothing starts');
 

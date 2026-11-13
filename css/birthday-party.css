@@ -2,9 +2,13 @@
    FRONT PAGE BIRTHDAY PARTY  (css/birthday-party.css, with js/birthdayParty.js)
    ---------------------------------------------------------
    A tiny floating celebration (row or button) above the bottom doors, plus
-   a popup with the full list. All of it is created by js/birthdayParty.js
-   inside #frontPage, only when there are birthdays to celebrate, so with no
-   birthdays nothing here is ever on the page.
+   a popup with the full list, for three kinds of celebration that share it:
+   welcome (new members), birthdays and anniversaries. All of it is created
+   by js/birthdayParty.js inside #frontPage, only when there is something to
+   celebrate, so otherwise nothing here is ever on the page.
+   The popup's backdrop gif and gradient depend on the kind
+   (.bp-modal[data-type]): assets/welcome.gif, assets/birthday.gif,
+   assets/anniversary.gif.
 
    WHERE THINGS GO is decided by the script from measured positions (see
    chooseMode() in js/birthdayParty.js), which sets the row's left / right /
@@ -50,6 +54,9 @@
     color:#fff;
     font-family:Inter,Arial,sans-serif;
 }
+
+/* between kinds (and before it fades in) the row is not tappable */
+#frontBirthdayParty:not(.is-on) .bp-row{pointer-events:none;}
 
 /* while the popup is open the row steps aside */
 #frontBirthdayParty.is-hushed .bp-row{
@@ -140,6 +147,7 @@
 }
 
 #frontBirthdayParty .bp-title{
+    transition:opacity .28s ease;
     position:relative;
     align-self:flex-start;
     padding-bottom:5px;                    /* room for the white line */
@@ -149,6 +157,8 @@
     line-height:1.15;
     white-space:nowrap;
 }
+
+#frontBirthdayParty .bp-title.is-out{opacity:0;}
 
 /* white separator under the title, as long as the title, above the names */
 #frontBirthdayParty .bp-title::after{
@@ -164,21 +174,42 @@
 }
 
 #frontBirthdayParty .bp-name{
+    display:flex;
+    align-items:baseline;
+    gap:.45em;
     min-height:1.3em;
     font-size:var(--bp-name);
     font-weight:600;
     line-height:1.3;
     white-space:nowrap;
     overflow:hidden;
-    text-overflow:ellipsis;
     transition:opacity .28s ease;
 }
 #frontBirthdayParty .bp-name.is-out{opacity:0;}
+
+/* the name gives way (ellipsis) before the "3 years" / milestone text does */
+#frontBirthdayParty .bp-name-main{
+    min-width:0;
+    overflow:hidden;
+    text-overflow:ellipsis;
+}
+#frontBirthdayParty .bp-name-extra{flex:0 0 auto;}
+#frontBirthdayParty .bp-name-extra:empty{display:none;}
+#frontBirthdayParty .bp-name-extra::before{content:"\00B7";margin-right:.45em;}
 
 /* Fit the row to the width it was given (see "WHERE THE ROW SITS").
    The selectors repeat #frontBirthdayParty so they outrank the defaults above. */
 @container bp (max-width:299px){
     #frontBirthdayParty .bp-row{--bp-gif:60px;--bp-title:14px;--bp-name:15px;}
+    /* the padding / negative margin keep the title's shadow from being clipped */
+    #frontBirthdayParty .bp-title{
+        max-width:calc(100% + 16px);
+        margin:-8px;
+        padding:8px 8px 13px;
+        overflow:hidden;
+        text-overflow:ellipsis;
+    }
+    #frontBirthdayParty .bp-title::after{left:8px;right:8px;bottom:8px;}
 }
 @container bp (max-width:219px){
     #frontBirthdayParty .bp-row{--bp-gif:48px;--bp-title:12px;--bp-name:13.5px;gap:8px;}
@@ -254,6 +285,22 @@
     transform:none;
 }
 
+/* welcome and anniversary: their own backdrop gif over their own gradient
+   (the gradient is also the fallback if the gif cannot be loaded) */
+.bp-modal[data-type="welcome"] .bp-card{
+    background:
+        url("../assets/welcome.gif") center / cover no-repeat,
+        linear-gradient(160deg,#18a58a 0%,#0b7a74 52%,#0e351f 100%);
+}
+.bp-modal[data-type="anniversary"] .bp-card{
+    background:
+        url("../assets/anniversary.gif") center / cover no-repeat,
+        linear-gradient(160deg,#d69a1c 0%,#a56a0b 52%,#5c3a05 100%);
+}
+.bp-modal[data-type="anniversary"] .bp-card-list{
+    background:rgba(52,28,0,.5);
+}
+
 .bp-close{
     position:absolute;
     top:10px;
@@ -305,9 +352,9 @@
     flex:0 0 auto;
     margin:8px 0 14px;
     padding-bottom:10px;
-    font-size:clamp(20px,6vw,26px);
+    font-size:clamp(19px,5.6vw,24px);
     font-weight:800;
-    letter-spacing:.09em;
+    letter-spacing:.07em;
     line-height:1.15;
     text-align:center;
     color:#fff;
@@ -322,6 +369,16 @@
     border-radius:2px;
     background:var(--bp-gold);
 }
+
+.bp-card-sub{
+    flex:0 0 auto;
+    margin:-4px 0 12px;
+    font-size:14px;
+    font-weight:500;
+    letter-spacing:.04em;
+    text-align:center;
+}
+.bp-card-sub[hidden]{display:none;}
 
 .bp-card-list{
     flex:1 1 auto;
@@ -347,6 +404,21 @@
     border-bottom:1px solid rgba(255,255,255,.16);
 }
 .bp-card-list li:last-child{border-bottom:0;}
+.bp-li-name{display:block;}
+.bp-li-extra{
+    display:block;
+    margin-top:2px;
+    font-size:13px;
+    font-weight:500;
+    opacity:.9;
+}
+/* 5, 10, 15 ... year anniversaries stand out */
+.bp-card-list li.is-milestone .bp-li-name{font-weight:700;}
+.bp-card-list li.is-milestone .bp-li-extra{
+    color:#ffe27a;
+    font-weight:700;
+    opacity:1;
+}
 
 /* ---------------------------------------------------------
    The button: same size as #frontShareButton, mirrored to the left
@@ -383,6 +455,7 @@
 }
 
 #frontBirthdayButton.is-on{opacity:1;}
+#frontBirthdayButton:not(.is-on){pointer-events:none;}
 
 #frontBirthdayButton .bp-btn-gif{
     position:relative;

@@ -1,10 +1,82 @@
 {
-  "_note": "DEMO ONLY - fake people. Birthdays on 11-13 match on 13 November (device date). Delete before go-live.",
+  "_note": "DEMO ONLY - fake people. Dates are relative to today so every kind shows on any day: birthday \"today\"; added \"today-2d\" = 2 days ago; added \"today-5y\" = exactly 5 years ago today (a 5-year anniversary). Delete before go-live (public file).",
   "members": [
-    { "name": "Joy Demo",                         "birthday": "1990-11-13", "added": "2022-03-05", "phone": "+1-555-0101", "email": "joy.demo@example.com" },
-    { "name": "Nathaniel Testwell",               "birthday": "1984-11-13", "added": "2019-11-13", "phone": "+1-555-0102", "email": "nathaniel@example.com" },
-    { "name": "Bartholomew Fitzgerald-Williams",  "birthday": "1978-11-13", "added": "2021-06-20", "phone": "+1-555-0103", "email": "bart@example.com" },
-    { "name": "Not Today One",                    "birthday": "1992-03-02", "added": "2023-01-10", "phone": "+1-555-0104", "email": "one@example.com" },
-    { "name": "Not Today Two",                    "birthday": "1988-12-25", "added": "2020-09-01", "phone": "+1-555-0105", "email": "two@example.com" }
+    {
+      "name": "Joy Demo",
+      "birthday": "today",
+      "added": "2022-03-05",
+      "phone": "+1-555-0101",
+      "email": "joy.demo@example.com"
+    },
+    {
+      "name": "Nathaniel Testwell",
+      "birthday": "today",
+      "added": "today-7y",
+      "phone": "+1-555-0102",
+      "email": "nathaniel@example.com"
+    },
+    {
+      "name": "Bartholomew Fitzgerald-Williams",
+      "birthday": "today",
+      "added": "2021-06-20",
+      "phone": "+1-555-0103",
+      "email": "bart@example.com"
+    },
+    {
+      "name": "Amara Newjoin",
+      "birthday": "1995-02-14",
+      "added": "today-1d",
+      "phone": "+1-555-0106",
+      "email": "amara@example.com"
+    },
+    {
+      "name": "Caleb Fresh",
+      "birthday": "1991-07-30",
+      "added": "today-0d",
+      "phone": "+1-555-0107",
+      "email": "caleb@example.com"
+    },
+    {
+      "name": "Naomi Recent",
+      "birthday": "1987-09-09",
+      "added": "today-6d",
+      "phone": "+1-555-0108",
+      "email": "naomi@example.com"
+    },
+    {
+      "name": "Ruth Oneyear",
+      "birthday": "1993-04-04",
+      "added": "today-1y",
+      "phone": "+1-555-0109",
+      "email": "ruth@example.com"
+    },
+    {
+      "name": "Esther Fiveyear",
+      "birthday": "1980-10-10",
+      "added": "today-5y",
+      "phone": "+1-555-0110",
+      "email": "esther@example.com"
+    },
+    {
+      "name": "Gideon Decade",
+      "birthday": "1975-01-20",
+      "added": "today-10y",
+      "phone": "+1-555-0111",
+      "email": "gideon@example.com"
+    },
+    {
+      "name": "Not Today One",
+      "birthday": "1992-03-02",
+      "added": "2023-01-10",
+      "phone": "+1-555-0104",
+      "email": "one@example.com"
+    },
+    {
+      "name": "Joined Eight Days Ago",
+      "birthday": "1988-12-25",
+      "added": "today-8d",
+      "phone": "+1-555-0105",
+      "email": "two@example.com"
+    }
   ]
 }

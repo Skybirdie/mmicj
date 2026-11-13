@@ -1,81 +1,82 @@
-Birthday party (Front Page) - visual side, v1.3.1
-=================================================
+Front Page celebrations (welcome / birthdays / anniversaries) - v2.0.0
+=====================================================================
+(file names keep the "birthday" name; BirthdayParty is still the global)
 
-New files
-  js/birthdayParty.js            the row + popup + clock
-  css/birthday-party.css         all of its styling
-  assets/birthday/manifest.json  list of the gif file names in assets/birthday/
-  assets/birthday-icon.gif       the party popper used by the birthday button
-  assets/birthday/members-demo.json  DEMO ONLY: 3 fake members with a 13 Nov birthday + 2 who are not
-                                 (delete before go-live; it is a public file)
-  birthdayParty.test.mjs         run: node birthdayParty.test.mjs
-Changed file
-  index.html                     +1 <link> (after front-page.css), +1 <script> (after frontShare.js)
-Already in your assets (used as-is)
-  assets/birthday/*.gif          the rotating row/popup gifs
-  assets/birthday.gif            the popup backdrop
+Files
+  js/birthdayParty.js               row + button + popup + clock + the date rules
+  css/birthday-party.css            all styling
+  index.html                        +1 <link> (after front-page.css), +1 <script> (after frontShare.js)
+  birthdayParty.test.mjs            node birthdayParty.test.mjs
+  assets/birthday/manifest.json     gif names for BIRTHDAYS (existing gifs)
+  assets/welcome/manifest.json      gif names for WELCOME        (empty: add your gifs)
+  assets/anniversary/manifest.json  gif names for ANNIVERSARIES  (empty: add your gifs)
+  assets/birthday-icon.gif          button icon, birthdays
+  assets/birthday/members-demo.json DEMO ONLY (fake people, dates relative to today). Delete before go-live.
 
-Adding a gif: drop it in assets/birthday/ AND add its file name to manifest.json
-(a static site cannot list a folder, so the list is how the app learns the names).
+Still to supply (until then these show a gold/teal gradient instead, never broken):
+  assets/welcome/*.gif       + their names in assets/welcome/manifest.json
+  assets/anniversary/*.gif   + their names in assets/anniversary/manifest.json
+  assets/welcome-icon.gif    button icon, welcome        (gold disc with a star until supplied)
+  assets/anniversary-icon.gif button icon, anniversaries (same)
+  assets/welcome.gif         popup backdrop, welcome       (teal gradient until supplied)
+  assets/anniversary.gif     popup backdrop, anniversaries (gold gradient until supplied)
+  (assets/birthday.gif is the birthday backdrop, already there)
+  Adding a gif to a folder: drop the file in AND add its name to that folder's manifest.json.
+
+The cycle (whatever applies today, in this order, 3 s pause between):
+  WELCOME  >  HAPPY BIRTHDAY  >  HAPPY ANNIVERSARY
+  Each kind: names shuffled, 3 s each (at least 10 s per kind: 1 name = 10 s, 2 = 5 s each),
+  gif changes every 10 s (shuffled deck, no repeats until all used, never the same twice in a row),
+  then fades out; after the last kind everything is gone until the app is reopened.
+  Tapping the row opens the popup for the kind showing (its gif, title, names A-Z, its backdrop);
+  the clock pauses while it is open. During the 3 s pause the row is not tappable.
+  Button layout (no room for a row): the button shows 10 s per kind with that kind's icon.
+
+The rules (celebrationsFromMembers in js/birthdayParty.js, covered by tests)
+  WELCOME      added today or in the 6 days before (7 days in all; WELCOME_DAYS).
+               Not future dates, not 7+ days ago.
+  BIRTHDAY     month/day of "birthday" is today (year optional: "1990-11-13" or "11-13").
+  ANNIVERSARY  month/day of "added" is today and at least 1 year ago; "3 years" shows after the name.
+               Someone added today is a welcome, not an anniversary.
+               29 Feb dates are celebrated on 28 Feb in years with no 29th.
+  Milestones   every 5th year (5, 10, 15, ...): the title becomes "10-YEAR ANNIVERSARY" and the person
+               gets two beats - the name, then special text ("A whole decade!"); in the popup they are
+               starred and gold. Wording is MILESTONE_TEXT at the top of the script
+               (5 Half a decade! / 10 A whole decade! / 25 A quarter century! / 50 Golden jubilee!,
+               other multiples of 5: "<n> years strong!").
+  Dates are "YYYY-MM-DD". "Today" is the device date in the demo; the real data should be worked out
+  for Trinidad's date by the daily Worker.
 
 Preview now, no data needed
-  open the app with ?birthdaydemo=members   reads members-demo.json and celebrates whoever has a
-                                            birthday TODAY (device date). The 3 fake birthdays are 13 Nov,
-                                            so on any other day use the two options below.
-  open the app with ?birthdaydemo=1               sample names
-                    ?birthdaydemo=Ann,Marcus,Joy  your own names
-  or in the browser console: BirthdayParty.demo()
+  ?birthdaydemo=members   reads members-demo.json (relative dates, so every kind shows on any day):
+                          3 welcome, 3 birthdays, 4 anniversaries (1, 5, 7, 10 years)
+  ?birthdaydemo=all       quick sample of all three
+  ?birthdaydemo=1         sample birthday names
+  ?birthdaydemo=Ann,Joy   your own birthday names
+  or in the console: BirthdayParty.demoAll()
 
-What it does
-  - Gif: shuffled deck from the manifest, changes every 10 s, no repeats until all used.
-  - Names: shuffled, one at a time, 3 s each. Fewer than 4 names: the time per name
-    is stretched so the party lasts at least 10 s (1 name = 10 s, 2 names = 5 s each).
-  - Row fades away after the last name; it does not return until the app is reopened.
-  - Tap/click the row: popup with the gif, HAPPY BIRTHDAY, names A-Z, on assets/birthday.gif.
-    Close with X, the dark area, or Esc. The clock pauses while it is open.
-  - The clock only runs while the row/button is showing (pauses in Books/Videos/Images,
-    in a hidden tab, behind the loading screen and while the popup is open).
-  - Gradient fallbacks: gold disc if a gif fails (row, button and popup); the popup card is a
-    teal gradient under birthday.gif, so it simply stays teal if that gif fails.
-    The gifs are transparent, so the gradients only show on failure.
-
-Where it goes (the page is measured, first layout that really fits wins)
-  1. SIDE    room left of the centerpiece (desktop, laptop, landscape tablet/phone):
-             row from the left edge to 18px left of the centerpiece, 6px above the doors.
-             The popup also opens in that left space (no dimming), so the centerpiece
-             stays visible while the list is read. Tap outside / X / Esc closes it.
-  2. BELOW   no room beside it but a clear strip between the centerpiece and the doors
-             (phones, portrait tablets): row sits in that strip, 6px above the doors, never
-             over the centerpiece, and stops 8px left of the share button when that button is
-             above the doors (phones). Popup is centered.
-  3. BUTTON  neither fits (short phones, near-square windows, small landscape phones):
-             a birthday button, 60x60 like the share button and its horizontal mirror
-             (same padding, hover and press feel; left side instead of right). Uses
-             assets/birthday-icon.gif, or a gold gradient disc with a star if it cannot load.
-  The row and the button both show for 10 seconds only (the row longer when there are many
-  names: 3 s per name), fade in/out, then are gone until the app is reopened. The button's
-  10 s is BUTTON_MS at the top of js/birthdayParty.js.
-  Rows shrink with their space (smaller gif/text, then stacked). The layout is re-chosen
-  when the window is resized or rotated.
-  The decision is chooseMode() / choosePopup() in js/birthdayParty.js (pure functions,
-  covered by birthdayParty.test.mjs, including "never over the centerpiece" at every size
-  from 300x400 to 1920x1300).
+Where it goes (the page is measured, first layout that really fits wins) - unchanged
+  1. SIDE    room left of the centerpiece: row from the left edge to 18px left of it, 6px above the
+             doors; the popup also opens in that left space (no dimming).
+  2. BELOW   clear strip between the centerpiece and the doors: row there, never over the
+             centerpiece, stopping 8px left of the share button when it is above the doors.
+  3. BUTTON  no room: 60x60 button mirroring #frontShareButton on the left.
+  Rows shrink with their space; very long titles/names get an ellipsis rather than overlap.
 
 Text
-  White; text-shadow is your 0 2px 3px rgba(0,0,0,.55) plus a faint wide halo
-  (0 0 10px rgba(0,0,0,.3)) because the water background is light. The gif has a tiny
-  drop-shadow for the same reason. Both are one line each in birthday-party.css
-  (--bp-shadow, and the filter on .bp-gif img) if you want them removed.
+  White; text-shadow is your 0 2px 3px rgba(0,0,0,.55) plus a faint wide halo (--bp-shadow);
+  white separator under the title; tiny drop-shadow on the gif.
+
+The data step (next) - the shape the app needs
+  BirthdayParty.setCelebrations({
+      welcome:     ["Ann", ...],                       // names
+      birthday:    ["Joy", ...],                       // names
+      anniversary: [{name:"Daniel", years:5}, ...]     // names + whole years
+  });
+  Plan (option A): a daily scheduled Worker reads the private members file, runs the same rules for
+  Trinidad's date and writes ONE small public file in exactly that shape (names + years only).
+  Phone numbers, emails, birthdays and add dates never reach the browser.
 
 Cost / risk
-  With no names nothing runs at all (no request, no timer, no DOM). With names: one small JSON
-  request plus the gifs, one 200 ms timer, two elements added inside #frontPage. It does not touch
-  the centerpiece, doors, share button or any front-page script.
-
-Rollback: remove the <link> and <script> lines from index.html.
-
-NEXT STEP (data) - how it will plug in
-  The only call needed is  BirthdayParty.setCelebrants(["Ann","Marcus",...]).
-  Plan: the Worker reads the members file from the private R2 bucket, works out who has a birthday
-  today (in Trinidad time), and returns ONLY display names. Phone numbers, emails and birth years
-  never reach the browser. Anniversaries can reuse the same row/popup with a different title.
+  Nothing runs without names. Otherwise: one small manifest.json per kind that plays, plus the gifs.
+  Touches no other front-page code. Rollback: remove the <link> and <script> lines from index.html.
