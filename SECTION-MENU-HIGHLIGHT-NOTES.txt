@@ -1,0 +1,3 @@
+Section dropdown "you are here" highlight (narrow screens)
+Files: css/section-menu-current.css (NEW), index.html (one <link> line added after share.css)
+Rollback: remove the <link> line.

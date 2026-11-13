@@ -1,0 +1,57 @@
+/* =========================================================
+   Section dropdown: "you are here" highlight (narrow screens)
+
+   Same look as the Front Page menu's current item
+   (.front-menu-switch.active): green tint, green border, bolder label
+   and a glowing dot on the right.
+
+   AppSwitcher already sets .active and aria-pressed="true" on the
+   current section's [data-app-target] button in every dropdown (Books,
+   Videos, Images/Graphics and the Front Page's own), so this is CSS only.
+
+   - Scoped to .responsive-app-menu, which is only shown on narrow
+     screens; the wide-screen tab bar (.app-switcher) is untouched.
+   - The border is an inset shadow, so the row never changes size.
+   - Colours match the Front Page menu: #0D723B / #00d95f in light mode,
+     #ACE1AF in dark mode.
+   ========================================================= */
+
+.responsive-app-menu{
+    --menu-current:#0D723B;
+    --menu-current-bg:linear-gradient(135deg,rgba(13,114,59,.16),rgba(13,114,59,.07));
+    --menu-current-dot:#00d95f;
+}
+html[data-theme="dark"] .responsive-app-menu{
+    --menu-current:#ACE1AF;
+    --menu-current-bg:linear-gradient(135deg,
+        color-mix(in srgb,#ACE1AF 30%,transparent),
+        color-mix(in srgb,#ACE1AF 14%,transparent));
+    --menu-current-dot:#ACE1AF;
+}
+
+/* Rows become flex so the dot can sit at the right; text stays left. */
+.responsive-app-menu button[data-app-target]{
+    display:flex;
+    align-items:center;
+    gap:10px;
+}
+
+#topBarRightControls .responsive-app-menu button.active,
+.responsive-app-menu button[data-app-target].active,
+.responsive-app-menu button[data-app-target][aria-pressed="true"]{
+    background:var(--menu-current-bg);
+    box-shadow:inset 0 0 0 1px var(--menu-current);
+    font-weight:700;
+}
+
+.responsive-app-menu button[data-app-target].active::after,
+.responsive-app-menu button[data-app-target][aria-pressed="true"]::after{
+    content:"";
+    flex:0 0 auto;
+    width:8px;
+    height:8px;
+    margin-left:auto;
+    border-radius:50%;
+    background:var(--menu-current-dot);
+    box-shadow:0 0 7px var(--menu-current-dot);
+}
