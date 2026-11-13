@@ -1,0 +1,14 @@
+Search summaries, landing-row filtering, Clear button, no-results messages
+===========================================================================
+NEW
+  js/searchSummary.js     reads each section's own search box + counts, shows the summaries, Clear button
+  css/search-summary.css  styling; visibility driven by html[data-ss-reader|video|slideshow] (only while a search has text)
+CHANGED (small, additive)
+  index.html              +1 <link> (search-summary.css), +1 <script> (searchSummary.js, after readAloud.js)
+  js/library.js           organizedBooks("viewer") applies the same search; buildViewerLibrary split into
+                          buildViewerShelf()+updateViewerContinue(); filter() also refreshes the landing row
+  js/videoLibrary.js      setFilter() also refreshes the landing; API adds matchesSearch/getSearch/getDisplayedCount
+  js/videoViewer.js       landing row filtered with VideoLibrary.matchesSearch
+  js/slideshowViewer.js   landing row passes search to SlideshowSorter.organize (already supports it)
+Search stays separate per section (own box, own logic). With no search text nothing visible changes.
+Rollback: remove the <link>/<script> lines and restore the four changed JS files.

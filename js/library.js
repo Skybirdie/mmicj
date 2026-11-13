@@ -96,8 +96,20 @@ syncOrganizationControls(){
 
 organizedBooks(panel="viewer"){
     const org=this.getOrganization(panel);
-    if(window.LibrarySorter)return LibrarySorter.organize({books:SkyReader.library,sort:org.sort,filter:org.filter,category:org.category});
-    return [...SkyReader.library];
+    const organized=window.LibrarySorter
+        ? LibrarySorter.organize({books:SkyReader.library,sort:org.sort,filter:org.filter,category:org.category})
+        : [...SkyReader.library];
+    /* The Viewer Landing row follows the same search as the library panel
+       (same fields as applyOrganization). Empty search = unchanged. */
+    if(panel==="viewer"){
+        const query=(this.searchText||"").trim().toLowerCase();
+        if(query){
+            return organized.filter(book=>[book.title,book.subtitle,book.author,book.category]
+                .map(v=>String(v||"").toLowerCase())
+                .some(value=>value.includes(query)));
+        }
+    }
+    return organized;
 },
 
 build(){
@@ -114,6 +126,16 @@ this.buildViewerLibrary();
 
 buildViewerLibrary(){
 
+this.buildViewerShelf();
+
+this.updateViewerContinue();
+
+},
+
+/* The landing's book row only (split out of buildViewerLibrary so a search
+   can refresh it without touching the Read Again card). */
+buildViewerShelf(){
+
 const shelf=document.getElementById("viewerShelfView");
 if(!shelf)return;
 
@@ -127,8 +149,6 @@ card.classList.add("viewerBookCard");
 shelf.appendChild(card);
 
 });
-
-this.updateViewerContinue();
 
 },
 
@@ -506,6 +526,9 @@ filter(text){
        reflects the new filtered result. */
     this.buildShelf();
     this.buildList();
+
+    /* ...and the Viewer Landing's book row, so both always agree. */
+    this.buildViewerShelf();
 
 },
 

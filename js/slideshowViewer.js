@@ -261,7 +261,15 @@ return true;
         const list =
             window.SlideshowSorter &&
             typeof SlideshowSorter.organize === "function"
-                ? SlideshowSorter.organize({ slideshows: rawList, sort: "newest" })
+                ? SlideshowSorter.organize({
+                    slideshows: rawList,
+                    sort: "newest",
+                    /* Follow the sidebar search; empty search = all. */
+                    search: window.SlideshowLibrary &&
+                            typeof SlideshowLibrary.getSearch === "function"
+                        ? SlideshowLibrary.getSearch()
+                        : ""
+                })
                 : rawList;
         let recentItem = null;
         try {

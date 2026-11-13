@@ -802,7 +802,16 @@ function renderLanding() {
                 })
                 : videos;
 
-        landingVideos.forEach(
+        /* Follow the sidebar search (same fields); empty search = all. */
+        const searchedVideos =
+            window.VideoLibrary &&
+            typeof VideoLibrary.matchesSearch === "function"
+                ? landingVideos.filter(
+                    video => VideoLibrary.matchesSearch(video)
+                )
+                : landingVideos;
+
+        searchedVideos.forEach(
             video => {
 
                 libraryContainer.appendChild(

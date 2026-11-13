@@ -369,6 +369,9 @@ function renderLanding() {
             .toLowerCase();
 
         render();
+
+        /* The Video landing's library row follows the same search. */
+        renderLanding();
     }
 
 
@@ -1750,6 +1753,11 @@ function layoutCircleField() {
 
     getVideos,
     getView,
+
+    /* Search helpers (landing row filter + search summary). */
+    matchesSearch: matchesFilter,
+    getSearch: () => filterQuery,
+    getDisplayedCount: () => filteredDisplayVideos().length,
 
     getIndex,
     getCount,

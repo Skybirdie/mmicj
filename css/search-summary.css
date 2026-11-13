@@ -1,0 +1,76 @@
+/* =========================================================
+   Search summaries (js/searchSummary.js)
+
+   Everything is driven by one attribute per section on <html>:
+   data-ss-reader / data-ss-video / data-ss-slideshow, present only while
+   that section's search box has text. With no search, none of this
+   matches and the app looks exactly as before.
+   ========================================================= */
+
+.ss-summary{
+    box-sizing:border-box;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    margin:6px 10px 8px;
+    padding:7px 10px;
+    border:1px solid color-mix(in srgb,var(--text,#222) 14%,transparent);
+    border-radius:10px;
+    background:color-mix(in srgb,var(--panel,#fff) 82%,transparent);
+    color:var(--text,#222);
+    font:500 12px/1.35 Inter,Arial,sans-serif;
+    text-align:left;
+}
+.ss-summary[hidden]{display:none!important;}
+
+.ss-text{min-width:0;overflow-wrap:anywhere;}
+.ss-query{font-weight:700;}
+.ss-count{opacity:.8;white-space:nowrap;}
+.ss-summary[data-ss-state="none"] .ss-text{font-weight:600;}
+
+.ss-clear{
+    flex:0 0 auto;
+    appearance:none;
+    border:1px solid color-mix(in srgb,var(--text,#222) 22%,transparent);
+    border-radius:999px;
+    padding:3px 10px;
+    background:transparent;
+    color:inherit;
+    font:600 11px/1.2 Inter,Arial,sans-serif;
+    cursor:pointer;
+    white-space:nowrap;
+}
+.ss-clear:hover,
+.ss-clear:focus-visible{
+    background:color-mix(in srgb,var(--text,#222) 10%,transparent);
+    outline:none;
+}
+
+/* ---- Landing: temporarily takes the place of Read/Watch/View Again ---- */
+.ss-summary.ss-landing{
+    flex:0 0 auto;
+    width:min(560px,calc(100% - 20px));
+    margin:6px auto 4px;
+}
+
+html[data-ss-reader] #viewerContinue,
+html[data-ss-video] .video-landing-media-row,
+html[data-ss-slideshow] .slideshow-landing-media-row{
+    display:none!important;
+}
+
+/* ---- The libraries' own generic "empty" lines give way to the summary ---- */
+html[data-ss-reader] .libraryEmptyState,
+html[data-ss-video] .video-library-empty,
+html[data-ss-slideshow] .slideshow-library-empty{
+    display:none;
+}
+
+/* Share Mode has no library: never show these there. */
+body.sky-share-mode .ss-summary{display:none!important;}
+
+/* Narrow: tuck the button under the sentence only when really tight. */
+@media (max-width:340px){
+    .ss-summary{flex-wrap:wrap;}
+}
