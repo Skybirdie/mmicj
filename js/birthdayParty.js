@@ -1,7 +1,7 @@
 "use strict";
 
 /* =========================================================
-   Front Page birthday party  (js/birthdayParty.js  v1.1.0)
+   Front Page birthday party  (js/birthdayParty.js  v1.3.0)
    with css/birthday-party.css
 
    A tiny celebration row above the bottom doors of the Front Page:
@@ -24,9 +24,28 @@
      assets/birthday.gif backdrop. The party's clock is paused while the
      popup is open.
 
-   The clock only runs while the Front Page is actually showing (it
-   pauses in Books / Videos / Images, in a hidden tab, and behind the
-   loading screen).
+   WHERE IT GOES - the page is measured (not guessed) and the first
+   layout that really fits wins:
+     1. SIDE    room to the left of the centerpiece (wide screens):
+                the row runs from the screen's left edge to a comfortable
+                distance left of the centerpiece, just above the bottom
+                doors. The popup also opens in that left space, so the
+                centerpiece stays visible while the list is read.
+     2. BELOW   no room beside it, but a clear strip between the
+                centerpiece and the bottom doors (phones, portrait
+                tablets): the row sits in that strip, never over the
+                centerpiece, and stops just left of #frontShareButton
+                when that button is above the doors.
+     3. BUTTON  neither fits: a birthday button (assets/birthday-icon.gif)
+                the same size as #frontShareButton and its horizontal
+                mirror (left side instead of right). Like the row it only
+                shows for 10 seconds (fades in, fades out); tapping it
+                opens the popup.
+   The decision is chooseMode() below, a pure function with tests.
+
+   The clock only runs while the row or button is showing: it pauses in
+   Books / Videos / Images, in a hidden tab, behind the loading screen and
+   while the popup is open.
 
    WHAT THIS FILE DOES NOT DO (yet)
    It knows nothing about members. It only needs a list of display names
@@ -34,12 +53,14 @@
 
        BirthdayParty.setCelebrants(["Ann", "Marcus", ...]);
 
-   The members catalog (private bucket, via the Worker) will call that
-   later; the phone numbers, emails and birth years never need to reach
-   the browser, only the names to celebrate today.
+   Plan for the real data: a daily scheduled Worker writes a small
+   public file with today's names only; phone numbers, emails and birth
+   years never reach the browser.
 
    PREVIEWING NOW (no data needed)
-       open the app with   ?birthdaydemo=1                  (sample names)
+       open the app with   ?birthdaydemo=members            (assets/birthday/members-demo.json,
+                                                             today's birthdays only)
+                           ?birthdaydemo=1                  (sample names)
                            ?birthdaydemo=Ann,Marcus,Joy     (your own names)
        or in the console:  BirthdayParty.demo()
 
@@ -47,7 +68,8 @@
    With no names nothing runs: no network, no timers, no DOM. When there
    are names it fetches one tiny JSON file (the gif list) plus the gifs.
    It never touches the centerpiece, the doors or any other front-page
-   code; it only appends two elements inside #frontPage.
+   code; it only appends elements inside #frontPage and reads their
+   positions.
    ========================================================= */
 (function(){
     "use strict";
@@ -57,12 +79,26 @@
        --------------------------------------------------------- */
     const GIF_FOLDER     = "assets/birthday/";
     const GIF_MANIFEST   = GIF_FOLDER + "manifest.json";   /* ["a.gif","b.gif",...] */
+    const BUTTON_ICON    = "assets/birthday-icon.gif";     /* the button (layout 3) */
     const NAME_MS        = 3000;    /* time each name is shown (minimum) */
     const GIF_MS         = 10000;   /* the gif changes this often */
     const MIN_PARTY_MS   = 10000;   /* the party never ends sooner than this */
+    const BUTTON_MS      = 10000;   /* how long the birthday button (layout 3) shows */
     const TICK_MS        = 200;     /* clock resolution */
     const FADE_MS        = 280;     /* name / gif cross-fade (match the CSS) */
     const LEAVE_MS       = 500;     /* fade-out before the row is removed */
+
+    /* layout numbers (px) */
+    const INSET          = 10;      /* gap to the screen's left edge */
+    const GAP_CENTER     = 18;      /* gap between the row and the centerpiece */
+    const GAP_DOORS      = 6;       /* gap between the row and the bottom doors */
+    const GAP_BELOW      = 4;       /* gap between the centerpiece and the row below it */
+    const SIDE_MIN_W     = 190;     /* narrowest useful row beside the centerpiece */
+    const BELOW_MIN_W    = 190;     /* narrowest useful row below it */
+    const SHARE_GAP      = 8;       /* gap between the row and #frontShareButton */
+    const POPUP_SIDE_MIN = 260;     /* narrowest popup worth placing beside the centerpiece */
+    const POPUP_SIDE_MAX = 400;
+    const POPUP_SIDE_MIN_H = 300;
 
     const DEMO_NAMES = ["Ava", "Marcus", "Joy", "Daniel", "Hannah"];
     const DEMO_MEMBERS_FILE = GIF_FOLDER + "members-demo.json";   /* ?birthdaydemo=members */
@@ -159,7 +195,60 @@
         return out;
     }
 
+    /* Height of the row for a given width (matches the tiers in
+       css/birthday-party.css: gif 72 / 60 / 48 px). */
+    function rowHeightFor(width){
+        return width >= 300 ? 72 : width >= 220 ? 60 : 48;
+    }
+
+    /* Which layout fits? All numbers are pixels measured on the page:
+         vw, vh      the Front Page's size
+         center      {left, right, top, bottom} of the centerpiece
+         waveTop     top edge of the bottom doors
+         shareLeft   left edge of #frontShareButton (or null)
+         shareAbove  true when that button sits above the doors (phones)
+       Returns {mode:"side"|"below"|"button", right, bottom}
+       (right/bottom = distance from the screen's right / bottom edge). */
+    function chooseMode(g){
+        const bottom = Math.round(g.vh - g.waveTop + GAP_DOORS);
+
+        /* 1. beside the centerpiece */
+        const sideW = g.center.left - INSET - GAP_CENTER;
+        if(sideW >= SIDE_MIN_W){
+            return {mode:"side", right:Math.round(g.vw - (g.center.left - GAP_CENTER)), bottom:bottom};
+        }
+
+        /* 2. in the strip between the centerpiece and the doors */
+        const rightEdge = (g.shareAbove && g.shareLeft != null)
+            ? g.shareLeft - SHARE_GAP
+            : g.vw - INSET;
+        const belowW = rightEdge - INSET;
+        const room = (g.waveTop - GAP_DOORS) - (g.center.bottom + GAP_BELOW);
+        if(belowW >= BELOW_MIN_W && room >= rowHeightFor(belowW)){
+            return {mode:"below", right:Math.round(g.vw - rightEdge), bottom:bottom};
+        }
+
+        /* 3. no room: the mirrored button */
+        return {mode:"button", right:0, bottom:bottom};
+    }
+
+    /* Where the popup goes: beside the centerpiece if there is room for a
+       reasonable card, otherwise centered. top/bottom are the free band
+       between the top and bottom doors. */
+    function choosePopup(g){
+        const left = INSET + 6;
+        const width = Math.min(POPUP_SIDE_MAX, Math.round(g.center.left - left - GAP_CENTER));
+        const top = Math.round(g.topWaveBottom + 12);
+        const bottom = Math.round(g.vh - g.waveTop + 12);
+        const height = g.vh - top - bottom;
+        if(width >= POPUP_SIDE_MIN && height >= POPUP_SIDE_MIN_H){
+            return {placement:"side", left:left, width:width, top:top, bottom:bottom};
+        }
+        return {placement:"center"};
+    }
+
     const CORE = {cleanNames, alphabetical, shuffled, plan, gifDeck, manifestFiles, birthdaysToday,
+                  chooseMode, choosePopup, rowHeightFor,
                   NAME_MS, GIF_MS, MIN_PARTY_MS};
 
     /* ---------------------------------------------------------
@@ -205,6 +294,11 @@
         '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" ' +
         'stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>';
 
+    /* little star shown on the gold disc when the button's gif is missing */
+    const STAR_ICON =
+        '<svg class="bp-star" viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" ' +
+        'd="M12 2.5l2.7 6.2 6.8.6-5.1 4.5 1.5 6.6L12 16.9l-5.9 3.5 1.5-6.6L2.5 9.3l6.8-.6z"/></svg>';
+
     function build(p){
         const page = frontPage();
         if(!page) return false;
@@ -212,6 +306,7 @@
         /* --- the row --- */
         const root = el("div");
         root.id = "frontBirthdayParty";
+        root.hidden = true;                 /* shown once a layout has been chosen */
 
         const row = el("button", "bp-row");
         row.type = "button";
@@ -235,11 +330,28 @@
         row.appendChild(text);
         root.appendChild(row);
 
+        /* --- the button (layout 3): mirror of #frontShareButton --- */
+        const button = el("button");
+        button.id = "frontBirthdayButton";
+        button.type = "button";
+        button.hidden = true;
+        button.title = "Today's birthdays";
+        button.setAttribute("aria-haspopup", "dialog");
+        button.setAttribute("aria-label", "Today's birthdays");
+        const btnBox = el("span", "bp-btn-gif");
+        const btnImg = el("img");
+        btnImg.alt = "";
+        btnImg.draggable = false;
+        btnBox.appendChild(btnImg);
+        btnBox.insertAdjacentHTML("beforeend", STAR_ICON);
+        button.appendChild(btnBox);
+
         /* --- the popup --- */
         const modal = el("div", "bp-modal");
         modal.setAttribute("role", "dialog");
         modal.setAttribute("aria-modal", "true");
         modal.setAttribute("aria-labelledby", "bpModalTitle");
+        modal.dataset.placement = "center";
 
         const backdrop = el("div", "bp-modal-backdrop");
         const card = el("div", "bp-card");
@@ -269,17 +381,81 @@
         modal.appendChild(card);
 
         page.appendChild(root);
+        page.appendChild(button);
         page.appendChild(modal);
 
         row.addEventListener("click", () => openModal());
+        button.addEventListener("click", () => openModal());
         close.addEventListener("click", () => closeModal());
         backdrop.addEventListener("click", () => closeModal());
         modal.addEventListener("keydown", e => {
             if(e.key === "Escape"){ e.stopPropagation(); closeModal(); }
         });
 
-        p.dom = {root, row, gifBox, gifImg, name, modal, close, cardGifBox, cardGifImg};
+        loadInto(btnImg, btnBox, BUTTON_ICON);
+
+        p.dom = {root, row, button, gifBox, gifImg, name, modal, close, cardGifBox, cardGifImg};
         return true;
+    }
+
+    /* ---- measuring and choosing the layout ---- */
+    function rectIn(page, selectorOrEl){
+        const node = typeof selectorOrEl === "string" ? page.querySelector(selectorOrEl) : selectorOrEl;
+        if(!node) return null;
+        const r = node.getBoundingClientRect();
+        if(!r.width && !r.height) return null;
+        const pr = page.getBoundingClientRect();
+        return {left:r.left - pr.left, right:r.right - pr.left, top:r.top - pr.top, bottom:r.bottom - pr.top};
+    }
+
+    function measure(){
+        const page = frontPage();
+        if(!page || !frontIsShowing()) return null;
+        const pr = page.getBoundingClientRect();
+        const vw = pr.width, vh = pr.height;
+        if(!vw || !vh) return null;
+
+        const narrow = vw <= 700;
+        /* If the doors are not built yet, use the same sizes front-page.css uses. */
+        let center = rectIn(page, ".front-door-center");
+        if(!center){
+            const s = Math.min(vh * 0.75, vw * (narrow ? 0.84 : 0.82));
+            center = {left:(vw - s) / 2, right:(vw + s) / 2, top:(vh - s) / 2, bottom:(vh + s) / 2};
+        }
+        const wave = rectIn(page, "#frontWave");
+        const waveTop = wave ? wave.top : vh - vh * (narrow ? 0.15 : 0.10);
+        const topWave = rectIn(page, "#frontTopWave");
+        const topWaveBottom = topWave ? topWave.bottom : vh * (narrow ? 0.15 : 0.10);
+        const share = rectIn(page, "#frontShareButton");
+
+        return {
+            vw:vw, vh:vh, center:center, waveTop:waveTop, topWaveBottom:topWaveBottom,
+            shareLeft: share ? share.left : null,
+            shareAbove: !!share && share.top < waveTop - 4
+        };
+    }
+
+    function rowCapable(p){ return p.mode === "side" || p.mode === "below"; }
+
+    function layout(p){
+        if(p.done) return;
+        const g = measure();
+        if(!g || !p.dom) return;
+
+        const choice = chooseMode(g);
+        p.mode = choice.mode;
+
+        const root = p.dom.root;
+        const showRow = rowCapable(p) && !p.done;
+        root.hidden = !showRow;
+        if(showRow){
+            root.style.left = "max(" + INSET + "px, env(safe-area-inset-left, 0px))";
+            root.style.right = choice.right + "px";
+            root.style.bottom = choice.bottom + "px";
+            root.dataset.mode = choice.mode;
+        }
+        /* the button stands in whenever there is no room for a row */
+        p.dom.button.hidden = (p.mode !== "button");
     }
 
     /* ---- name line ---- */
@@ -299,9 +475,13 @@
     }
 
     /* ---- gif ---- */
-    function showNextGif(p){
+    function nextGifUrl(p){
         const file = p.deck ? p.deck.next() : null;
-        const url = file ? GIF_FOLDER + encodeURIComponent(file) : null;
+        return file ? GIF_FOLDER + encodeURIComponent(file) : null;
+    }
+
+    function showNextGif(p){
+        const url = nextGifUrl(p);
         p.currentGif = url;
 
         const img = p.dom.gifImg;
@@ -325,7 +505,8 @@
 
     /* ---- clock ---- */
     function canRun(p){
-        return frontIsShowing() &&
+        return !p.done &&
+               frontIsShowing() &&
                !document.hidden &&
                !document.getElementById("reloadScreen") &&   /* loading screen */
                !p.modalOpen;
@@ -348,38 +529,60 @@
         const dt = Math.min(now - p.lastTick, TICK_MS * 2);   /* a stalled tab adds nothing */
         p.lastTick = now;
 
+        layout(p);                        /* the doors may have just been built */
         if(!canRun(p)) return;
 
-        p.dom.root.classList.add("is-on");
+        const isRow = rowCapable(p);
+        (isRow ? p.dom.root : p.dom.button).classList.add("is-on");
         p.elapsed += dt;
 
-        if(p.elapsed >= p.plan.total){
+        /* a row lasts as long as its names need (at least 10 s); the button 10 s */
+        if(p.elapsed >= (isRow ? p.plan.total : BUTTON_MS)){
             finish(p);
             return;
         }
-        render(p);
+        if(isRow) render(p);
     }
 
     function finish(p){
         clearInterval(p.timer);
         p.timer = null;
         p.done = true;
+        if(p.observer){ p.observer.disconnect(); p.observer = null; }
         p.dom.root.classList.remove("is-on");
+        p.dom.button.classList.remove("is-on");
+        /* fade out, then take everything off the page until the app is reopened */
         setTimeout(() => {
-            if(p.dom.root.parentNode) p.dom.root.parentNode.removeChild(p.dom.root);
-            if(p.dom.modal.parentNode) p.dom.modal.parentNode.removeChild(p.dom.modal);
+            [p.dom.root, p.dom.button, p.dom.modal].forEach(n => n.parentNode && n.parentNode.removeChild(n));
         }, LEAVE_MS);
     }
 
     /* ---- popup ---- */
+    function placePopup(p){
+        const modal = p.dom.modal;
+        const g = measure();
+        const choice = g ? choosePopup(g) : {placement:"center"};
+        modal.dataset.placement = choice.placement;
+        if(choice.placement === "side"){
+            modal.style.setProperty("--bp-side-left", choice.left + "px");
+            modal.style.setProperty("--bp-side-width", choice.width + "px");
+            modal.style.setProperty("--bp-side-top", choice.top + "px");
+            modal.style.setProperty("--bp-side-bottom", choice.bottom + "px");
+        }
+    }
+
     function openModal(){
         const p = party;
         if(!p || p.done || p.modalOpen) return;
         p.modalOpen = true;
+        p.dom.root.classList.add("is-hushed");
 
-        /* the popup shows whichever gif the row is showing right now */
+        /* the popup shows whichever gif the row is showing right now
+           (or the next one in the deck if the row never ran) */
+        if(!p.currentGif && p.deck) p.currentGif = nextGifUrl(p);
         loadInto(p.dom.cardGifImg, p.dom.cardGifBox, p.currentGif);
 
+        placePopup(p);
         p.dom.modal.classList.add("is-open");
         p.dom.close.focus({preventScroll:true});
     }
@@ -389,22 +592,30 @@
         if(!p || !p.modalOpen) return;
         p.modalOpen = false;
         p.dom.modal.classList.remove("is-open");
+        p.dom.root.classList.remove("is-hushed");
         p.lastTick = Date.now();
-        try{ p.dom.row.focus({preventScroll:true}); }catch(e){}
+        const back = p.dom.button.hidden ? p.dom.row : p.dom.button;
+        try{ back.focus({preventScroll:true}); }catch(e){}
     }
 
     /* ---------------------------------------------------------
        Public API
        --------------------------------------------------------- */
+    function teardown(p){
+        if(!p) return;
+        if(p.timer) clearInterval(p.timer);
+        if(p.observer) p.observer.disconnect();
+        if(p.dom){
+            [p.dom.root, p.dom.button, p.dom.modal].forEach(n => n.parentNode && n.parentNode.removeChild(n));
+        }
+    }
+
     function setCelebrants(names, options){
         const force = !!(options && options.force);
         const list = cleanNames(names);
         if(!list.length) return false;
         if(party && !force) return false;      /* one party per app opening */
-        if(party && party.timer) clearInterval(party.timer);
-        if(party && party.dom){
-            [party.dom.root, party.dom.modal].forEach(n => n.parentNode && n.parentNode.removeChild(n));
-        }
+        teardown(party);
 
         const p = {
             order:      shuffled(list),
@@ -415,9 +626,11 @@
             gifIndex:   -1,
             deck:       null,
             currentGif: null,
+            mode:       "button",
             modalOpen:  false,
             done:       false,
             timer:      null,
+            observer:   null,
             lastTick:   Date.now(),
             dom:        null
         };
@@ -429,14 +642,21 @@
             .then(r => r.ok ? r.json() : [])
             .catch(() => [])
             .then(json => {
-                if(party !== p || p.done) return;
+                if(party !== p) return;
                 p.deck = gifDeck(manifestFiles(json));
                 p.gifIndex = -1;
-                render(p);
+                if(!p.done) render(p);
             });
 
         render(p);                               /* first name straight away */
+        layout(p);
         p.timer = setInterval(() => tick(p), TICK_MS);
+
+        /* screen changes (resize, rotation, the Front Page being shown) re-pick the layout */
+        if(typeof ResizeObserver === "function"){
+            p.observer = new ResizeObserver(() => layout(p));
+            p.observer.observe(frontPage());
+        }
         return true;
     }
 
@@ -448,6 +668,7 @@
         setCelebrants: setCelebrants,
         demo:          demo,
         isRunning:     () => !!party && !party.done,
+        mode:          () => party ? party.mode : null,
         _core:         CORE
     };
 

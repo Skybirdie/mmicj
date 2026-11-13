@@ -1,10 +1,11 @@
-Birthday party (Front Page) - visual side, v1.1.0
+Birthday party (Front Page) - visual side, v1.3.1
 =================================================
 
 New files
   js/birthdayParty.js            the row + popup + clock
   css/birthday-party.css         all of its styling
   assets/birthday/manifest.json  list of the gif file names in assets/birthday/
+  assets/birthday-icon.gif       the party popper used by the birthday button
   assets/birthday/members-demo.json  DEMO ONLY: 3 fake members with a 13 Nov birthday + 2 who are not
                                  (delete before go-live; it is a public file)
   birthdayParty.test.mjs         run: node birthdayParty.test.mjs
@@ -32,21 +33,33 @@ What it does
   - Row fades away after the last name; it does not return until the app is reopened.
   - Tap/click the row: popup with the gif, HAPPY BIRTHDAY, names A-Z, on assets/birthday.gif.
     Close with X, the dark area, or Esc. The clock pauses while it is open.
-  - The clock only runs while the Front Page is showing (pauses in Books/Videos/Images,
-    in a hidden tab, behind the loading screen).
-  - Gradient fallbacks: gold disc if a gif fails (row and popup); the popup card is a
+  - The clock only runs while the row/button is showing (pauses in Books/Videos/Images,
+    in a hidden tab, behind the loading screen and while the popup is open).
+  - Gradient fallbacks: gold disc if a gif fails (row, button and popup); the popup card is a
     teal gradient under birthday.gif, so it simply stays teal if that gif fails.
     The gifs are transparent, so the gradients only show on failure.
 
-Where the row sits (bottom doors: 10dvh, 15dvh at <=700px)
-  Tall/narrow screens (width/height <= 3/4: phones, portrait tablets):
-      left edge of screen -> just left of the share button column, just above the doors.
-  Everything else (desktop, laptop, landscape):
-      left edge of screen -> 18px left of the centerpiece, just above the doors.
-  The row shrinks with its space (smaller gif/text, then stacked), and hides if under 100px
-  wide (only happens in near-square windows, e.g. 800x900) rather than cover the page.
-  If front-page.css sizes change (doors, centerpiece, share button), the matching numbers are
-  listed in the header of css/birthday-party.css.
+Where it goes (the page is measured, first layout that really fits wins)
+  1. SIDE    room left of the centerpiece (desktop, laptop, landscape tablet/phone):
+             row from the left edge to 18px left of the centerpiece, 6px above the doors.
+             The popup also opens in that left space (no dimming), so the centerpiece
+             stays visible while the list is read. Tap outside / X / Esc closes it.
+  2. BELOW   no room beside it but a clear strip between the centerpiece and the doors
+             (phones, portrait tablets): row sits in that strip, 6px above the doors, never
+             over the centerpiece, and stops 8px left of the share button when that button is
+             above the doors (phones). Popup is centered.
+  3. BUTTON  neither fits (short phones, near-square windows, small landscape phones):
+             a birthday button, 60x60 like the share button and its horizontal mirror
+             (same padding, hover and press feel; left side instead of right). Uses
+             assets/birthday-icon.gif, or a gold gradient disc with a star if it cannot load.
+  The row and the button both show for 10 seconds only (the row longer when there are many
+  names: 3 s per name), fade in/out, then are gone until the app is reopened. The button's
+  10 s is BUTTON_MS at the top of js/birthdayParty.js.
+  Rows shrink with their space (smaller gif/text, then stacked). The layout is re-chosen
+  when the window is resized or rotated.
+  The decision is chooseMode() / choosePopup() in js/birthdayParty.js (pure functions,
+  covered by birthdayParty.test.mjs, including "never over the centerpiece" at every size
+  from 300x400 to 1920x1300).
 
 Text
   White; text-shadow is your 0 2px 3px rgba(0,0,0,.55) plus a faint wide halo

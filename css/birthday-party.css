@@ -1,56 +1,48 @@
 /* =========================================================
    FRONT PAGE BIRTHDAY PARTY  (css/birthday-party.css, with js/birthdayParty.js)
    ---------------------------------------------------------
-   A tiny floating celebration row above the bottom doors, plus a popup
-   with the full list. Both are created by js/birthdayParty.js inside
-   #frontPage, only when there are birthdays to celebrate, so with no
+   A tiny floating celebration (row or button) above the bottom doors, plus
+   a popup with the full list. All of it is created by js/birthdayParty.js
+   inside #frontPage, only when there are birthdays to celebrate, so with no
    birthdays nothing here is ever on the page.
 
-   WHERE THE ROW SITS (the row is transparent; left edge is always the
-   screen's left edge, the right edge depends on the screen):
+   WHERE THINGS GO is decided by the script from measured positions (see
+   chooseMode() in js/birthdayParty.js), which sets the row's left / right /
+   bottom itself:
+     side    row left of the centerpiece, just above the doors (wide screens);
+             the popup also opens in that left space
+     below   row in the strip between the centerpiece and the doors
+             (phones, portrait tablets), left of the share button when that
+             is above the doors
+     button  no room for a row: #frontBirthdayButton, the same size as
+             #frontShareButton and its horizontal mirror (left side)
+   Only the button's own position is in this file, mirrored from
+   #frontShareButton in css/front-page.css (keep them in step):
+     wide      left:clamp(60px,5vw,20%)   bottom:0
+     <=700px   left:clamp(5px,5vw,15%)    bottom:clamp(110px,20vw,25%)
 
-   A. Tall / narrow screens (phones, portrait tablets: width/height <= 3/4)
-        right edge = just left of #frontShareButton
-        (phones <= 700px: the share button is above the doors, so the row
-         shares its strip and stops just left of it; wider portrait
-         screens: the row runs above the doors)
-   B. Everything else (desktops, laptops, landscape)
-        right edge = a comfortable distance left of the centerpiece
-        (.front-door-center is min(75dvh,82vw) wide, centered)
-
-   The row adapts to the width it is given (container query at the bottom):
-   smaller gif and text, then a stacked layout, then it hides rather than
-   crowd the page.
-
-   Same numbers as css/front-page.css (keep them in step if those change):
-     bottom doors    10dvh tall, 15dvh at <= 700px
-     centerpiece     min(75dvh,82vw), min(75dvh,84vw) at <= 700px
-     share button    60px; right clamp(60px,5vw,20%)  (<= 700px: clamp(5px,5vw,15%))
-                     and bottom clamp(110px,20vw,25%) at <= 700px
+   The row adapts to the width it is given (container query below):
+   smaller gif and text, then a stacked layout.
    ========================================================= */
 
 #frontBirthdayParty,
+#frontBirthdayButton,
 .bp-modal{
     --bp-gold:linear-gradient(135deg,#ffe27a 0%,#e3a82b 55%,#b9770e 100%);
     --bp-shadow:0 2px 3px rgba(0,0,0,.55), 0 0 10px rgba(0,0,0,.3);
 }
 
 #frontBirthdayParty[hidden],
+#frontBirthdayButton[hidden],
 .bp-modal[hidden]{display:none!important;}
 
 /* ---------------------------------------------------------
-   The row
+   The row (left / right / bottom are set by the script)
    --------------------------------------------------------- */
 #frontBirthdayParty{
-    --bp-wave:10dvh;                       /* height of the bottom doors */
-    --bp-center:min(75dvh,82vw);           /* width of the centerpiece */
-    --bp-gap-center:18px;                  /* breathing room left of it */
-    --bp-inset:max(10px,env(safe-area-inset-left,0px));
-
     position:absolute;
-    left:var(--bp-inset);
-    right:calc(50% + (var(--bp-center) / 2) + var(--bp-gap-center));
-    bottom:calc(var(--bp-wave) + 6px);
+    left:10px;
+    bottom:0;
     z-index:150;                           /* above doors (20/50), below share button (200) */
 
     container:bp / inline-size;
@@ -59,27 +51,10 @@
     font-family:Inter,Arial,sans-serif;
 }
 
-@media (max-width:700px){
-    #frontBirthdayParty{
-        --bp-wave:15dvh;
-        --bp-center:min(75dvh,84vw);
-    }
-}
-
-/* A. Tall / narrow screens: the centerpiece leaves a clear strip above
-      the doors, so the row runs under it, up to the share button column. */
-@media (max-aspect-ratio:3/4){
-    #frontBirthdayParty{
-        right:calc(clamp(60px,5vw,20%) + 60px + 8px);
-    }
-}
-
-/* A, phones (<= 700px): the share button is above the doors here, so the
-   row shares its strip: same right-hand neighbour, left of the button. */
-@media (max-width:700px) and (max-aspect-ratio:3/4){
-    #frontBirthdayParty{
-        right:calc(clamp(5px,5vw,15%) + 60px + 8px);
-    }
+/* while the popup is open the row steps aside */
+#frontBirthdayParty.is-hushed .bp-row{
+    opacity:0!important;
+    pointer-events:none;
 }
 
 #frontBirthdayParty .bp-row{
@@ -165,11 +140,27 @@
 }
 
 #frontBirthdayParty .bp-title{
+    position:relative;
+    align-self:flex-start;
+    padding-bottom:5px;                    /* room for the white line */
     font-size:var(--bp-title);
     font-weight:800;
     letter-spacing:.07em;
     line-height:1.15;
     white-space:nowrap;
+}
+
+/* white separator under the title, as long as the title, above the names */
+#frontBirthdayParty .bp-title::after{
+    content:"";
+    position:absolute;
+    left:0;
+    right:0;
+    bottom:0;
+    height:2px;
+    border-radius:2px;
+    background:#fff;
+    box-shadow:0 1px 2px rgba(0,0,0,.5);
 }
 
 #frontBirthdayParty .bp-name{
@@ -196,6 +187,7 @@
 @container bp (max-width:149px){
     #frontBirthdayParty .bp-row{--bp-gif:44px;--bp-title:11px;--bp-name:12.5px;flex-direction:column;gap:2px;text-align:center;}
     #frontBirthdayParty .bp-text{align-items:center;max-width:100%;}
+    #frontBirthdayParty .bp-title{align-self:center;}
 }
 /* No room: stay out of the way. */
 @container bp (max-width:99px){
@@ -356,10 +348,121 @@
 }
 .bp-card-list li:last-child{border-bottom:0;}
 
+/* ---------------------------------------------------------
+   The button: same size as #frontShareButton, mirrored to the left
+   --------------------------------------------------------- */
+#frontBirthdayButton{
+    position:fixed;
+    left:clamp(60px,5vw,20%);
+    bottom:0;
+    z-index:200;
+
+    width:60px;
+    height:60px;
+    box-sizing:border-box;
+    margin:0;
+    padding:8px;
+
+    display:flex;
+    align-items:center;
+    justify-content:center;
+
+    border:none;
+    border-radius:8px;
+    background:transparent;
+
+    cursor:pointer;
+    pointer-events:auto;
+    appearance:none;
+    -webkit-appearance:none;
+    -webkit-tap-highlight-color:transparent;
+    touch-action:manipulation;
+
+    opacity:0;
+    transition:filter .2s ease, transform .2s ease, opacity .45s ease;
+}
+
+#frontBirthdayButton.is-on{opacity:1;}
+
+#frontBirthdayButton .bp-btn-gif{
+    position:relative;
+    display:block;
+    width:70%;
+    height:70%;
+    border-radius:50%;
+    pointer-events:none;
+}
+
+#frontBirthdayButton .bp-btn-gif img{
+    position:absolute;
+    inset:0;
+    display:block;
+    width:100%;
+    height:100%;
+    margin:0;
+    padding:0;
+    object-fit:contain;
+    user-select:none;
+    -webkit-user-drag:none;
+    pointer-events:none;
+}
+
+/* gif missing: gold gradient disc with a small white star */
+#frontBirthdayButton .bp-btn-gif .bp-star{display:none;}
+#frontBirthdayButton .bp-btn-gif.is-fallback{
+    background:var(--bp-gold);
+    box-shadow:0 0 12px rgba(255,214,102,.6);
+}
+#frontBirthdayButton .bp-btn-gif.is-fallback img{visibility:hidden;}
+#frontBirthdayButton .bp-btn-gif.is-fallback .bp-star{
+    display:block;
+    position:absolute;
+    inset:22%;
+    width:56%;
+    height:56%;
+}
+
+#frontBirthdayButton:hover{
+    filter:brightness(1.12);
+    transform:translateY(-2px);
+}
+#frontBirthdayButton:active{
+    transform:translateY(0) scale(.96);
+}
+#frontBirthdayButton:focus-visible{
+    outline:2px solid #fff;
+    outline-offset:3px;
+}
+
+@media (max-width:700px){
+    #frontBirthdayButton{
+        left:clamp(5px,5vw,15%);
+        bottom:clamp(110px,20vw,25%);
+    }
+}
+
+/* ---------------------------------------------------------
+   Popup placed beside the centerpiece (wide screens): the script sets
+   --bp-side-left / -width / -top / -bottom. No dimming, so the
+   centerpiece stays fully visible; tapping outside still closes it.
+   --------------------------------------------------------- */
+.bp-modal[data-placement="side"]{
+    place-items:center start;
+    padding:var(--bp-side-top) 0 var(--bp-side-bottom) var(--bp-side-left);
+}
+.bp-modal[data-placement="side"] .bp-modal-backdrop{
+    background:transparent;
+}
+.bp-modal[data-placement="side"] .bp-card{
+    width:var(--bp-side-width);
+    max-height:100%;
+}
+
 @media (prefers-reduced-motion:reduce){
     #frontBirthdayParty .bp-row,
     #frontBirthdayParty .bp-gif img,
     #frontBirthdayParty .bp-name,
+    #frontBirthdayButton,
     .bp-modal-backdrop,
     .bp-card{transition:none;}
 }

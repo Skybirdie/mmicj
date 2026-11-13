@@ -60,6 +60,45 @@ ok(C.birthdaysToday(L, new Date(2027,2,1)).length === 0, '...and not on 1 March'
 ok(C.birthdaysToday(L, new Date(2028,1,28)).length === 0 && C.birthdaysToday(L, new Date(2028,1,29)).join() === 'Leap', 'in a leap year it is celebrated on the 29th only');
 ok(C.birthdaysToday('nope').length === 0, 'birthdaysToday survives a non-list');
 
+/* layout choice - numbers measured on the real front page */
+const box = (vw, vh, s, waveH, shareLeft, shareAbove) => ({
+    vw, vh, waveTop: vh - waveH, topWaveBottom: waveH, shareLeft, shareAbove,
+    center: {left: (vw - s) / 2, right: (vw + s) / 2, top: (vh - s) / 2, bottom: (vh + s) / 2}
+});
+const mode = g => C.chooseMode(g).mode;
+ok(mode(box(1440, 900, 675, 90, 1320, false)) === 'side', 'desktop 1440x900 -> beside the centerpiece');
+ok(mode(box(1280, 720, 540, 72, 1160, false)) === 'side', 'laptop 1280x720 -> beside the centerpiece');
+ok(mode(box(1024, 768, 576, 76.8, 904, false)) === 'side', 'landscape tablet 1024x768 -> beside the centerpiece');
+ok(mode(box(844, 390, 292.5, 39, 724, false)) === 'side', 'landscape phone 844x390 -> beside the centerpiece');
+const ph = C.chooseMode(box(390, 844, 327.6, 126.6, 311, true));
+ok(ph.mode === 'below' && ph.right === 87, 'phone 390x844 -> below the centerpiece, stops 8px left of the share button');
+ok(mode(box(820, 1180, 672, 118, 700, false)) === 'below', 'portrait tablet 820x1180 -> below the centerpiece');
+ok(mode(box(320, 568, 268.8, 85.2, 244, true)) === 'button', 'short phone 320x568 (strip too thin) -> button');
+ok(mode(box(390, 600, 327.6, 90, 311, true)) === 'button', 'short phone 390x600 -> button');
+ok(mode(box(800, 900, 656, 90, 680, false)) === 'button', 'near-square window 800x900 -> button');
+ok(mode(box(667, 375, 281, 56.3, 574, true)) === 'button', 'small landscape phone 667x375 -> button');
+const side = C.chooseMode(box(1440, 900, 675, 90, 1320, false));
+ok(side.bottom === 96 && side.right === Math.round(1440 - (382.5 - 18)), 'side row: 6px above the doors, 18px left of the centerpiece');
+/* the row never overlaps the centerpiece */
+let noOverlap = true;
+for (let w = 300; w <= 1920; w += 37) for (let h = 400; h <= 1300; h += 41) {
+    const narrow = w <= 700, s = Math.min(h * .75, w * (narrow ? .84 : .82)), wh = h * (narrow ? .15 : .10);
+    const g = box(w, h, s, wh, narrow ? w - Math.max(5, w * .05) - 60 : w - Math.max(60, w * .05) - 60, narrow && true);
+    const r = C.chooseMode(g);
+    if (r.mode === 'side' && (w - r.right) > g.center.left) noOverlap = false;
+    if (r.mode === 'below') { const rowTop = g.vh - r.bottom - C.rowHeightFor(w - r.right - 10); if (rowTop < g.center.bottom) noOverlap = false; }
+}
+ok(noOverlap, 'no screen size from 300x400 to 1920x1300 puts the row over the centerpiece');
+
+/* popup placement */
+const pop = g => C.choosePopup(g).placement;
+ok(pop(box(1440, 900, 675, 90)) === 'side', 'wide desktop: popup opens beside the centerpiece');
+ok(pop(box(1280, 720, 540, 72)) === 'side', 'laptop: popup opens beside the centerpiece');
+ok(pop(box(1024, 768, 576, 76.8)) === 'center', 'narrow side space: popup centered');
+ok(pop(box(390, 844, 327.6, 126.6)) === 'center', 'phone: popup centered');
+const pw = C.choosePopup(box(1440, 900, 675, 90));
+ok(pw.width <= 400 && pw.left + pw.width + 18 <= 382.5 + 1, 'side popup stays clear of the centerpiece');
+
 /* nothing happens without a front page */
 ok(w.BirthdayParty.setCelebrants(['Ann']) === false && !w.BirthdayParty.isRunning(), 'no page / no names: nothing starts');
 
