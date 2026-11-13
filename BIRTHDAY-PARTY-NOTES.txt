@@ -1,0 +1,63 @@
+Birthday party (Front Page) - visual side, v1.0.0
+=================================================
+
+New files
+  js/birthdayParty.js            the row + popup + clock
+  css/birthday-party.css         all of its styling
+  assets/birthday/manifest.json  list of the gif file names in assets/birthday/
+  birthdayParty.test.mjs         run: node birthdayParty.test.mjs
+Changed file
+  index.html                     +1 <link> (after front-page.css), +1 <script> (after frontShare.js)
+Already in your assets (used as-is)
+  assets/birthday/*.gif          the rotating row/popup gifs
+  assets/birthday.gif            the popup backdrop
+
+Adding a gif: drop it in assets/birthday/ AND add its file name to manifest.json
+(a static site cannot list a folder, so the list is how the app learns the names).
+
+Preview now, no data needed
+  open the app with ?birthdaydemo=1               sample names
+                    ?birthdaydemo=Ann,Marcus,Joy  your own names
+  or in the browser console: BirthdayParty.demo()
+
+What it does
+  - Gif: shuffled deck from the manifest, changes every 10 s, no repeats until all used.
+  - Names: shuffled, one at a time, 3 s each. Fewer than 4 names: the time per name
+    is stretched so the party lasts at least 10 s (1 name = 10 s, 2 names = 5 s each).
+  - Row fades away after the last name; it does not return until the app is reopened.
+  - Tap/click the row: popup with the gif, HAPPY BIRTHDAY, names A-Z, on assets/birthday.gif.
+    Close with X, the dark area, or Esc. The clock pauses while it is open.
+  - The clock only runs while the Front Page is showing (pauses in Books/Videos/Images,
+    in a hidden tab, behind the loading screen).
+  - Gradient fallbacks: gold disc if a gif fails (row and popup); the popup card is a
+    teal gradient under birthday.gif, so it simply stays teal if that gif fails.
+    The gifs are transparent, so the gradients only show on failure.
+
+Where the row sits (bottom doors: 10dvh, 15dvh at <=700px)
+  Tall/narrow screens (width/height <= 3/4: phones, portrait tablets):
+      left edge of screen -> just left of the share button column, just above the doors.
+  Everything else (desktop, laptop, landscape):
+      left edge of screen -> 18px left of the centerpiece, just above the doors.
+  The row shrinks with its space (smaller gif/text, then stacked), and hides if under 100px
+  wide (only happens in near-square windows, e.g. 800x900) rather than cover the page.
+  If front-page.css sizes change (doors, centerpiece, share button), the matching numbers are
+  listed in the header of css/birthday-party.css.
+
+Text
+  White; text-shadow is your 0 2px 3px rgba(0,0,0,.55) plus a faint wide halo
+  (0 0 10px rgba(0,0,0,.3)) because the water background is light. The gif has a tiny
+  drop-shadow for the same reason. Both are one line each in birthday-party.css
+  (--bp-shadow, and the filter on .bp-gif img) if you want them removed.
+
+Cost / risk
+  With no names nothing runs at all (no request, no timer, no DOM). With names: one small JSON
+  request plus the gifs, one 200 ms timer, two elements added inside #frontPage. It does not touch
+  the centerpiece, doors, share button or any front-page script.
+
+Rollback: remove the <link> and <script> lines from index.html.
+
+NEXT STEP (data) - how it will plug in
+  The only call needed is  BirthdayParty.setCelebrants(["Ann","Marcus",...]).
+  Plan: the Worker reads the members file from the private R2 bucket, works out who has a birthday
+  today (in Trinidad time), and returns ONLY display names. Phone numbers, emails and birth years
+  never reach the browser. Anniversaries can reuse the same row/popup with a different title.

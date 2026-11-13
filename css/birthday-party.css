@@ -1,0 +1,365 @@
+/* =========================================================
+   FRONT PAGE BIRTHDAY PARTY  (css/birthday-party.css, with js/birthdayParty.js)
+   ---------------------------------------------------------
+   A tiny floating celebration row above the bottom doors, plus a popup
+   with the full list. Both are created by js/birthdayParty.js inside
+   #frontPage, only when there are birthdays to celebrate, so with no
+   birthdays nothing here is ever on the page.
+
+   WHERE THE ROW SITS (the row is transparent; left edge is always the
+   screen's left edge, the right edge depends on the screen):
+
+   A. Tall / narrow screens (phones, portrait tablets: width/height <= 3/4)
+        right edge = just left of #frontShareButton
+        (phones <= 700px: the share button is above the doors, so the row
+         shares its strip and stops just left of it; wider portrait
+         screens: the row runs above the doors)
+   B. Everything else (desktops, laptops, landscape)
+        right edge = a comfortable distance left of the centerpiece
+        (.front-door-center is min(75dvh,82vw) wide, centered)
+
+   The row adapts to the width it is given (container query at the bottom):
+   smaller gif and text, then a stacked layout, then it hides rather than
+   crowd the page.
+
+   Same numbers as css/front-page.css (keep them in step if those change):
+     bottom doors    10dvh tall, 15dvh at <= 700px
+     centerpiece     min(75dvh,82vw), min(75dvh,84vw) at <= 700px
+     share button    60px; right clamp(60px,5vw,20%)  (<= 700px: clamp(5px,5vw,15%))
+                     and bottom clamp(110px,20vw,25%) at <= 700px
+   ========================================================= */
+
+#frontBirthdayParty,
+.bp-modal{
+    --bp-gold:linear-gradient(135deg,#ffe27a 0%,#e3a82b 55%,#b9770e 100%);
+    --bp-shadow:0 2px 3px rgba(0,0,0,.55), 0 0 10px rgba(0,0,0,.3);
+}
+
+#frontBirthdayParty[hidden],
+.bp-modal[hidden]{display:none!important;}
+
+/* ---------------------------------------------------------
+   The row
+   --------------------------------------------------------- */
+#frontBirthdayParty{
+    --bp-wave:10dvh;                       /* height of the bottom doors */
+    --bp-center:min(75dvh,82vw);           /* width of the centerpiece */
+    --bp-gap-center:18px;                  /* breathing room left of it */
+    --bp-inset:max(10px,env(safe-area-inset-left,0px));
+
+    position:absolute;
+    left:var(--bp-inset);
+    right:calc(50% + (var(--bp-center) / 2) + var(--bp-gap-center));
+    bottom:calc(var(--bp-wave) + 6px);
+    z-index:150;                           /* above doors (20/50), below share button (200) */
+
+    container:bp / inline-size;
+    pointer-events:none;                   /* only the row itself is tappable */
+    color:#fff;
+    font-family:Inter,Arial,sans-serif;
+}
+
+@media (max-width:700px){
+    #frontBirthdayParty{
+        --bp-wave:15dvh;
+        --bp-center:min(75dvh,84vw);
+    }
+}
+
+/* A. Tall / narrow screens: the centerpiece leaves a clear strip above
+      the doors, so the row runs under it, up to the share button column. */
+@media (max-aspect-ratio:3/4){
+    #frontBirthdayParty{
+        right:calc(clamp(60px,5vw,20%) + 60px + 8px);
+    }
+}
+
+/* A, phones (<= 700px): the share button is above the doors here, so the
+   row shares its strip: same right-hand neighbour, left of the button. */
+@media (max-width:700px) and (max-aspect-ratio:3/4){
+    #frontBirthdayParty{
+        right:calc(clamp(5px,5vw,15%) + 60px + 8px);
+    }
+}
+
+#frontBirthdayParty .bp-row{
+    --bp-gif:72px;
+    --bp-title:16px;
+    --bp-name:17px;
+
+    display:flex;
+    align-items:center;
+    gap:10px;
+    max-width:100%;
+    margin:0;
+    padding:0;
+    border:0;
+    border-radius:12px;
+    background:transparent;                /* fully transparent, as asked */
+    color:inherit;
+    font:inherit;
+    text-align:left;
+    cursor:pointer;
+    pointer-events:auto;
+    appearance:none;
+    -webkit-appearance:none;
+    -webkit-tap-highlight-color:transparent;
+    touch-action:manipulation;
+
+    opacity:0;
+    transform:translateY(8px);
+    transition:opacity .45s ease, transform .45s ease;
+}
+
+#frontBirthdayParty.is-on .bp-row{
+    opacity:1;
+    transform:none;
+}
+
+#frontBirthdayParty .bp-row:focus-visible{
+    outline:2px solid #fff;
+    outline-offset:4px;
+}
+
+/* Gif box. The gifs are transparent, so nothing sits behind them;
+   the gradient disc only appears if a gif cannot be loaded. */
+#frontBirthdayParty .bp-gif{
+    position:relative;
+    flex:0 0 auto;
+    width:var(--bp-gif);
+    height:var(--bp-gif);
+    border-radius:50%;
+}
+
+#frontBirthdayParty .bp-gif img{
+    position:absolute;
+    inset:0;
+    display:block;
+    width:100%;
+    height:100%;
+    object-fit:contain;
+    opacity:1;
+    filter:drop-shadow(0 1px 2px rgba(0,0,0,.35));
+    transition:opacity .25s ease;
+    user-select:none;
+    -webkit-user-drag:none;
+    pointer-events:none;
+}
+
+#frontBirthdayParty .bp-gif img.is-out{opacity:0;}
+
+#frontBirthdayParty .bp-gif.is-fallback{
+    background:var(--bp-gold);
+    box-shadow:0 0 14px rgba(255,214,102,.6);
+}
+#frontBirthdayParty .bp-gif.is-fallback img{visibility:hidden;}
+
+/* Text: white with a soft shadow, two stacked lines. */
+#frontBirthdayParty .bp-text{
+    display:flex;
+    flex-direction:column;
+    gap:2px;
+    min-width:0;
+    color:#fff;
+    text-shadow:var(--bp-shadow);
+}
+
+#frontBirthdayParty .bp-title{
+    font-size:var(--bp-title);
+    font-weight:800;
+    letter-spacing:.07em;
+    line-height:1.15;
+    white-space:nowrap;
+}
+
+#frontBirthdayParty .bp-name{
+    min-height:1.3em;
+    font-size:var(--bp-name);
+    font-weight:600;
+    line-height:1.3;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    transition:opacity .28s ease;
+}
+#frontBirthdayParty .bp-name.is-out{opacity:0;}
+
+/* Fit the row to the width it was given (see "WHERE THE ROW SITS").
+   The selectors repeat #frontBirthdayParty so they outrank the defaults above. */
+@container bp (max-width:299px){
+    #frontBirthdayParty .bp-row{--bp-gif:60px;--bp-title:14px;--bp-name:15px;}
+}
+@container bp (max-width:219px){
+    #frontBirthdayParty .bp-row{--bp-gif:48px;--bp-title:12px;--bp-name:13.5px;gap:8px;}
+}
+/* Very narrow strip: stack the gif above the text. */
+@container bp (max-width:149px){
+    #frontBirthdayParty .bp-row{--bp-gif:44px;--bp-title:11px;--bp-name:12.5px;flex-direction:column;gap:2px;text-align:center;}
+    #frontBirthdayParty .bp-text{align-items:center;max-width:100%;}
+}
+/* No room: stay out of the way. */
+@container bp (max-width:99px){
+    #frontBirthdayParty .bp-row{display:none;}
+}
+
+/* ---------------------------------------------------------
+   The popup
+   --------------------------------------------------------- */
+.bp-modal{
+    position:absolute;
+    inset:0;
+    z-index:310;                           /* above the share panel (300) */
+    display:grid;
+    place-items:center;
+    padding:16px;
+    box-sizing:border-box;
+    visibility:hidden;
+    pointer-events:none;
+    font-family:Inter,"Segoe UI",Roboto,Arial,sans-serif;
+}
+
+.bp-modal.is-open{
+    visibility:visible;
+    pointer-events:auto;
+}
+
+.bp-modal-backdrop{
+    position:absolute;
+    inset:0;
+    background:rgba(0,0,0,.5);
+    opacity:0;
+    transition:opacity .2s ease;
+}
+.bp-modal.is-open .bp-modal-backdrop{opacity:1;}
+
+.bp-card{
+    position:relative;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    box-sizing:border-box;
+    width:min(100%,400px);
+    max-height:min(88dvh,640px);
+    padding:20px 18px 18px;
+    border-radius:22px;
+    overflow:hidden;
+    color:#fff;
+    text-shadow:var(--bp-shadow);
+
+    /* assets/birthday.gif over a teal gradient. The gradient is also the
+       fallback: if the gif cannot be loaded the card simply stays teal. */
+    background:
+        url("../assets/birthday.gif") center / cover no-repeat,
+        linear-gradient(160deg,#00897b 0%,#00606a 52%,#0e351f 100%);
+    box-shadow:0 18px 50px rgba(0,0,0,.45), 0 0 0 1px rgba(255,255,255,.2);
+
+    opacity:0;
+    transform:translateY(10px) scale(.97);
+    transition:opacity .2s ease, transform .2s ease;
+}
+.bp-modal.is-open .bp-card{
+    opacity:1;
+    transform:none;
+}
+
+.bp-close{
+    position:absolute;
+    top:10px;
+    right:10px;
+    z-index:2;
+    display:grid;
+    place-items:center;
+    width:36px;
+    height:36px;
+    margin:0;
+    padding:0;
+    border:0;
+    border-radius:50%;
+    background:rgba(255,255,255,.18);
+    color:#fff;
+    cursor:pointer;
+    -webkit-tap-highlight-color:transparent;
+}
+.bp-close:hover{background:rgba(255,255,255,.3);}
+.bp-close:focus-visible{outline:2px solid #fff;outline-offset:2px;}
+.bp-close svg{width:18px;height:18px;display:block;}
+
+.bp-card-gif{
+    position:relative;
+    flex:0 0 auto;
+    width:132px;
+    height:132px;
+    margin-top:2px;
+    border-radius:50%;
+}
+.bp-card-gif img{
+    position:absolute;
+    inset:0;
+    display:block;
+    width:100%;
+    height:100%;
+    object-fit:contain;
+    user-select:none;
+    -webkit-user-drag:none;
+}
+.bp-card-gif.is-fallback{
+    background:var(--bp-gold);
+    box-shadow:0 0 26px rgba(255,214,102,.55);
+}
+.bp-card-gif.is-fallback img{visibility:hidden;}
+
+.bp-card-title{
+    position:relative;
+    flex:0 0 auto;
+    margin:8px 0 14px;
+    padding-bottom:10px;
+    font-size:clamp(20px,6vw,26px);
+    font-weight:800;
+    letter-spacing:.09em;
+    line-height:1.15;
+    text-align:center;
+    color:#fff;
+}
+.bp-card-title::after{
+    content:"";
+    position:absolute;
+    left:20%;
+    right:20%;
+    bottom:0;
+    height:3px;
+    border-radius:2px;
+    background:var(--bp-gold);
+}
+
+.bp-card-list{
+    flex:1 1 auto;
+    box-sizing:border-box;
+    width:100%;
+    min-height:0;
+    margin:0;
+    padding:4px 16px;
+    list-style:none;
+    overflow-y:auto;
+    overscroll-behavior:contain;
+    border-radius:14px;
+    background:rgba(0,40,44,.55);
+    -webkit-overflow-scrolling:touch;
+}
+.bp-card-list li{
+    padding:10px 4px;
+    font-size:17px;
+    font-weight:500;
+    line-height:1.3;
+    text-align:center;
+    overflow-wrap:anywhere;
+    border-bottom:1px solid rgba(255,255,255,.16);
+}
+.bp-card-list li:last-child{border-bottom:0;}
+
+@media (prefers-reduced-motion:reduce){
+    #frontBirthdayParty .bp-row,
+    #frontBirthdayParty .bp-gif img,
+    #frontBirthdayParty .bp-name,
+    .bp-modal-backdrop,
+    .bp-card{transition:none;}
+}
