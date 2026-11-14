@@ -67,10 +67,18 @@
        });
 
    and the pure function celebrationsFromMembers(members, date) turns a
-   members list ({name, birthday, added}) into exactly that shape. Plan:
-   a daily scheduled Worker runs it and writes a small public file with
-   today's names only; phone numbers, emails and dates never reach the
-   browser. (setCelebrants(names) still works: birthdays only.)
+   members list ({name, birthday, added}) into exactly that shape (used by
+   the demo). LIVE DATA: the admin portal's Worker rebuilds one small public
+   file every night just after midnight in Trinidad (and whenever the member
+   list is saved):
+       https://media.mmicj.com/catalog/celebrations.json
+       {v:1, date:"2026-11-14", welcome:[{name}], birthday:[name],
+        anniversary:[{name, years?}]}        // years only on every 5th
+   Names only: phone numbers, emails, birthdays and add dates never reach the
+   browser. This file fetches it once when the app opens (a static file, so
+   no Worker request), uses it only when its date is today's date in
+   Trinidad, and says nothing at all when it is missing, late or unreadable.
+   (setCelebrants(names) still works: birthdays only.)
 
    PREVIEWING NOW (no data needed)
        ?birthdaydemo=members   assets/birthday/members-demo.json, filtered
@@ -98,6 +106,9 @@
     const MIN_PARTY_MS   = 10000;   /* each kind lasts at least this long */
     const BUTTON_MS      = 10000;   /* how long the button shows, per kind */
     const GAP_MS         = 3000;    /* pause between welcome > birthdays > anniversaries */
+    const LIVE_ON        = true;    /* false = never fetch the real celebrations file (demos still work) */
+    const TODAY_URL      = "https://media.mmicj.com/catalog/celebrations.json";
+    const TODAY_TIMEOUT  = 8000;    /* give up on the file after this long, silently */
     const WELCOME_DAYS   = 7;       /* "new": added today or in the 6 days before (7 days) */
     const TICK_MS        = 200;     /* clock resolution */
     const FADE_MS        = 280;     /* name / gif cross-fade (match the CSS) */
@@ -424,7 +435,21 @@
         return {placement:"center"};
     }
 
-    const CORE = {cleanNames, cleanEntries, alphabetical, shuffled, plan, gifDeck, manifestFiles,
+    /* Trinidad's calendar day (UTC-4 all year, no daylight saving) as "YYYY-MM-DD", whatever the device's time zone. */
+    function trinidadToday(now){
+        return new Date((now || new Date()).getTime() - 4 * 3600 * 1000).toISOString().slice(0, 10);
+    }
+
+    /* The public file -> {welcome, birthday, anniversary}, or null when it must not be used:
+       not an object, or its date is not today's date in Trinidad (yesterday's file, a stale copy, a clock far off). */
+    function acceptTodayFile(file, todayYMD){
+        if(!file || typeof file !== "object" || Array.isArray(file)) return null;
+        if(file.date !== todayYMD) return null;
+        const list = v => Array.isArray(v) ? v : [];
+        return {welcome:list(file.welcome), birthday:list(file.birthday), anniversary:list(file.anniversary)};
+    }
+
+    const CORE = {trinidadToday, acceptTodayFile, cleanNames, cleanEntries, alphabetical, shuffled, plan, gifDeck, manifestFiles,
                   milestoneText, yearsLabel, entryTitle, makeBeats,
                   celebrationsFromMembers, birthdaysToday, resolveDemoMembers,
                   chooseMode, choosePopup, rowHeightFor,
@@ -966,6 +991,7 @@
         isRunning:       () => !!party && !party.done,
         mode:            () => party ? party.mode : null,
         current:         () => party && !party.done ? currentSegment(party).type : null,
+        loadToday:       loadToday,
         _core:           CORE
     };
 
@@ -978,6 +1004,22 @@
             .then(json => setCelebrations(
                 celebrationsFromMembers(resolveDemoMembers(json && json.members)),
                 {force:true}));
+    }
+
+    /* The real thing: today's file, once per app opening. Any problem (offline, 404, bad JSON, wrong day) = no celebration. */
+    function loadToday(){
+        const day = trinidadToday();
+        const ctl = typeof AbortController === "function" ? new AbortController() : null;
+        const timer = ctl ? setTimeout(() => ctl.abort(), TODAY_TIMEOUT) : null;
+        /* ?d=<day> gives each day its own cached copy, so a copy saved yesterday can never be served today */
+        return fetch(TODAY_URL + "?d=" + day, ctl ? {signal:ctl.signal} : undefined)
+            .then(r => r.ok ? r.json() : null)
+            .then(file => {
+                const lists = acceptTodayFile(file, day);
+                return lists ? setCelebrations(lists) : false;
+            })
+            .catch(() => false)
+            .then(result => { if(timer) clearTimeout(timer); return result; });
     }
 
     /* ?birthdaydemo=members | all | 1 | Ann,Marcus,Joy */
@@ -993,6 +1035,12 @@
                 document.addEventListener("DOMContentLoaded", start, {once:true});
             }else{
                 start();
+            }
+        }else if(LIVE_ON){
+            if(document.readyState === "loading"){
+                document.addEventListener("DOMContentLoaded", loadToday, {once:true});
+            }else{
+                loadToday();
             }
         }
     }catch(e){}

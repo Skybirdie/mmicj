@@ -1,4 +1,4 @@
-Front Page celebrations (welcome / birthdays / anniversaries) - v2.0.0
+Front Page celebrations (welcome / birthdays / anniversaries) - v2.1.0 (live data)
 =====================================================================
 (file names keep the "birthday" name; BirthdayParty is still the global)
 
@@ -44,8 +44,7 @@ The rules (celebrationsFromMembers in js/birthdayParty.js, covered by tests)
                starred and gold. Wording is MILESTONE_TEXT at the top of the script
                (5 Half a decade! / 10 A whole decade! / 25 A quarter century! / 50 Golden jubilee!,
                other multiples of 5: "<n> years strong!").
-  Dates are "YYYY-MM-DD". "Today" is the device date in the demo; the real data should be worked out
-  for Trinidad's date by the daily Worker.
+  Dates are "YYYY-MM-DD". "Today" is the device date in the demo; in the live data it is Trinidad's date (worked out by the Worker).
 
 Preview now, no data needed
   ?birthdaydemo=members   reads members-demo.json (relative dates, so every kind shows on any day):
@@ -67,15 +66,27 @@ Text
   White; text-shadow is your 0 2px 3px rgba(0,0,0,.55) plus a faint wide halo (--bp-shadow);
   white separator under the title; tiny drop-shadow on the gif.
 
-The data step (next) - the shape the app needs
+LIVE DATA (new in v2.1.0)
+  On every app opening js/birthdayParty.js fetches ONE static file (unless a ?birthdaydemo= is in the address):
+      https://media.mmicj.com/catalog/celebrations.json?d=<today's Trinidad date>
+      {"v":1, "date":"2026-11-14", "welcome":[{"name":"Ann"}], "birthday":["Joy"],
+       "anniversary":[{"name":"Bo"}, {"name":"Cy", "years":5}]}
+  - It is a static file, so it costs no Worker request. ?d=<date> gives each day its own saved copy.
+  - It is used ONLY if its "date" equals today's date in Trinidad (UTC-4, worked out from the clock, so the
+    phone's time zone does not matter). Yesterday's file, a 404, offline, bad JSON, an 8 s timeout: silently nothing.
+  - Names only. The portal's Worker writes it (nightly + after every Members save). See the portal's
+    docs/MEMBERS-CELEBRATIONS.md. Years appear only on every 5th anniversary, so ordinary anniversaries show the name only.
+  - Switch it off: LIVE_ON = false at the top of the script. The file address is TODAY_URL.
+  - BirthdayParty.loadToday() runs it again from the console (it only shows if nothing has played yet).
+  - The service worker only touches page loads, so it never caches this file.
+  Go-live checklist: delete assets/birthday/members-demo.json (demo only), add the welcome / anniversary gifs and icons.
+
+The shape the app takes (also what the Worker writes)
   BirthdayParty.setCelebrations({
       welcome:     ["Ann", ...],                       // names
       birthday:    ["Joy", ...],                       // names
       anniversary: [{name:"Daniel", years:5}, {name:"Ruth"}, ...]   // years only needed for 5/10/15... milestones
   });
-  Plan (option A): a daily scheduled Worker reads the private members file, runs the same rules for
-  Trinidad's date and writes ONE small public file in exactly that shape (names only; years only for 5/10/15... milestones).
-  Phone numbers, emails, birthdays and add dates never reach the browser.
 
 Cost / risk
   Nothing runs without names. Otherwise: one small manifest.json per kind that plays, plus the gifs.

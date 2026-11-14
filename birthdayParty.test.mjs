@@ -144,6 +144,19 @@ const dm = C.resolveDemoMembers([{name:'a', birthday:'today', added:'today-2d'},
 ok(dm[0].birthday === '1990-11-13' && dm[0].added === '2026-11-11' && dm[1].added === '2021-11-13' && dm[2].added === '2020-01-01', 'demo date tokens resolve relative to today');
 ok(C.ORDER.join() === 'welcome,birthday,anniversary' && C.GAP_MS === 3000, 'order is welcome > birthday > anniversary with a 3 s gap');
 
+
+/* the live file: Trinidad's day, and only today's file is accepted */
+ok(C.trinidadToday(new Date('2026-11-14T04:05:00Z')) === '2026-11-14' && C.trinidadToday(new Date('2026-11-14T03:59:00Z')) === '2026-11-13', "Trinidad's date is the UTC clock minus four hours");
+ok(C.trinidadToday(new Date('2027-01-01T03:00:00Z')) === '2026-12-31', "Trinidad's date rolls back across a year end");
+const good = {v:1, date:'2026-11-14', welcome:[{name:'Ann'}], birthday:['Joy'], anniversary:[{name:'Bo'}, {name:'Cy', years:5}]};
+const acc = C.acceptTodayFile(good, '2026-11-14');
+ok(acc && acc.birthday[0] === 'Joy' && acc.welcome.length === 1 && acc.anniversary.length === 2, "today's file is accepted");
+ok(C.acceptTodayFile(good, '2026-11-15') === null && C.acceptTodayFile(good, '2026-11-13') === null, "yesterday's or tomorrow's file is ignored");
+ok(C.acceptTodayFile(null, 'x') === null && C.acceptTodayFile([], 'x') === null && C.acceptTodayFile('oops', 'x') === null && C.acceptTodayFile({}, '2026-11-14') === null, 'junk is ignored');
+const sparse = C.acceptTodayFile({date:'2026-11-14', birthday:['Joy']}, '2026-11-14');
+ok(sparse && sparse.welcome.length === 0 && sparse.anniversary.length === 0, 'missing lists count as empty');
+ok(C.cleanEntries(acc.anniversary, 'anniversary').map(e => e.name + ':' + (e.years || '')).join() === 'Bo:,Cy:5', 'the file\'s anniversaries (with and without years) go through the app unchanged');
+
 /* nothing happens without a front page */
 ok(w.BirthdayParty.setCelebrants(['Ann']) === false && !w.BirthdayParty.isRunning(), 'no page / no names: nothing starts');
 
