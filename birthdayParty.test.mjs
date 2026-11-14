@@ -122,7 +122,7 @@ ok(C.celebrationsFromMembers([{name:'L', added:'2020-02-29'}], new Date(2027, 1,
 ok(C.celebrationsFromMembers([{name:'Y', added:'2025-12-31'}], new Date(2026, 0, 2)).welcome.length === 1, 'welcome window crosses a year end');
 
 /* entries */
-ok(JSON.stringify(C.cleanEntries([{name:' Ann ', years:3}, {name:'ann', years:4}, {name:'Bo', years:0}, {name:'Cy'}, 'Di', {name:'Ed', years:'5'}], 'anniversary')) === JSON.stringify([{name:'Ann', years:3}, {name:'Ed', years:5}]), 'anniversary entries need >= 1 whole year; duplicates dropped');
+ok(JSON.stringify(C.cleanEntries([{name:' Ann ', years:3}, {name:'ann', years:4}, {name:'Bo', years:0}, {name:'Cy'}, 'Di', {name:'Ed', years:'5'}], 'anniversary')) === JSON.stringify([{name:'Ann', years:3}, {name:'Bo'}, {name:'Cy'}, {name:'Di'}, {name:'Ed', years:5}]), 'anniversary years are optional (kept only when >= 1 whole year); duplicates dropped');
 ok(JSON.stringify(C.cleanEntries(['Ann', {name:'Bo'}, ''], 'welcome')) === JSON.stringify([{name:'Ann'}, {name:'Bo'}]), 'welcome entries accept names or {name}');
 
 /* anniversary wording */
@@ -133,7 +133,8 @@ ok(C.yearsLabel(1) === '1 year' && C.yearsLabel(3) === '3 years', 'years label i
 ok(C.entryTitle('anniversary', {years:10}) === '10-YEAR ANNIVERSARY' && C.entryTitle('anniversary', {years:3}) === 'HAPPY ANNIVERSARY', 'milestones change the title');
 ok(C.entryTitle('birthday', {}) === 'HAPPY BIRTHDAY' && C.entryTitle('welcome', {}) === 'WELCOME', 'titles for birthday and welcome');
 const beats = C.makeBeats('anniversary', [{name:'Ann', years:3}, {name:'Bo', years:10}]);
-ok(beats.length === 3 && beats[0].main === 'Ann' && beats[0].extra === '3 years', 'regular anniversary: one beat, name + years');
+ok(beats.length === 3 && beats[0].main === 'Ann' && beats[0].extra === '', 'regular anniversary: one beat, name only (no years)');
+ok(C.makeBeats('anniversary', [{name:'Cy'}]).length === 1, 'an anniversary with no years is just a name');
 ok(beats[1].main === 'Bo' && beats[1].extra === '' && beats[2].main === '\u2605 A whole decade!' && beats[2].entry.name === 'Bo', 'milestone: two beats, the name then its special text');
 ok(C.makeBeats('birthday', [{name:'A'}, {name:'B'}]).length === 2 && C.makeBeats('welcome', [{name:'A'}])[0].extra === '', 'birthday / welcome: one beat per name, no extra');
 ok(C.plan(C.makeBeats('anniversary', [{name:'Bo', years:10}]).length).total === 10000, 'a lone milestone (2 beats) still lasts at least 10 s');

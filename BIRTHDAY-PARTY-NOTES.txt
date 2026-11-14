@@ -36,7 +36,7 @@ The rules (celebrationsFromMembers in js/birthdayParty.js, covered by tests)
   WELCOME      added today or in the 6 days before (7 days in all; WELCOME_DAYS).
                Not future dates, not 7+ days ago.
   BIRTHDAY     month/day of "birthday" is today (year optional: "1990-11-13" or "11-13").
-  ANNIVERSARY  month/day of "added" is today and at least 1 year ago; "3 years" shows after the name.
+  ANNIVERSARY  month/day of "added" is today and at least 1 year ago; years are NOT shown for ordinary anniversaries (name only); only 5/10/15... year milestones show them.
                Someone added today is a welcome, not an anniversary.
                29 Feb dates are celebrated on 28 Feb in years with no 29th.
   Milestones   every 5th year (5, 10, 15, ...): the title becomes "10-YEAR ANNIVERSARY" and the person
@@ -71,10 +71,10 @@ The data step (next) - the shape the app needs
   BirthdayParty.setCelebrations({
       welcome:     ["Ann", ...],                       // names
       birthday:    ["Joy", ...],                       // names
-      anniversary: [{name:"Daniel", years:5}, ...]     // names + whole years
+      anniversary: [{name:"Daniel", years:5}, {name:"Ruth"}, ...]   // years only needed for 5/10/15... milestones
   });
   Plan (option A): a daily scheduled Worker reads the private members file, runs the same rules for
-  Trinidad's date and writes ONE small public file in exactly that shape (names + years only).
+  Trinidad's date and writes ONE small public file in exactly that shape (names only; years only for 5/10/15... milestones).
   Phone numbers, emails, birthdays and add dates never reach the browser.
 
 Cost / risk

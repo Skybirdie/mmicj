@@ -181,9 +181,10 @@
             if(seen.has(key)) return;
             const entry = {name:name};
             if(type === "anniversary"){
+                /* years is optional: it is only ever shown for 5/10/15...
+                   year milestones, so a plain name is a valid anniversary. */
                 const years = Math.floor(Number(isObject ? raw.years : NaN));
-                if(!(years >= 1)) return;
-                entry.years = years;
+                if(years >= 1) entry.years = years;
             }
             seen.add(key);
             out.push(entry);
@@ -281,7 +282,8 @@
                     beats.push({entry:entry, main:entry.name, extra:""});
                     beats.push({entry:entry, main:"\u2605 " + special, extra:""});
                 }else{
-                    beats.push({entry:entry, main:entry.name, extra:yearsLabel(entry.years)});
+                    /* an ordinary anniversary shows the name only, no years */
+                    beats.push({entry:entry, main:entry.name, extra:""});
                 }
             }else{
                 beats.push({entry:entry, main:entry.name, extra:""});
@@ -833,10 +835,11 @@
             li.appendChild(el("span", "bp-li-name", entry.name));
             if(seg.type === "anniversary"){
                 const special = milestoneText(entry.years);
-                li.appendChild(el("span", "bp-li-extra",
-                    special ? "★ " + yearsLabel(entry.years) + " · " + special
-                            : yearsLabel(entry.years)));
-                if(special) li.classList.add("is-milestone");
+                if(special){
+                    li.appendChild(el("span", "bp-li-extra",
+                        "★ " + yearsLabel(entry.years) + " · " + special));
+                    li.classList.add("is-milestone");
+                }
             }
             d.list.appendChild(li);
         });
