@@ -86,6 +86,13 @@ function load(withRules=true){
   ok(S('Hmm ICJ')==='Hmm '+EJ,'ICJ after an ordinary word: '+S('Hmm ICJ'));
   ok(S('Jimmy I C J and comic jar and mimic jay and magic Jim and Mimi cj')==='Jimmy I C J and comic jar and mimic jay and magic Jim and Mimi cj','common words with the same letters are untouched');
   ok(S('MM ICJ and MM ICJs')===MJ+' and '+MJ+' s','a spaced MM ICJ (a PDF split) is still MMICJ at a word edge: '+S('MM ICJ and MM ICJs'));
+  /* small capitals split by the PDF ("L" big, "ORD" small) must still be the word, never "el ord" */
+  ok(S('the L ORD is')==='the lord is'&&S('L ORD')==='lord'&&S('L\u00ADORD')==='lord','L ORD (small capitals split) -> lord: '+S('the L ORD is'));
+  ok(S('O LORD my G OD')==='O lord my god','G OD -> god: '+S('O LORD my G OD'));
+  ok(S("the L ORD'S word")==="the lord's word",'split word with a possessive: '+S("the L ORD'S word"));
+  ok(S('L ord')==='Lord','a big L and lower-case rest is the plain word: '+S('L ord'));
+  ok(S('VITAMIN C IS good and PLAN B OR C')==='vitamin C is good and plan B or C','only the listed words are ever joined: '+S('VITAMIN C IS good and PLAN B OR C'));
+  ok(S('GO DO it')==='go do it'&&S('GO D')==='go D','neighbouring words are never glued into a listed word: '+S('GO D'));
   ok(S('DISCONTENTS')==='discontents'&&S('CONTENTSMENT')==='contentsment','a longer word that merely contains CONTENTS is its own word, never cut at CONTENTS');
 
   ok(S('Sister Liburd and Liburd\'s book')==="Sister Lie bird and Lie bird's book",'Liburd: '+S('Sister Liburd and Liburd\'s book'));
@@ -366,6 +373,7 @@ function makeEnv(o){
   ok(e.RA._enforce('MMICJ: x')==='em em eye see jay, x','enforce() works on its own');
   ok(e.RA._enforce('ICJ and icj.org and Micj and Pacific Jazz')==='eye see jay and eye see jay dot org and M eye see jay and Pacific Jazz','built-in safety net: icj -> eye see jay, no match across words: '+e.RA._enforce('ICJ and icj.org and Micj and Pacific Jazz'));
   ok(e.RA._enforce('THE LORD\'S word, GOD and JESUS')==='the lord\'s word, god and jesus','built-in safety net: words in capitals are plain words: '+e.RA._enforce('THE LORD\'S word, GOD and JESUS'));
+  ok(e.RA._enforce('the L ORD and G OD')==='the lord and god','built-in safety net: split small capitals are joined: '+e.RA._enforce('the L ORD and G OD'));
   ok(e.RA._enforce('NIV, KJV, USA, XII, MP3, McDONALD')==='NIV, KJV, USA, XII, MP3, McDONALD','built-in safety net: acronyms, numerals and mixed case untouched');
   ok(e.RA._enforce('Hmm i c j and hum mi cj')==='Hmm i c j and hum mi cj'&&e.RA._enforce('MM icj and MMICJs')==='em em eye see jay and em em eye see jay s','built-in safety net: MMICJ does not eat the end of an ordinary word: '+e.RA._enforce('Hmm i c j and hum mi cj'));
   ok(e.RA._enforce('TABLE OF CONTENTS: Chapter 1')==='table of contents, Chapter 1'&&e.RA._enforce('DISCONTENTS')==='discontents','built-in safety net: CONTENTS -> contents, longer words untouched: '+e.RA._enforce('TABLE OF CONTENTS: Chapter 1'));

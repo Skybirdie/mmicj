@@ -81,12 +81,17 @@ api.words=[
   minLength:  capitals of this many letters or more are words (3 = LORD, GOD, THE; use 4 to leave 3-letter ones alone)
   shortWords: two-letter words that are ordinary words when written in capitals ("IN THE BEGINNING")
   spelled:    acronyms that are said letter by letter: add one here when something is wrongly said as a word
+  joined:     words a PDF draws in SMALL CAPITALS (a big first letter, smaller rest), which reach the voice split as
+              "L ORD" or "G OD" (or "L ord"), a split right after the first letter: listed words are put back together first, so they are said as
+              "lord" / "god" and never "el ord". Only the words listed here are ever joined, so ordinary text
+              (VITAMIN C IS ...) is never glued together. Add a word here when it arrives split.
   enabled:    false switches the whole rule off
 =======================================================*/
 api.capsAsWords={
     enabled:true,
     minLength:3,
     shortWords:["AN","AS","AT","BE","BY","DO","GO","HE","IF","IN","IS","ME","MY","NO","OF","ON","OR","SO","TO","UP","WE"],
+    joined:["LORD","GOD","JEHOVAH","JESUS","CHRIST"],
     spelled:["USA","USPS","UAE","UFO","FBI","CIA","IRS","BBC","CNN","NBA","NFL","YMCA",
              "DNA","PDF","DVD","USB","URL","FAQ","SMS","GPS","ATM","CPU","GPU","ISBN","DIY","VIP","RSVP","NGO",
              "CEO","CFO","CTO","HIV","WWI","WWII",
@@ -203,7 +208,16 @@ function compile(){
         caps:(function(){
             const c=api.capsAsWords||{};
             const up=l=>new Set((l||[]).map(x=>String(x).toUpperCase()));
-            return {on:c.enabled!==false&&!!api.capsAsWords,min:Math.max(2,c.minLength||3),spelled:up(c.spelled),short:up(c.shortWords)};
+            const SEP="[\\u00AD\u200B-\u200D\u2060\uFEFF\\s]?";
+            const joined=(c.joined||[]).map(x=>String(x).toUpperCase()).filter(x=>/^\p{Lu}{2,}$/u.test(x)).map(x=>{
+                const ch=Array.from(x);
+                /* a small-capitals word splits right after its big first letter: "L ORD" (all capitals) or "L ord"
+                   (rest lower case), with one space / soft hyphen between. Splits elsewhere ("GO D") are left alone. */
+                const upper=ch[0]+SEP+ch.slice(1).join("");
+                const lower=ch[0]+SEP+ch.slice(1).join("").toLowerCase();
+                return new RegExp("(^|[^\\p{L}\\p{N}])("+upper+"|"+lower+")(?![\\p{L}\\p{N}])","gu");
+            });
+            return {on:c.enabled!==false&&!!api.capsAsWords,min:Math.max(2,c.minLength||3),spelled:up(c.spelled),short:up(c.shortWords),joined:joined};
         })(),
         abbr:(api.abbreviations||[]).map(a=>({
             re:new RegExp("(^|[^"+LET+".])("+a[0]+")(?![" + LET + "])","giu"),
@@ -256,6 +270,8 @@ const VOWEL=/[AEIOUY]/;
 function capitals(t){
     const c=compiled.caps;
     if(!c.on)return t;
+    /* "L ORD" / "G OD" (small capitals split by the PDF) -> "LORD" / "GOD"; a word that arrived whole is left as it was */
+    for(const re of c.joined)t=t.replace(re,(m,pre,word)=>pre+word.replace(/[\u00AD\u200B-\u200D\u2060\uFEFF\s]/g,""));
     return t.replace(/(^|[^\p{L}\p{N}])(\p{Lu}{2,})(['\u2019][sS])?(?![\p{L}\p{N}])/gu,(m,pre,tok,poss)=>{
         if(c.spelled.has(tok))return m;
         if(tok.length<c.min&&!(tok.length===2&&c.short.has(tok)))return m;

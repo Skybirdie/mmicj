@@ -487,7 +487,7 @@ async function chunksForPage(p){
    and no colon, semicolon or dash is ever left in the text for the voice to pronounce. */
 /* Words in capitals (LORD, GOD'S, THE) are said as plain words, not letter by letter. The lists live in
    js/readAloudRules.js (api.capsAsWords); when that file is missing these built-in ones are used. */
-const CAPS_DEFAULT={enabled:true,minLength:3,
+const CAPS_DEFAULT={enabled:true,minLength:3,joined:["LORD","GOD","JEHOVAH","JESUS","CHRIST"],
     shortWords:["AN","AS","AT","BE","BY","DO","GO","HE","IF","IN","IS","ME","MY","NO","OF","ON","OR","SO","TO","UP","WE"],
     spelled:["USA","USPS","UAE","UFO","FBI","CIA","IRS","BBC","CNN","NBA","NFL","YMCA","DNA","PDF","DVD","USB","URL","FAQ","SMS","GPS","ATM","CPU","GPU","ISBN","DIY","VIP","RSVP","NGO","CEO","CFO","CTO","HIV","WWI","WWII","NIV","ESV","KJV","NKJV","NASB","NLT","NRSV","YHWH"]};
 function capsToWords(t){
@@ -497,6 +497,12 @@ function capsToWords(t){
     if(c.enabled===false)return t;
     const spelled=new Set((c.spelled||[]).map(x=>String(x).toUpperCase())),short=new Set((c.shortWords||[]).map(x=>String(x).toUpperCase()));
     const min=Math.max(2,c.minLength||3);
+    /* small capitals split by the PDF ("L ORD", "G OD", "L ord") are put back together first */
+    (c.joined||[]).map(x=>String(x).toUpperCase()).filter(x=>/^\p{Lu}{2,}$/u.test(x)).forEach(x=>{
+        const ch=Array.from(x),SEP="[\\u00AD\u200B-\u200D\u2060\uFEFF\\s]?";
+        t=t.replace(new RegExp("(^|[^\\p{L}\\p{N}])("+ch[0]+SEP+ch.slice(1).join("")+"|"+ch[0]+SEP+ch.slice(1).join("").toLowerCase()+")(?![\\p{L}\\p{N}])","gu"),
+            (m,pre,word)=>pre+word.replace(/[\u00AD\u200B-\u200D\u2060\uFEFF\s]/g,""));
+    });
     const ROMAN=/^(?=[IVXLCDM])M{0,4}(?:CM|CD|D?C{0,3})(?:XC|XL|L?X{0,3})(?:IX|IV|V?I{0,3})$/;
     return t.replace(/(^|[^\p{L}\p{N}])(\p{Lu}{2,})(['\u2019][sS])?(?![\p{L}\p{N}])/gu,(m,pre,tok,poss)=>{
         if(spelled.has(tok))return m;
