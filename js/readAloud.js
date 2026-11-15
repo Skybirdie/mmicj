@@ -32,7 +32,7 @@
    How things are SAID (names, acronyms, "e.g.", colons / semicolons / dashes,
    list commas, the silence after a paragraph) lives in js/readAloudRules.js.
    That file is optional: without it the text is spoken as tidied here. Whatever happens
-   (rules file missing, a rule failing) enforce() below still spells MMICJ, says "icj" as "eye see jay", says CONTENTS as a word, and removes colons,
+   (rules file missing, a rule failing) enforce() below still spells MMICJ, says "icj" as "eye see jay", says CONTENTS and other words in capitals (LORD) as plain words, and removes colons,
    semicolons and dashes from the very last text handed to the voice.
 
    Page turns it makes itself are silent (the turn sound would talk over the voice).
@@ -483,15 +483,46 @@ async function chunksForPage(p){
 }
 
 /* The last word before the voice. Runs on every piece that is spoken, so the rules hold even when
-   js/readAloudRules.js is missing or one of its rules fails: MMICJ is always spelled letter by letter, "icj" is "eye see jay", CONTENTS is the word,
+   js/readAloudRules.js is missing or one of its rules fails: MMICJ is always spelled letter by letter, "icj" is "eye see jay", CONTENTS and other words in capitals (LORD) are plain words,
    and no colon, semicolon or dash is ever left in the text for the voice to pronounce. */
+/* Words in capitals (LORD, GOD'S, THE) are said as plain words, not letter by letter. The lists live in
+   js/readAloudRules.js (api.capsAsWords); when that file is missing these built-in ones are used. */
+const CAPS_DEFAULT={enabled:true,minLength:3,
+    shortWords:["AN","AS","AT","BE","BY","DO","GO","HE","IF","IN","IS","ME","MY","NO","OF","ON","OR","SO","TO","UP","WE"],
+    spelled:["USA","USPS","UAE","UFO","FBI","CIA","IRS","BBC","CNN","NBA","NFL","YMCA","DNA","PDF","DVD","USB","URL","FAQ","SMS","GPS","ATM","CPU","GPU","ISBN","DIY","VIP","RSVP","NGO","CEO","CFO","CTO","HIV","WWI","WWII","NIV","ESV","KJV","NKJV","NASB","NLT","NRSV","YHWH"]};
+function capsToWords(t){
+    const R=window.ReadAloudRules;
+    if(R&&typeof R.capitals==="function"){try{return R.capitals(t);}catch(e){}}
+    const c=(R&&R.capsAsWords)||CAPS_DEFAULT;
+    if(c.enabled===false)return t;
+    const spelled=new Set((c.spelled||[]).map(x=>String(x).toUpperCase())),short=new Set((c.shortWords||[]).map(x=>String(x).toUpperCase()));
+    const min=Math.max(2,c.minLength||3);
+    const ROMAN=/^(?=[IVXLCDM])M{0,4}(?:CM|CD|D?C{0,3})(?:XC|XL|L?X{0,3})(?:IX|IV|V?I{0,3})$/;
+    return t.replace(/(^|[^\p{L}\p{N}])(\p{Lu}{2,})(['\u2019][sS])?(?![\p{L}\p{N}])/gu,(m,pre,tok,poss)=>{
+        if(spelled.has(tok))return m;
+        if(tok.length<min&&!(tok.length===2&&short.has(tok)))return m;
+        if(!/[AEIOUY]/.test(tok.normalize("NFD").replace(/[\u0300-\u036f]/g,"")))return m;
+        if(ROMAN.test(tok))return m;
+        return pre+tok.toLowerCase()+(poss?poss.toLowerCase():"");
+    });
+}
+
 function basicEnforce(t){
     return String(t==null?"":t)
-        .replace(/(m[\s\u00AD\u200B-\u200D\u2060\uFEFF]?m[\s\u00AD\u200B-\u200D\u2060\uFEFF]?i[\s\u00AD\u200B-\u200D\u2060\uFEFF]?c[\s\u00AD\u200B-\u200D\u2060\uFEFF]?j)(\.(?=[a-z]{2,24}(?![a-z0-9])))?/gi,(m,name,dot)=>dot?" em em eye see jay dot ":" em em eye see jay ")
+        /* with a real space between its letters ("MM icj") it only counts at a word edge: "Hmm i c j" keeps its "mm" */
+        .replace(/(m[\s\u00AD\u200B-\u200D\u2060\uFEFF]?m[\s\u00AD\u200B-\u200D\u2060\uFEFF]?i[\s\u00AD\u200B-\u200D\u2060\uFEFF]?c[\s\u00AD\u200B-\u200D\u2060\uFEFF]?j)(\.(?=[a-z]{2,24}(?![a-z0-9])))?/gi,(m,name,dot,off,str)=>{
+            if(/\s/.test(name)){
+                const L=c=>!!c&&/[\p{L}\p{N}]/u.test(c),nx=str.charAt(off+name.length);
+                if(L(str.charAt(off-1))||(L(nx)&&!(/[sS]/.test(nx)&&!L(str.charAt(off+name.length+1)))))return m;
+            }
+            return dot?" em em eye see jay dot ":" em em eye see jay ";
+        })
         /* "icj" anywhere (the letters touching, a soft hyphen allowed): a voice says "ick jay" */
         .replace(/(i[\u00AD\u200B-\u200D\u2060\uFEFF]?c[\u00AD\u200B-\u200D\u2060\uFEFF]?j)(\.(?=[a-z]{2,24}(?![a-z0-9])))?/gi,(m,name,dot)=>dot?" eye see jay dot ":" eye see jay ")
         /* "CONTENTS" in capitals is spelled out by the voice: it is the ordinary word */
         .replace(/(^|[^\p{L}\p{N}])contents(?![\p{L}\p{N}])/giu,"$1contents")
+        /* any other word in capitals (LORD) is an ordinary word too; MMICJ / ICJ were already replaced above */
+        .replace(/^[\s\S]*$/,capsToWords)
         .replace(/\s*[:;\uFF1A\uFF1B\u037E]\s*/g,", ")
         .replace(/\s*(?:--+|[\u2012-\u2015])\s*/g,", ")
         .replace(/\s+[-\u2010\u2011]+\s+/g,", ")

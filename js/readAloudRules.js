@@ -15,6 +15,9 @@
                   MMICJ is spelled out wherever it appears, in any letter case;
                   mmicj.com is "em em eye see jay dot com".
                   "icj" anywhere (ICJ, Micj, icj.org) is "eye see jay"; "CONTENTS" is the word "contents"
+                  Any OTHER word in capitals (LORD, JESUS, GOD'S, THE) is said as the ordinary word, not
+                  letter by letter (see CAPITALS below; real acronyms such as USA or FBI are listed there
+                  and keep being spelled out)
    2. ABBREVIATIONS  "e.g." -> "for example", "Dr." -> "Doctor", "U.S." -> "U S"
    3. PUNCTUATION colons, semicolons and dashes are never spoken, they only
                   separate what is before from what is after them.
@@ -61,6 +64,34 @@ api.words=[
        ("Naf" was said as "en a f"), but say a dictionary word normally. Said the same way: "naf". */
     ["Naphatali", "Naff tah lee"]
 ];
+
+/*=======================================================
+  EDIT HERE (1a/4) - CAPITALS
+  A word written in CAPITAL LETTERS (LORD, JESUS, GOD'S, "THE LORD IS MY SHEPHERD") is an ordinary word. A voice
+  tends to spell it out ("el oh ar dee"); here it is handed over as the plain word ("lord"). Only the
+  speech changes, never the page.
+  This runs AFTER the WORDS list above, so MMICJ and ICJ (and everything else listed there) keep their own
+  rules, and nothing here ever touches them.
+  Left exactly as written (so the voice treats them as it always did):
+    - words with digits or lower-case letters in them (MP3, McDONALD, LORDship)
+    - capital words with no vowel (BBC, KJV, NLT, PTSD): they cannot be said as a word
+    - Roman numerals (XII, VIII, MMXXIV)
+    - the short acronyms listed in spelled: they stay letter by letter
+    - two-letter capitals, unless listed in shortWords (IN, OF, TO ...)
+  minLength:  capitals of this many letters or more are words (3 = LORD, GOD, THE; use 4 to leave 3-letter ones alone)
+  shortWords: two-letter words that are ordinary words when written in capitals ("IN THE BEGINNING")
+  spelled:    acronyms that are said letter by letter: add one here when something is wrongly said as a word
+  enabled:    false switches the whole rule off
+=======================================================*/
+api.capsAsWords={
+    enabled:true,
+    minLength:3,
+    shortWords:["AN","AS","AT","BE","BY","DO","GO","HE","IF","IN","IS","ME","MY","NO","OF","ON","OR","SO","TO","UP","WE"],
+    spelled:["USA","USPS","UAE","UFO","FBI","CIA","IRS","BBC","CNN","NBA","NFL","YMCA",
+             "DNA","PDF","DVD","USB","URL","FAQ","SMS","GPS","ATM","CPU","GPU","ISBN","DIY","VIP","RSVP","NGO",
+             "CEO","CFO","CTO","HIV","WWI","WWII",
+             "NIV","ESV","KJV","NKJV","NASB","NLT","NRSV","YHWH"]
+};
 
 /*=======================================================
   EDIT HERE (1b/4) - ARROWS
@@ -152,8 +183,10 @@ function compile(){
         words:(api.words||[]).map(w=>{
             const o=w[2]||{};
             if(o.anywhere){
-                /* the letters in a row, with at most one space / soft hyphen / zero-width mark between two of them
-                   (tight: no space) */
+                /* The letters in a row, with at most one soft hyphen / zero-width mark between two of them.
+                   Unless tight, one SPACE may also sit between two letters (a PDF can split MMICJ as "MM ICJ").
+                   A match that used such a space only counts when it starts and ends at a word edge (words()
+                   checks), so "Hmm i c j" or "hum mi cj" never lose the end of an ordinary word. */
                 const between=o.tight?"[\\u00AD\\u200B-\\u200D\\u2060\\uFEFF]?":"[\\s\\u00AD\\u200B-\\u200D\\u2060\\uFEFF]?";
                 const letters=Array.from(String(w[0])).map(esc).join(between);
                 return {
@@ -167,6 +200,11 @@ function compile(){
                 say:String(w[1])
             };
         }),
+        caps:(function(){
+            const c=api.capsAsWords||{};
+            const up=l=>new Set((l||[]).map(x=>String(x).toUpperCase()));
+            return {on:c.enabled!==false&&!!api.capsAsWords,min:Math.max(2,c.minLength||3),spelled:up(c.spelled),short:up(c.shortWords)};
+        })(),
         abbr:(api.abbreviations||[]).map(a=>({
             re:new RegExp("(^|[^"+LET+".])("+a[0]+")(?![" + LET + "])","giu"),
             say:String(a[1]),
@@ -184,17 +222,53 @@ function words(t){
             /* A web address: a voice meets "jay.com" and spells the word letter by letter ("j a y dot com").
                Say the dot as a word, apart from the name: mmicj.com -> "em em eye see jay dot com".
                "MMICJ.Come" (a missing space after a full stop) is not an address and is left as it was. */
+            /* A match that has a real space inside it ("Hmm i c j", "hum mi cj") is only the name when it
+               starts at the beginning of a word and does not run on into the next one (a plural "s" is fine).
+               Without a space the letters touch, and they count anywhere (MMICJs, mmicj-admin, xmmicj). */
+            const spacedOk=(m,start,str)=>{
+                if(!/\s/.test(m))return true;
+                if(isLet(str.charAt(start-1)))return false;
+                const nx=str.charAt(start+m.length);
+                return !isLet(nx)||(/[sS]/.test(nx)&&!isLet(str.charAt(start+m.length+1)));
+            };
             if(w.dom)t=t.replace(w.dom,(m,www,name,off,str)=>{
                 const ending=(str.slice(off+m.length).match(/^[A-Za-z]+/)||[""])[0];
                 if(ending!==ending.toLowerCase()&&ending!==ending.toUpperCase())return m;
+                if(!spacedOk(name,off+www.length,str)&&!www)return m;
                 return (www?"w w w dot ":"")+name+" dot ";
             });
             /* spoken form gets its own spaces when it was glued to other letters (MMICJs -> "... jay s") */
-            t=t.replace(w.re,(m,off,str)=>(isLet(str.charAt(off-1))?" ":"")+w.say+(isLet(str.charAt(off+m.length))?" ":""));
+            t=t.replace(w.re,(m,off,str)=>{
+                if(!spacedOk(m,off,str))return m;
+                return (isLet(str.charAt(off-1))?" ":"")+w.say+(isLet(str.charAt(off+m.length))?" ":"");
+            });
         }else t=t.replace(w.re,(m,pre)=>pre+w.say);
     }
     return t;
 }
+
+/* A word in capitals (LORD, JESUS, GOD'S, THE) is an ordinary word: a voice would spell it ("el oh ar dee"),
+   so it is handed over in lower case ("lord"). Runs after words(), so MMICJ / ICJ are already their spoken
+   letters and are never seen here. Not touched: digits or lower case inside the word (MP3, McDONALD), words
+   with no vowel (BBC, KJV), Roman numerals (XII), listed acronyms (USA), unlisted two-letter capitals. */
+const ROMAN=/^(?=[IVXLCDM])M{0,4}(?:CM|CD|D?C{0,3})(?:XC|XL|L?X{0,3})(?:IX|IV|V?I{0,3})$/;
+const VOWEL=/[AEIOUY]/;
+function capitals(t){
+    const c=compiled.caps;
+    if(!c.on)return t;
+    return t.replace(/(^|[^\p{L}\p{N}])(\p{Lu}{2,})(['\u2019][sS])?(?![\p{L}\p{N}])/gu,(m,pre,tok,poss)=>{
+        if(c.spelled.has(tok))return m;
+        if(tok.length<c.min&&!(tok.length===2&&c.short.has(tok)))return m;
+        if(!VOWEL.test(tok.normalize("NFD").replace(/[\u0300-\u036f]/g,"")))return m;
+        if(ROMAN.test(tok))return m;
+        return pre+tok.toLowerCase()+(poss?poss.toLowerCase():"");
+    });
+}
+api.capitals=function(text){
+    const t=String(text==null?"":text);
+    if(!compiled)compile();
+    return capitals(t);
+};
 
 /* a final full stop on an abbreviation is kept when it was also the end of the piece */
 function abbreviations(t){
@@ -317,6 +391,7 @@ function run(text,opts){
     if(sp){lead=sp.num;t=sp.rest;}
     t=words(t);
     t=abbreviations(t);
+    t=capitals(t);
     t=separators(t,atEnd);
     t=serialComma(t);
     t=t.replace(/\s+([,.!?])/g,"$1").replace(/\s+/g," ").trim();
@@ -348,13 +423,14 @@ api.spokenParts=function(text,opts){
     return [{text:r.lead,gap:g},{text:r.body,gap:0}];
 };
 
-/* The last word before the voice: whatever came before, MMICJ is spelled and no colon, semicolon or dash
-   is left in the text. Safe to run on text that was already processed (it changes nothing then). */
+/* The last word before the voice: whatever came before, MMICJ is spelled, words in capitals are plain words
+   and no colon, semicolon or dash is left in the text. Safe to run on text that was already processed (it changes nothing then). */
 api.enforce=function(text){
     let t=String(text==null?"":text);
     if(!t)return t;
     if(!compiled)compile();
     t=words(t);
+    t=capitals(t);
     t=sweep(t);
     return t.replace(/(\s*,){2,}/g,",").replace(/\s+([,.!?])/g,"$1").replace(/\s+/g," ").trim();
 };

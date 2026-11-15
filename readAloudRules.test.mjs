@@ -36,7 +36,7 @@ function load(withRules=true){
   ok(S('mmicj and Mmicj and MmIcJ and MMICJ')===[MJ,'and',MJ,'and',MJ,'and',MJ].join(' '),'any capitals of mmicj: '+S('mmicj and Mmicj and MmIcJ and MMICJ'));
   ok(S("MMICJ's library")==="em em eye see jay's library",'MMICJ possessive');
   ok(S('Visit mmicj.com today')==='Visit '+MJ+' dot com today','inside an address the dot is a word, apart from the letters (a voice spells "jay.com" as j-a-y): '+S('Visit mmicj.com today'));
-  ok(S('at mmicj.com.')==='at '+MJ+' dot com.'&&S('Go to MMICJ.COM now')==='Go to '+MJ+' dot COM now','an address at the end of a sentence, and in capitals');
+  ok(S('at mmicj.com.')==='at '+MJ+' dot com.'&&S('Go to MMICJ.COM now')==='Go to '+MJ+' dot com now','an address at the end of a sentence, and in capitals');
   ok(S('www.mmicj.com/books')==='w w w dot '+MJ+' dot com/books','www. and a path after the address');
   ok(S('mmicj.com, mmicj.org and MMICJs')===MJ+' dot com, '+MJ+' dot org and '+MJ+' s','several addresses, and the plural, in one sentence: '+S('mmicj.com, mmicj.org and MMICJs'));
   ok(S('Visit MMICJ.Come and see')==='Visit '+MJ+'.Come and see','"MMICJ.Come" (a missing space after a full stop) is not an address');
@@ -64,10 +64,29 @@ function load(withRules=true){
 
   /* CONTENTS in capitals is the word "contents" */
   ok(S('CONTENTS')==='contents','CONTENTS -> contents: '+S('CONTENTS'));
-  ok(S('TABLE OF CONTENTS')==='TABLE OF contents','TABLE OF CONTENTS: '+S('TABLE OF CONTENTS'));
+  ok(S('TABLE OF CONTENTS')==='table of contents','TABLE OF CONTENTS: '+S('TABLE OF CONTENTS'));
   ok(S('Contents and contents and CoNtEnTs')==='contents and contents and contents','CONTENTS in any case: '+S('Contents and contents and CoNtEnTs'));
   ok(S('CONTENTS: Chapter 1')==='contents, Chapter 1','CONTENTS as a title with a colon: '+S('CONTENTS: Chapter 1'));
-  ok(S('DISCONTENTS')==='DISCONTENTS'&&S('CONTENTSMENT')==='CONTENTSMENT','a longer word that merely contains CONTENTS is left alone');
+  /* ---- words in CAPITALS are ordinary words (LORD must not be spelled "el oh ar dee") ---- */
+  ok(S('LORD')==='lord'&&S('THE LORD is my shepherd')==='the lord is my shepherd','LORD -> the word: '+S('THE LORD is my shepherd'));
+  ok(S("LORD'S house and the LORD\u2019s word and GOD's love")==="lord's house and the lord\u2019s word and god's love",'possessives: '+S("LORD'S house and the LORD\u2019s word and GOD's love"));
+  ok(S('JESUS CHRIST is LORD, GOD of all.')==='jesus christ is lord, god of all.','several capital words in a sentence');
+  ok(S('IN THE BEGINNING GOD created')==='in the beginning god created','two-letter capital words (IN, OF, TO ...) are words too: '+S('IN THE BEGINNING GOD created'));
+  ok(S('(LORD) and "LORD" and LORD.')==='(lord) and "lord" and lord.','next to brackets, quotes and a full stop');
+  ok(S('Read the NIV, KJV and BBC on the USA and UK TV')==='Read the NIV, KJV and BBC on the USA and UK TV','listed acronyms and vowel-less capitals are left to be spelled: '+S('Read the NIV, KJV and BBC on the USA and UK TV'));
+  ok(S('CHAPTER XII and MMXXIV')==='chapter XII and MMXXIV','Roman numerals are left alone: '+S('CHAPTER XII and MMXXIV'));
+  ok(S('MP3 and McDONALD and LORDship and FBIs')==='MP3 and McDONALD and LORDship and FBIs','words with digits or lower-case letters in them are left alone');
+  ok(S('DID you MIX it?')==='did you MIX it?','a word made only of Roman-numeral letters is a word unless it is a valid numeral: '+S('DID you MIX it?'));
+  ok(S('3 LORD God')==='3. lord God','a verse number still comes first');
+  ok(w.ReadAloudRules.enforce('THE LORD')==='the lord'&&w.ReadAloudRules.enforce(S('THE LORD'))==='the lord','capitals are also fixed by enforce(), which is safe to run twice');
+  /* the special cases for MMICJ and ICJ keep their own spelling, and do not spill into other words */
+  ok(S('MMICJ, ICJ and LORD')===MJ+', '+EJ+', and lord','MMICJ and ICJ keep their rules next to a capital word: '+S('MMICJ, ICJ and LORD'));
+  ok(S('Check mmicj.com and LORD')==='Check '+MJ+' dot com and lord','an mmicj address next to a capital word');
+  ok(S('Hmm i c j')==='Hmm i c j'&&S('hum mi cj')==='hum mi cj'&&S('Hmm, I cj')==='Hmm, I cj','"mm" at the end of an ordinary word is never taken as the start of MMICJ: '+S('Hmm i c j')+' / '+S('hum mi cj'));
+  ok(S('Hmm ICJ')==='Hmm '+EJ,'ICJ after an ordinary word: '+S('Hmm ICJ'));
+  ok(S('Jimmy I C J and comic jar and mimic jay and magic Jim and Mimi cj')==='Jimmy I C J and comic jar and mimic jay and magic Jim and Mimi cj','common words with the same letters are untouched');
+  ok(S('MM ICJ and MM ICJs')===MJ+' and '+MJ+' s','a spaced MM ICJ (a PDF split) is still MMICJ at a word edge: '+S('MM ICJ and MM ICJs'));
+  ok(S('DISCONTENTS')==='discontents'&&S('CONTENTSMENT')==='contentsment','a longer word that merely contains CONTENTS is its own word, never cut at CONTENTS');
 
   ok(S('Sister Liburd and Liburd\'s book')==="Sister Lie bird and Lie bird's book",'Liburd: '+S('Sister Liburd and Liburd\'s book'));
   ok(S('Naphatali spoke.')==='Naff tah lee spoke.','Naphatali ("Naff": a real word, so no voice spells it out as letters)');
@@ -117,7 +136,7 @@ function load(withRules=true){
   ok(S('At 10:30 on John 3:16 and 3:1 odds')==='At 10 30 on John 3 16 and 3 1 odds','times and verses: the colon is never said: '+S('At 10:30 on John 3:16 and 3:1 odds'));
   ok(S('John 3:16-18 says')==='John 3 16 to 18 says','verse range: '+S('John 3:16-18 says'));
   ok(S('The war of 1914-1918 and 5-10 items')==='The war of 1914 to 1918 and 5 to 10 items','number ranges with a hyphen: '+S('The war of 1914-1918 and 5-10 items'));
-  ok(S('COVID-19 and e-mail and well\u2010known')==='COVID 19 and e mail and well known','hyphens between letters and digits: '+S('COVID-19 and e-mail and well\u2010known'));
+  ok(S('COVID-19 and e-mail and well\u2010known')==='covid 19 and e mail and well known','hyphens between letters and digits: '+S('COVID-19 and e-mail and well\u2010known'));
   ok(S('A\u2012B')==='A, B'&&S('C\u2015D')==='C, D'&&S('E\u2E3AF')==='E, F','other dash characters: '+S('A\u2012B')+' | '+S('C\u2015D')+' | '+S('E\u2E3AF'));
   ok(S('Note:Hello')==='Note, Hello'&&S('x;y')==='x, y'&&S('a\uFF1Ab\uFF1Bc')==='a, b, c','colon and semicolon in every form, with or without spaces: '+S('Note:Hello')+' | '+S('x;y')+' | '+S('a\uFF1Ab\uFF1Bc'));
   ok(S('Rate -5 degrees')==='Rate -5 degrees','a minus sign in front of a digit stays');
@@ -346,7 +365,10 @@ function makeEnv(o){
   ok(e.log.join('|')==='Hear em em eye see jay, peace, love, joy.','a failing rules file: '+e.log.join('|'));
   ok(e.RA._enforce('MMICJ: x')==='em em eye see jay, x','enforce() works on its own');
   ok(e.RA._enforce('ICJ and icj.org and Micj and Pacific Jazz')==='eye see jay and eye see jay dot org and M eye see jay and Pacific Jazz','built-in safety net: icj -> eye see jay, no match across words: '+e.RA._enforce('ICJ and icj.org and Micj and Pacific Jazz'));
-  ok(e.RA._enforce('TABLE OF CONTENTS: Chapter 1')==='TABLE OF contents, Chapter 1'&&e.RA._enforce('DISCONTENTS')==='DISCONTENTS','built-in safety net: CONTENTS -> contents, longer words untouched: '+e.RA._enforce('TABLE OF CONTENTS: Chapter 1'));
+  ok(e.RA._enforce('THE LORD\'S word, GOD and JESUS')==='the lord\'s word, god and jesus','built-in safety net: words in capitals are plain words: '+e.RA._enforce('THE LORD\'S word, GOD and JESUS'));
+  ok(e.RA._enforce('NIV, KJV, USA, XII, MP3, McDONALD')==='NIV, KJV, USA, XII, MP3, McDONALD','built-in safety net: acronyms, numerals and mixed case untouched');
+  ok(e.RA._enforce('Hmm i c j and hum mi cj')==='Hmm i c j and hum mi cj'&&e.RA._enforce('MM icj and MMICJs')==='em em eye see jay and em em eye see jay s','built-in safety net: MMICJ does not eat the end of an ordinary word: '+e.RA._enforce('Hmm i c j and hum mi cj'));
+  ok(e.RA._enforce('TABLE OF CONTENTS: Chapter 1')==='table of contents, Chapter 1'&&e.RA._enforce('DISCONTENTS')==='discontents','built-in safety net: CONTENTS -> contents, longer words untouched: '+e.RA._enforce('TABLE OF CONTENTS: Chapter 1'));
 }
 {
   /* a number that starts a sentence is spoken on its own, then a real silence */
