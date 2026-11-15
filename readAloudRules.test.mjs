@@ -46,6 +46,29 @@ function load(withRules=true){
   ok(S('MM icj and MM\u00ADicj')===MJ+' and '+MJ,'a space or soft hyphen between its letters: '+S('MM icj and MM\u00ADicj'));
   ok(S('(MMICJ)')==='('+MJ+')','in brackets');
   ok(!/mmicj/i.test(S('x MMicj y mmicj. MMICJ, mMiCj;')),'no written form of mmicj survives');
+  /* "icj" anywhere -> eye see jay (a voice says "ick jay") */
+  const EJ='eye see jay';
+  ok(S('ICJ')===EJ&&S('icj')===EJ&&S('Icj')===EJ&&S('iCJ')===EJ,'icj in any letter case: '+S('ICJ')+' / '+S('icj'));
+  ok(S('Meditation Mornings ICJ today.')==='Meditation Mornings '+EJ+' today.','icj as a word in a phrase: '+S('Meditation Mornings ICJ today.'));
+  ok(S('the ICJ, and ICJ.')==='the '+EJ+', and '+EJ+'.','icj before punctuation: '+S('the ICJ, and ICJ.'));
+  ok(S('MICJ')==='M '+EJ&&S('Micjah')==='M '+EJ+' ah','icj at the end or inside a longer word: '+S('MICJ')+' / '+S('Micjah'));
+  ok(S('ICJs')===EJ+' s','icj + plural s: '+S('ICJs'));
+  ok(S('mornings-icj and icj-admin')==='mornings '+EJ+' and '+EJ+' admin','icj joined with a hyphen: '+S('mornings-icj and icj-admin'));
+  ok(S('see icj.org now')==='see '+EJ+' dot org now','icj in an address: '+S('see icj.org now'));
+  ok(S('(ICJ)')==='('+EJ+')','icj in brackets');
+  ok(S('IC\u00ADJ')===EJ&&S('I\u200BCJ')===EJ,'a soft hyphen or zero-width mark inside the letters: '+S('IC\u00ADJ'));
+  ok(S('Pacific Jazz and specific job')==='Pacific Jazz and specific job','"ic J" across two words is NOT icj (no space allowed): '+S('Pacific Jazz and specific job'));
+  ok(!/icj/i.test(S('x ICJ y icj. Icj, iCj; MMICJ micj')),'no written form of icj survives: '+S('x ICJ y icj. Icj, iCj; MMICJ micj'));
+  ok(S('MMICJ and ICJ')===MJ+' and '+EJ,'MMICJ keeps its own spelling, ICJ gets "eye see jay": '+S('MMICJ and ICJ'));
+  ok(w.ReadAloudRules.enforce('ICJ')===EJ&&w.ReadAloudRules.enforce(S('ICJ'))===EJ,'icj is also fixed by enforce(), which is safe to run twice');
+
+  /* CONTENTS in capitals is the word "contents" */
+  ok(S('CONTENTS')==='contents','CONTENTS -> contents: '+S('CONTENTS'));
+  ok(S('TABLE OF CONTENTS')==='TABLE OF contents','TABLE OF CONTENTS: '+S('TABLE OF CONTENTS'));
+  ok(S('Contents and contents and CoNtEnTs')==='contents and contents and contents','CONTENTS in any case: '+S('Contents and contents and CoNtEnTs'));
+  ok(S('CONTENTS: Chapter 1')==='contents, Chapter 1','CONTENTS as a title with a colon: '+S('CONTENTS: Chapter 1'));
+  ok(S('DISCONTENTS')==='DISCONTENTS'&&S('CONTENTSMENT')==='CONTENTSMENT','a longer word that merely contains CONTENTS is left alone');
+
   ok(S('Sister Liburd and Liburd\'s book')==="Sister Lie bird and Lie bird's book",'Liburd: '+S('Sister Liburd and Liburd\'s book'));
   ok(S('Naphatali spoke.')==='Naff tah lee spoke.','Naphatali ("Naff": a real word, so no voice spells it out as letters)');
   ok(S('Naphatalis')==='Naphatalis','a longer word that merely contains a name is left alone');
@@ -322,6 +345,8 @@ function makeEnv(o){
   await until(()=>e.RA.state()==='idle'&&e.log.length>=1);
   ok(e.log.join('|')==='Hear em em eye see jay, peace, love, joy.','a failing rules file: '+e.log.join('|'));
   ok(e.RA._enforce('MMICJ: x')==='em em eye see jay, x','enforce() works on its own');
+  ok(e.RA._enforce('ICJ and icj.org and Micj and Pacific Jazz')==='eye see jay and eye see jay dot org and M eye see jay and Pacific Jazz','built-in safety net: icj -> eye see jay, no match across words: '+e.RA._enforce('ICJ and icj.org and Micj and Pacific Jazz'));
+  ok(e.RA._enforce('TABLE OF CONTENTS: Chapter 1')==='TABLE OF contents, Chapter 1'&&e.RA._enforce('DISCONTENTS')==='DISCONTENTS','built-in safety net: CONTENTS -> contents, longer words untouched: '+e.RA._enforce('TABLE OF CONTENTS: Chapter 1'));
 }
 {
   /* a number that starts a sentence is spoken on its own, then a real silence */

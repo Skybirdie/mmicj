@@ -13,7 +13,8 @@
 
    1. WORDS       a word that should be said another way (names, acronyms).
                   MMICJ is spelled out wherever it appears, in any letter case;
-                  mmicj.com is "em em eye see jay dot com"
+                  mmicj.com is "em em eye see jay dot com".
+                  "icj" anywhere (ICJ, Micj, icj.org) is "eye see jay"; "CONTENTS" is the word "contents"
    2. ABBREVIATIONS  "e.g." -> "for example", "Dr." -> "Doctor", "U.S." -> "U S"
    3. PUNCTUATION colons, semicolons and dashes are never spoken, they only
                   separate what is before from what is after them.
@@ -42,10 +43,20 @@ const api={};
   options.anywhere: replace it wherever these letters appear, even inside
   another word or address (mmicj.com, MMICJs, mmicj-admin), any letter case,
   and even if the PDF put a space or soft hyphen between the letters.
+  options.tight: with anywhere, the letters must touch (only an invisible soft hyphen / zero-width
+  mark may sit between them, never a space). Use it for short letter groups that could otherwise match
+  across two real words ("Pacific Jazz").
 =======================================================*/
 api.words=[
     ["MMICJ",     "em em eye see jay", {anywhere:true}],   /* always its letters: M M I C J */
+    /* "icj" on its own or inside anything (ICJ, Icj, MICJ, ICJs, icj.org, mornings-icj): always "eye see jay".
+       A voice reads the letters "icj" as "ick jay". Listed after MMICJ, which keeps its own rule.
+       tight:true = the letters must be touching (a soft hyphen is fine, a space is not), because with
+       spaces allowed "Pacific Jazz" or "specific job" would be caught. */
+    ["ICJ",       "eye see jay",       {anywhere:true, tight:true}],
     ["Liburd",    "Lie bird"],
+    /* "CONTENTS" in capitals is spelled out by the voice ("C O N T ents"). It is the ordinary word. */
+    ["CONTENTS",  "contents"],
     /* "Naff": a real English word. Some iPhone voices spell out an unfamiliar three-letter token
        ("Naf" was said as "en a f"), but say a dictionary word normally. Said the same way: "naf". */
     ["Naphatali", "Naff tah lee"]
@@ -141,8 +152,9 @@ function compile(){
         words:(api.words||[]).map(w=>{
             const o=w[2]||{};
             if(o.anywhere){
-                /* the letters in a row, with at most one space / soft hyphen / zero-width mark between two of them */
-                const between="[\\s\\u00AD\\u200B-\\u200D\\u2060\\uFEFF]?";
+                /* the letters in a row, with at most one space / soft hyphen / zero-width mark between two of them
+                   (tight: no space) */
+                const between=o.tight?"[\\u00AD\\u200B-\\u200D\\u2060\\uFEFF]?":"[\\s\\u00AD\\u200B-\\u200D\\u2060\\uFEFF]?";
                 const letters=Array.from(String(w[0])).map(esc).join(between);
                 return {
                     anywhere:true,re:new RegExp(letters,"giu"),say:String(w[1]),

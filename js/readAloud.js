@@ -32,7 +32,7 @@
    How things are SAID (names, acronyms, "e.g.", colons / semicolons / dashes,
    list commas, the silence after a paragraph) lives in js/readAloudRules.js.
    That file is optional: without it the text is spoken as tidied here. Whatever happens
-   (rules file missing, a rule failing) enforce() below still spells MMICJ and removes colons,
+   (rules file missing, a rule failing) enforce() below still spells MMICJ, says "icj" as "eye see jay", says CONTENTS as a word, and removes colons,
    semicolons and dashes from the very last text handed to the voice.
 
    Page turns it makes itself are silent (the turn sound would talk over the voice).
@@ -483,11 +483,15 @@ async function chunksForPage(p){
 }
 
 /* The last word before the voice. Runs on every piece that is spoken, so the rules hold even when
-   js/readAloudRules.js is missing or one of its rules fails: MMICJ is always spelled letter by letter,
+   js/readAloudRules.js is missing or one of its rules fails: MMICJ is always spelled letter by letter, "icj" is "eye see jay", CONTENTS is the word,
    and no colon, semicolon or dash is ever left in the text for the voice to pronounce. */
 function basicEnforce(t){
     return String(t==null?"":t)
         .replace(/(m[\s\u00AD\u200B-\u200D\u2060\uFEFF]?m[\s\u00AD\u200B-\u200D\u2060\uFEFF]?i[\s\u00AD\u200B-\u200D\u2060\uFEFF]?c[\s\u00AD\u200B-\u200D\u2060\uFEFF]?j)(\.(?=[a-z]{2,24}(?![a-z0-9])))?/gi,(m,name,dot)=>dot?" em em eye see jay dot ":" em em eye see jay ")
+        /* "icj" anywhere (the letters touching, a soft hyphen allowed): a voice says "ick jay" */
+        .replace(/(i[\u00AD\u200B-\u200D\u2060\uFEFF]?c[\u00AD\u200B-\u200D\u2060\uFEFF]?j)(\.(?=[a-z]{2,24}(?![a-z0-9])))?/gi,(m,name,dot)=>dot?" eye see jay dot ":" eye see jay ")
+        /* "CONTENTS" in capitals is spelled out by the voice: it is the ordinary word */
+        .replace(/(^|[^\p{L}\p{N}])contents(?![\p{L}\p{N}])/giu,"$1contents")
         .replace(/\s*[:;\uFF1A\uFF1B\u037E]\s*/g,", ")
         .replace(/\s*(?:--+|[\u2012-\u2015])\s*/g,", ")
         .replace(/\s+[-\u2010\u2011]+\s+/g,", ")

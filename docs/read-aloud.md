@@ -85,7 +85,10 @@ Each rule has a short, commented list at the top of the file.
 - **Words**: `MMICJ` is always spelled out letter by letter (written "em em eye see jay" for the voice), wherever those letters appear and in any case
   (MMicj, mmicj, MMICJ, mmicj.com, MMICJs, even with a space between the letters). `mmicj.com` -> "em em eye see jay dot com" (the dot is said as a word, apart from the name: a voice that meets "jay.com" spells the word out as j-a-y), `Liburd` -> "Lie bird", `Naphatali` -> "Naff tah lee" (written "Naff", a real word, because some iPhone voices spell out an unfamiliar
   three-letter token like "Naf" as letters).
-  Add a name as `["Written", "how it sounds"]`; add `{anywhere:true}` as a third item to replace it inside other words too.
+  `ICJ` (any letter case, alone or inside any word or address: ICJ, icj, MICJ, ICJs, icj.org, mornings-icj) -> "eye see jay", because a voice reads "icj" as "ick jay". `MMICJ` keeps its own rule above it.
+  `CONTENTS` in capitals -> "contents" (a voice spells it out as "C O N T ents"). It is the ordinary word.
+  Add a name as `["Written", "how it sounds"]`; add `{anywhere:true}` as a third item to replace it inside other words too;
+  add `tight:true` as well when the letters must touch (no space allowed between them), which is what `ICJ` uses so "Pacific Jazz" is never caught.
 - **Abbreviations**: `e.g.` -> "for example", `i.e.` -> "that is", `etc.` -> "et cetera", `Dr.` -> "Doctor", `p.` -> "page" and so on.
   Dotted capitals not listed (`U.S.A.`, `N.B.`) are spelled out as letters ("U S A").
 - **Colons, semicolons, dashes** are never spoken, in any form (`: ; - -- en/em/figure dashes`, full-width colon). They become a short pause (a comma).
@@ -109,7 +112,7 @@ Each rule has a short, commented list at the top of the file.
 The file is optional: if it is missing, the text is still spoken as tidied, and superscripts still get a full stop.
 
 **Always enforced.** Whatever happens (rules file missing, a rule throwing an error), the very last text handed to the voice goes through
-`enforce()` (in `readAloudRules.js`, with a smaller built-in copy in `readAloud.js`): MMICJ is spelled out and no colon, semicolon or dash is left in it.
+`enforce()` (in `readAloudRules.js`, with a smaller built-in copy in `readAloud.js`): MMICJ is spelled out, "icj" is said "eye see jay", CONTENTS is said as the word, and no colon, semicolon or dash is left in it.
 
 ## If the device's speech engine rejects the voice
 If the engine reports a voice / language / synthesis error, Listen starts that piece again with a more cautious setup, up to three times
