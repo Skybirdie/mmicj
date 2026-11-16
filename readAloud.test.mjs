@@ -65,6 +65,24 @@ const lines=(texts,o={})=>({height:o.height??800,items:texts.map((t,i)=>item(t,o
   r=P(lines(['\uFB01rst \u201Cquote\u201D here\u00AD ok']));
   ok(r[0]==='first "quote" here ok.'||r[0].startsWith('first'),'ligatures normalised and soft hyphens dropped: '+JSON.stringify(r));
 
+  /* ---- a title that wraps because the line is full is ONE title; a deliberate break stays a break ---- */
+  const body=[];for(let i=0;i<6;i++)body.push(item('Body text line number '+(i+1)+' of this page goes on and on here',50,560-i*15,{w:300}));
+  const ttl=(texts,y0,step,h,x)=>texts.map((t,i)=>item(t,x??50,y0-i*step,{h:h,w:t.length*h*0.46}));
+  r=P({height:800,items:[...ttl(['The Secret Garden of','Forgotten Dreams'],700,29,24),...body]});
+  ok(r[0]==='The Secret Garden of Forgotten Dreams.'&&r.length===2,'a wrapped title (same size, normal line spacing) is read as one title: '+JSON.stringify(r));
+  r=P({height:800,items:[...ttl(['A Very Long Title That Needs','Three Lines Because It Does','Not Fit On One'],700,29,24),...body]});
+  ok(r[0]==='A Very Long Title That Needs Three Lines Because It Does Not Fit On One.','a title wrapped over three lines is one title: '+JSON.stringify(r[0]));
+  r=P({height:800,items:[...ttl(['The Secret Garden of','Forgotten Dreams'],700,29,24,150),...body]});
+  ok(r[0]==='The Secret Garden of Forgotten Dreams.','a centred title (lines start at different places) is one title too: '+JSON.stringify(r[0]));
+  r=P({height:800,items:[item('The Secret Garden',50,700,{h:24,w:190}),item('Book One',50,640,{h:24,w:90}),...body]});
+  ok(r[0]==='The Secret Garden.'&&r[1]==='Book One.','a clearly bigger gap between title lines is a deliberate break: '+JSON.stringify(r.slice(0,2)));
+  r=P({height:800,items:[...ttl(['Chapter One:','The Beginning'],700,29,24),...body]});
+  ok(r.length===3&&/^Chapter One[.:]?$/.test(r[0])&&r[1]==='The Beginning.','a title line ending in a colon or full stop is not joined to the next: '+JSON.stringify(r.slice(0,2)));
+  r=P({height:800,items:[item('The Secret Garden',50,700,{h:24,w:190}),item('by A. Writer',50,672,{h:14,w:120}),...body]});
+  ok(r[0]==='The Secret Garden.'&&r[1]==='by A. Writer.','a title followed by a smaller line (author, subtitle) stays separate: '+JSON.stringify(r.slice(0,2)));
+  r=P({height:800,items:[...ttl(['Wake up and drink water','Stretch gently','Write one sentence'],700,20,12),...body]});
+  ok(r.slice(0,3).join('|')==='Wake up and drink water.|Stretch gently.|Write one sentence.','short lines at the body size (a list, a verse) are never joined: '+JSON.stringify(r.slice(0,3)));
+
   /* sentences */
   let s=T.splitSentences(['Dr. Smith went home. He slept! Did he dream? Yes.']);
   ok(s.length===4&&s[0]==='Dr. Smith went home.','"Dr." is not a sentence end: '+JSON.stringify(s));

@@ -54,6 +54,9 @@ const KEY="mm-readaloud";
    (a reader who explicitly switched it off or on keeps their own choice). */
 const SHOW_BUTTON_BY_DEFAULT=true;
 const MAX_CHUNK=220;
+/* true: the lines of a title that wrapped only because the line was full are read as one title (no pause between
+   them); a gap, another type size or a closing mark still separates them. false: every title line stands alone. */
+const JOIN_WRAPPED_TITLES=true;
 const RATE_MIN=0.6,RATE_MAX=1.8;
 
 const SS=(typeof window!=="undefined" && "speechSynthesis" in window && typeof window.SpeechSynthesisUtterance==="function")
@@ -308,14 +311,22 @@ function buildParagraphs(data,ctx){
     };
     const isFull=l=>(l.x1-l.x0)>=0.8*colMax(l);   /* a wrapped line runs to within about one word of the margin */
 
-    /* the usual distance between two lines of the same paragraph on this page (median) */
+    /* The usual distance between two lines of the same paragraph on this page (median), as a multiple of the
+       type size, so a big title with its own normal line spacing is not mistaken for "a gap between paragraphs"
+       just because its lines are further apart than the lines of the small body text. */
     const pitches=[];
     for(let i=1;i<keep.length;i++){
-        const a=keep[i-1],b=keep[i],dy=a.y-b.y;
-        if(dy>0&&dy<=2.2*Math.max(a.h,b.h,8)&&Math.abs(a.h-b.h)<=0.15*Math.max(a.h,b.h)&&Math.abs(a.x0-b.x0)<=0.1*pageW)pitches.push(dy);
+        const a=keep[i-1],b=keep[i],dy=a.y-b.y,lh=Math.max(a.h,b.h,8);
+        if(dy>0&&dy<=2.2*lh&&Math.abs(a.h-b.h)<=0.15*Math.max(a.h,b.h)&&Math.abs(a.x0-b.x0)<=0.1*pageW)pitches.push(dy/lh);
     }
     pitches.sort((p,q)=>p-q);
-    const pitch=pitches.length>=3?pitches[pitches.length>>1]:0;
+    const pitchRatio=pitches.length>=3?pitches[pitches.length>>1]:0;
+
+    /* the usual type size of the page: the size most of the text is set in */
+    const bySize=keep.map(l=>({h:l.h,n:l.t.length})).sort((p,q)=>p.h-q.h);
+    let bodyH=0;
+    {const half=bySize.reduce((n,x)=>n+x.n,0)/2;let acc2=0;for(const x of bySize){acc2+=x.n;if(acc2>=half){bodyH=x.h;break;}}}
+    const centre=l=>(l.x0+l.x1)/2;
 
     const continues=(prev,l)=>{
         if(l.bullet||prev.leader)return false;
@@ -323,8 +334,16 @@ function buildParagraphs(data,ctx){
         const lineH=Math.max(prev.h,l.h,8);
         if(dy<=0||dy>2.2*lineH)return false;          /* new block, new column, or a big gap */
         if(Math.abs(prev.h-l.h)>0.15*Math.max(prev.h,l.h))return false;   /* a heading, caption or other type size */
-        if(pitch&&dy>1.4*pitch&&!/^[a-z]/.test(l.t))return false;   /* a visible gap between lines: a new paragraph, not a wrapped line */
+        if(pitchRatio&&dy>1.4*pitchRatio*lineH&&!/^[a-z]/.test(l.t))return false;   /* a visible gap between lines: a new paragraph, not a wrapped line */
         if(TERMINAL.test(prev.t)&&!endsWithAbbrev(prev.t)&&!/^[a-z]/.test(l.t))return false;   /* the sentence ended */
+        /* A title is usually set bigger than the text. Its lines are short and in Title Case, so the tests below
+           would call every line a separate piece. A bigger-than-body line followed by a line of the same size,
+           the same alignment (left or centred), the normal line spacing and no full stop, colon or question
+           mark before it, is a title that wrapped: the two lines are read together. A real break made with
+           Enter has a different look: a bigger gap, another size, or a mark at the end of the line. */
+        if(JOIN_WRAPPED_TITLES&&bodyH&&prev.h>=1.2*bodyH&&!/[:;]\s*$/.test(prev.t)
+            &&dy<=1.5*(pitchRatio||1.25)*lineH
+            &&(Math.abs(prev.x0-l.x0)<=0.03*pageW||Math.abs(centre(prev)-centre(l))<=0.03*pageW))return true;
         if(!isFull(prev))return /^[a-z]/.test(l.t);   /* short line: only join mid-sentence */
         return true;                                  /* a wrapped line */
     };
