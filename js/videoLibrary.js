@@ -1117,7 +1117,7 @@ thumbnail.appendChild(image);
 
  Minimum visible edge-to-edge spacing:
 
-                    10px
+        20px on desktop, 10px on narrow screens
 
  This applies horizontally, vertically and diagonally.
 =========================================================
@@ -1149,7 +1149,29 @@ function layoutCircleField() {
     -------------------------------------------------------
     */
 
-    const GAP = 10;
+    /*
+     Edge-to-edge spacing between circles.
+
+     Desktop (side panel, 1000px and wider) gets a roomier
+     gap. Narrow screens (the overlay drawer, 999px and
+     narrower) keep the original compact 10px, which already
+     looks right there.
+
+     The breakpoint matches the @media (max-width:999px)
+     rules in css/video.css. To tune the desktop look, change
+     DESKTOP_GAP only (try 16 for tighter, 24 for airier).
+    */
+
+    const DESKTOP_GAP = 20;
+
+    const MOBILE_GAP = 10;
+
+    const GAP =
+        window.matchMedia(
+            "(min-width:1000px)"
+        ).matches
+            ? DESKTOP_GAP
+            : MOBILE_GAP;
 
     const PADDING_X = 10;
 
