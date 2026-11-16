@@ -336,6 +336,51 @@ const P1=(...t)=>lines(t,{w:300});
   ok(Math.max(...e.Renderer.calls)<=3,'only the pages being read were asked for ('+JSON.stringify([...new Set(e.Renderer.calls)])+' of 30)');
 }
 
+/* --- changing the voice or speed while reading is heard at once, not a few sentences (or pages) later --- */
+{
+  const pages=[P1('Cover.'),P1('Alpha one. Alpha two. Alpha three. Alpha four. Alpha five. Alpha six. Alpha seven. Alpha eight.'),P1('Beta page.')];
+  const e=makeEnv({pages,speakMs:40});
+  e.RA.setVoice('v1');
+  e.setPage(2);e.button.click();
+  await until(()=>e.log.length>=2);
+  const before=e.log.length;
+  e.RA.setVoice('v2');e.RA.preview();               /* what the settings panel does */
+  await until(()=>e.log.length>=before+3);
+  const after=e.log.slice(before);
+  ok(after.length>=3&&after[0].voice==='v2'&&after.every(x=>x.voice==='v2'),'voice changed mid-read: the very next sentence is in the new voice ('+after.map(x=>x.voice).join(',')+')');
+  /* the log has a sentence once it has been spoken in full, so the sentence in progress at the change comes next, in the new voice */
+  const seq=e.log.map(x=>x.text).map(t=>['one','two','three','four','five','six','seven','eight'].findIndex(n=>t==='Alpha '+n+'.'));
+  ok(seq.slice(0,seq.length).every((n,i)=>i===0||n===seq[i-1]+1),'voice changed mid-read: no sentence is skipped or said twice ('+seq.join(',')+')');
+  ok(e.RA.state()==='speaking','voice changed mid-read: still reading');
+  e.RA.setRate(1.6);e.RA.preview();
+  const b2=e.log.length;
+  await until(()=>e.log.length>=b2+2);
+  ok(e.log.slice(b2).every(x=>x.rate===1.6),'speed changed mid-read: heard from the next sentence ('+e.log.slice(b2).map(x=>x.rate).join(',')+')');
+  e.RA.stop();
+}
+{
+  /* a spread whose sentences are all already queued: the change must not wait for the next spread */
+  const pages=[P1('Cover.'),P1('Short one. Short two.'),P1('Next page.')];
+  const e=makeEnv({pages,speakMs:60});
+  e.RA.setVoice('v1');
+  e.setPage(2);e.button.click();
+  await until(()=>e.log.length>=1);
+  const before=e.log.length;
+  e.RA.setVoice('v2');e.RA.preview();
+  await until(()=>e.log.length>=before+1);
+  ok(e.log[before].voice==='v2','a short page that is already fully queued still switches voice at once ('+e.log.map(x=>x.voice).join(',')+')');
+  e.RA.stop();
+}
+{
+  /* nothing is reading: preview still just plays a sample; paused stays paused */
+  const e=makeEnv({pages:[P1('Cover.'),P1('One. Two. Three. Four. Five. Six.')],speakMs:30});
+  e.RA.setVoice('v2');e.RA.preview();await sleep(150);
+  ok(e.log.length===1&&e.log[0].voice==='v2'&&/how I will read/.test(e.log[0].text)&&e.RA.state()==='idle','idle: preview plays the sample and does not start reading');
+  e.setPage(2);e.button.click();await sleep(60);e.RA.pause();
+  e.RA.setVoice('v1');e.RA.preview();await sleep(100);
+  ok(e.RA.state()==='paused','paused: changing the voice does not restart the reading');
+}
+
 /* --- settings --- */
 {
   const e=makeEnv({pages:[P1('Cover.'),P1('Voice test.')]});

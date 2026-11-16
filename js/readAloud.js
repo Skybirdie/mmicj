@@ -831,9 +831,25 @@ api.toggle=function(){
 
 api.state=()=>state;
 
-/* a few words in the chosen voice and speed, used by the settings panel */
+/* The voice and speed are fixed on each piece of speech when it is queued, and the loop keeps the piece being
+   spoken plus the next two queued ahead (on a short page that is the whole page, even the whole spread). So a
+   new voice or speed would only be heard once those had been spoken. This starts reading again from the piece
+   being spoken, so the change is heard straight away. Nothing is skipped; that one sentence is just said again. */
+function applyNow(){
+    if(state!=="speaking")return false;
+    const info=resumeInfo;
+    if(!info||!window.Reader||!Reader.isOpen()||Reader.spread().start!==info.start)return false;
+    info.index=Math.min(cursor,info.chunks.length);
+    begin(info);
+    return true;
+}
+
+/* A few words in the chosen voice and speed, used by the settings panel (it calls this when the voice or the
+   speed has been changed). While reading is in progress there is no sample: reading carries on in the new
+   voice or speed from the sentence being read. */
 api.preview=function(){
-    if(!SS||state==="speaking"||state==="loading")return;
+    if(!SS||state==="loading")return;
+    if(state==="speaking"){applyNow();return;}
     cancelSpeech();
     const u=makeUtterance("This is how I will read to you.");
     live.push(u);
