@@ -1,0 +1,219 @@
+/* =========================================================
+   mmicj item info  (css/item-info.css)
+   Companion to js/itemInfo.js.
+
+   1. The small "i" icon (a little smaller than the 25px favorite).
+   2. Where it sits on each kind of card. It is always
+      position:absolute, so it never takes part in a card's layout and
+      the centered title/date lines on the landing cards stay centered.
+   3. The shared pale-yellow details box.
+   ========================================================= */
+
+/* ---------- 1. the icon ---------- */
+
+.item-info-control{
+    position:absolute;
+    z-index:6;
+
+    width:20px;
+    height:20px;
+
+    display:flex;
+    align-items:center;
+    justify-content:center;
+
+    box-sizing:border-box;
+    padding:0;
+    border:0;
+    border-radius:50%;
+
+    background:color-mix(in srgb,var(--card,#222) 30%,transparent);
+    -webkit-backdrop-filter:blur(4px);
+    backdrop-filter:blur(4px);
+
+    color:var(--text,#fff);
+
+    cursor:pointer;
+    user-select:none;
+    -webkit-user-select:none;
+    -webkit-tap-highlight-color:transparent;
+
+    transition:transform .2s ease,color .2s ease,background .2s ease;
+}
+
+/* A fingertip-sized hit area without making the icon itself bigger. */
+.item-info-control::after{
+    content:"";
+    position:absolute;
+    inset:-5px;
+    border-radius:50%;
+}
+
+.item-info-control svg{
+    display:block;
+    width:15px;
+    height:15px;
+    pointer-events:none;
+}
+
+.item-info-control:hover,
+.item-info-control[aria-expanded="true"]{
+    transform:scale(1.08);
+}
+
+.item-info-control[aria-expanded="true"]{
+    color:#e0a800;
+}
+
+.item-info-control:focus-visible{
+    outline:2px solid #66CDAA;
+    outline-offset:1px;
+}
+
+
+/* ---------- 2. placement ---------- */
+
+/* Video circles (left panel): the favorite sits at the circle's
+   upper-right 45deg point; the info icon is its vertical mirror at the
+   lower-right 45deg point. The favorite is 25px and this icon is 20px,
+   so the extra 2.5px keeps the two icon CENTERS mirrored exactly. */
+.video-circle .item-info-control{
+    right:calc(14.64% - 1.54px + 2.5px);
+    bottom:calc(14.64% - 1.54px + 2.5px);
+}
+.video-circle .item-info-control::after{
+    inset:-2px;
+}
+
+/* The smallest circle (62px) is too small for a 20px icon beneath a
+   25px favorite, so it gets a 16px icon (centers still mirrored). */
+.video-circle-size-3 .item-info-control{
+    width:16px;
+    height:16px;
+    right:calc(14.64% - 1.54px + 4.5px);
+    bottom:calc(14.64% - 1.54px + 4.5px);
+}
+.video-circle-size-3 .item-info-control svg{
+    width:12px;
+    height:12px;
+}
+
+/* Video list rows: under the favorite (which is at right:10px). */
+.video-list-card .item-info-control{
+    right:12px;
+    bottom:6px;
+}
+
+/* Video landing circles: bottom-right corner of the card, beside the
+   date line. Absolute, so the centered title and date do not move. */
+.video-landing-circle-card .item-info-control{
+    right:2px;
+    bottom:1px;
+}
+
+/* Book cards: left-panel grid and Viewer Landing shelf. */
+.bookCard .item-info-control{
+    right:8px;
+    bottom:6px;
+}
+#viewerShelfView .bookCard .item-info-control{
+    right:4px;
+    bottom:3px;
+}
+
+/* Book list rows: the favorite there is a flex item at the row's right
+   edge; sit below it, centered on the same line. */
+#listView .listItem{
+    position:relative;
+}
+#listView .listItem .item-info-control{
+    right:14px;
+    bottom:8px;
+}
+
+/* Slideshow library cards (grid and list) and landing cards. */
+.slideshow-library-card .item-info-control{
+    right:8px;
+    bottom:6px;
+}
+.slideshow-landing-card .item-info-control{
+    right:-2px;
+    bottom:-2px;
+}
+
+
+/* ---------- 3. the details box ---------- */
+
+.item-info-popover{
+    position:fixed;
+    left:0;
+    top:0;
+    z-index:2147483000;
+
+    box-sizing:border-box;
+    min-width:90px;
+    max-width:min(230px,calc(100vw - 16px));
+
+    padding:8px 10px;
+
+    border:1px solid rgba(122,92,0,.28);
+    border-radius:10px;
+
+    background:linear-gradient(
+        145deg,
+        #fffbe3 0%,
+        #fff3b0 55%,
+        #ffe98a 100%
+    );
+    color:#3b2f00;
+
+    box-shadow:
+        0 8px 22px rgba(0,0,0,.28),
+        inset 0 1px 0 rgba(255,255,255,.65);
+
+    font-family:inherit;
+    font-size:12px;
+    line-height:1.35;
+    text-align:left;
+    overflow-wrap:anywhere;
+
+    opacity:0;
+    visibility:hidden;
+    transform:translateY(2px);
+    transition:
+        opacity .12s ease,
+        transform .12s ease,
+        visibility 0s linear .12s;
+}
+
+.item-info-popover.open{
+    opacity:1;
+    visibility:visible;
+    transform:none;
+    transition-delay:0s;
+}
+
+.item-info-popover-title{
+    font-size:12.5px;
+    font-weight:700;
+}
+
+.item-info-popover-subtitle{
+    margin-top:2px;
+    font-size:11.5px;
+    opacity:.88;
+}
+
+.item-info-popover-author{
+    margin-top:3px;
+    font-size:11px;
+    font-style:italic;
+    opacity:.8;
+}
+
+@media (prefers-reduced-motion:reduce){
+    .item-info-control,
+    .item-info-popover{
+        transition:none;
+    }
+}

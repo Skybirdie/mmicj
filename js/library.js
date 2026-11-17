@@ -445,6 +445,9 @@ if(options.includeDate){
 
 }
 
+/* Small info icon (title / subtitle / author box) - js/itemInfo.js */
+if(window.ItemInfo)ItemInfo.attach(card,book);
+
 card.onclick=()=>{
 
 this.select(book,1);
@@ -504,6 +507,9 @@ const favoriteButton=this.createFavoriteButton(book);
 
 info.append(title,subtitle);
 item.append(thumbWrap,info,favoriteButton);
+
+/* Small info icon (title / subtitle / author box) - js/itemInfo.js */
+if(window.ItemInfo)ItemInfo.attach(item,book);
 
 item.onclick=()=>{
 

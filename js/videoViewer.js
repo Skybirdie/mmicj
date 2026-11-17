@@ -1219,6 +1219,9 @@ function createLandingCircle(video) {
 
     button.appendChild(favorite);
 
+    /* Small info icon (title / subtitle / author box) - js/itemInfo.js */
+    if (window.ItemInfo) ItemInfo.attach(button, video);
+
     refreshFavorite();
 
 

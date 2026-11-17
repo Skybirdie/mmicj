@@ -386,6 +386,9 @@ if (
     );
 }
 
+/* Small info icon (title / subtitle / author box) - js/itemInfo.js */
+if (window.ItemInfo) ItemInfo.attach(b, item);
+
 b.addEventListener(
     "click",
     () => open(item)

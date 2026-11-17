@@ -637,6 +637,10 @@ circle.appendChild(image);
             createFavoriteControl(video)
         );
 
+        /* Small info icon (title / subtitle / author box), mirrored
+           below the favorite - js/itemInfo.js, css/item-info.css */
+        if (window.ItemInfo) ItemInfo.attach(circle, video);
+
         attachDurationBadge(circle, video);
 
         card.appendChild(
@@ -974,6 +978,9 @@ circle.appendChild(image);
             video.id;
 
         card.appendChild(createFavoriteControl(video));
+
+        /* Small info icon (title / subtitle / author box) - js/itemInfo.js */
+        if (window.ItemInfo) ItemInfo.attach(card, video);
 
 
         /*

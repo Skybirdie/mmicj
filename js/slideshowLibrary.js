@@ -239,6 +239,9 @@ function card(item) {
         createFavorite(item.id)
     );
 
+    /* Small info icon (title / subtitle / author box) - js/itemInfo.js */
+    if (window.ItemInfo) ItemInfo.attach(button, item);
+
     button.addEventListener(
         "click",
         () => select(item.id)
