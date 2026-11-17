@@ -38,7 +38,12 @@
     -webkit-user-select:none;
     -webkit-tap-highlight-color:transparent;
 
-    transition:transform .2s ease,color .2s ease,background .2s ease;
+    /* Muted at rest so it doesn't compete with the title or favorite;
+       it brightens on hover, keyboard focus and while its box is open.
+       Raise this (e.g. .75) for more presence, lower it for less. */
+    opacity:.55;
+
+    transition:transform .2s ease,color .2s ease,background .2s ease,opacity .2s ease;
 }
 
 /* A fingertip-sized hit area without making the icon itself bigger. */
@@ -54,6 +59,12 @@
     width:15px;
     height:15px;
     pointer-events:none;
+}
+
+.item-info-control:hover,
+.item-info-control:focus-visible,
+.item-info-control[aria-expanded="true"]{
+    opacity:1;
 }
 
 .item-info-control:hover,
