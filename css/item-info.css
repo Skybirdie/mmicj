@@ -104,11 +104,12 @@
     bottom:6px;
 }
 
-/* Video landing circles: bottom-right corner of the card, beside the
-   date line. Absolute, so the centered title and date do not move. */
+/* Video landing circles: bottom-right corner of the card, centered on
+   the date line and kept below the title line. Absolute, so the
+   centered title and date do not move. */
 .video-landing-circle-card .item-info-control{
     right:2px;
-    bottom:1px;
+    bottom:-3px;
 }
 
 /* Book cards: left-panel grid and Viewer Landing shelf. */
@@ -131,14 +132,20 @@
     bottom:8px;
 }
 
-/* Slideshow library cards (grid and list) and landing cards. */
+/* Slideshow library cards and landing cards. The text block under the
+   thumbnail is short (title line, then category line), so the icon is
+   set low enough to sit beside the bottom line and clear the title. */
 .slideshow-library-card .item-info-control{
     right:8px;
+    bottom:-2px;
+}
+/* List rows are taller and centered, so they keep the higher spot. */
+.slideshow-library-grid[data-view="list"] .slideshow-library-card .item-info-control{
     bottom:6px;
 }
 .slideshow-landing-card .item-info-control{
     right:-2px;
-    bottom:-2px;
+    bottom:-5px;
 }
 
 
