@@ -142,7 +142,7 @@ ok(C.plan(C.makeBeats('anniversary', [{name:'Bo', years:10}]).length).total === 
 /* demo dates (relative to today) */
 const dm = C.resolveDemoMembers([{name:'a', birthday:'today', added:'today-2d'}, {name:'b', added:'today-5y'}, {name:'c', added:'2020-01-01'}], NOW);
 ok(dm[0].birthday === '1990-11-13' && dm[0].added === '2026-11-11' && dm[1].added === '2021-11-13' && dm[2].added === '2020-01-01', 'demo date tokens resolve relative to today');
-ok(C.ORDER.join() === 'welcome,birthday,anniversary' && C.GAP_MS === 3000, 'order is welcome > birthday > anniversary with a 3 s gap');
+ok(C.ORDER.join() === 'welcome,birthday,anniversary' && C.GAP_MS === 2000, 'order is welcome > birthday > anniversary with a 2 s gap');
 
 
 /* the live file: Trinidad's day, and only today's file is accepted */

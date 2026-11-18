@@ -9,8 +9,9 @@ Tapping it opens a little menu above it with **Join** and **Testify**. Each open
 |---|---|
 | `js/frontForms.js` | NEW. The menu, both forms, the confirmation windows, the security check and the uploads |
 | `css/front-forms.css` | NEW. Button position and look, menu, windows (light and dark) |
-| `index.html` | 3 small additions: the stylesheet link, the `#frontFormsButton` markup inside `#frontPage`, the script tag (and `birthdayParty.js?v=bp6`) |
-| `js/birthdayParty.js` | The birthday row now stops at the left edge of whichever button is further left (the new button or the share button) |
+| `index.html` | 3 small additions: the stylesheet link, the `#frontFormsButton` markup inside `#frontPage`, the script tag (and `birthdayParty.js?v=bp7`) |
+| `js/birthdayParty.js` | The birthday row now stops at the left edge of whichever button is further left (the new button or the share button); the pause between welcome > birthdays > anniversaries is now 2 seconds (was 3) |
+| `birthdayParty.test.mjs`, `BIRTHDAY-PARTY-NOTES.txt` | Updated to say 2 seconds (the test now checks for it) |
 
 Nothing else changed. The front page, share panel, service worker and Worker are untouched.
 
@@ -47,4 +48,4 @@ Nothing else changed. The front page, share panel, service worker and Worker are
 * **"Not allowed from here":** the page's address is missing from `ALLOWED_ORIGINS`.
 * **"We could not confirm you are a person":** the Turnstile hostnames or secret do not match the site key.
 * **Text sends but a photo / audio does not:** the private bucket's CORS rule or the R2 access key / account id settings on `mmicj-intake`.
-* **The birthday row sits under the new button:** make sure `birthdayParty.js?v=bp6` is the deployed file.
+* **The birthday row sits under the new button:** make sure `birthdayParty.js?v=bp7` is the deployed file.

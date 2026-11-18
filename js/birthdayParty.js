@@ -20,8 +20,8 @@
                            e.g. "10-YEAR ANNIVERSARY", and a second beat
                            with special text such as "A whole decade!")
 
-   Whatever applies today plays in that order, with a 3 second pause
-   between them:   welcome > 3 s > birthdays > 3 s > anniversaries
+   Whatever applies today plays in that order, with a 2 second pause
+   between them:   welcome > 2 s > birthdays > 2 s > anniversaries
 
    Each one plays like this:
    - The gif is picked at random from that kind's folder (assets/welcome/,
@@ -105,7 +105,7 @@
     const GIF_MS         = 10000;   /* the gif changes this often */
     const MIN_PARTY_MS   = 10000;   /* each kind lasts at least this long */
     const BUTTON_MS      = 10000;   /* how long the button shows, per kind */
-    const GAP_MS         = 3000;    /* pause between welcome > birthdays > anniversaries */
+    const GAP_MS         = 2000;    /* pause between welcome > birthdays > anniversaries */
     const LIVE_ON        = true;    /* false = never fetch the real celebrations file (demos still work) */
     const TODAY_URL      = "https://media.mmicj.com/catalog/celebrations.json";
     const TODAY_TIMEOUT  = 8000;    /* give up on the file after this long, silently */
