@@ -106,6 +106,7 @@
     const MIN_PARTY_MS   = 10000;   /* each kind lasts at least this long */
     const BUTTON_MS      = 10000;   /* how long the button shows, per kind */
     const GAP_MS         = 2000;    /* pause between welcome > birthdays > anniversaries */
+    const LOOPS          = 3;       /* the whole flow (welcome > birthdays > anniversaries) plays this many times, then ends */
     const LIVE_ON        = true;    /* false = never fetch the real celebrations file (demos still work) */
     const TODAY_URL      = "https://media.mmicj.com/catalog/celebrations.json";
     const TODAY_TIMEOUT  = 8000;    /* give up on the file after this long, silently */
@@ -453,7 +454,7 @@
                   milestoneText, yearsLabel, entryTitle, makeBeats,
                   celebrationsFromMembers, birthdaysToday, resolveDemoMembers,
                   chooseMode, choosePopup, rowHeightFor,
-                  NAME_MS, GIF_MS, MIN_PARTY_MS, BUTTON_MS, GAP_MS, WELCOME_DAYS, TYPES, ORDER};
+                  NAME_MS, GIF_MS, MIN_PARTY_MS, BUTTON_MS, GAP_MS, LOOPS, WELCOME_DAYS, TYPES, ORDER};
 
     /* ---------------------------------------------------------
        The party
@@ -816,12 +817,13 @@
 
             /* a row lasts as long as its names need (at least 10 s); the button 10 s */
             if(p.phaseElapsed >= (isRow ? seg.plan.total : BUTTON_MS)){
-                if(p.segIndex >= p.segments.length - 1){
+                const last = p.segIndex >= p.segments.length - 1;
+                if(last && p.loop >= LOOPS){
                     finish(p);
                 }else{
-                    p.phase = "gap";            /* pause, then the next kind */
+                    p.phase = "gap";            /* pause, then the next kind (or the first again, for the next loop) */
                     p.phaseElapsed = 0;
-                    ensureDeck(p, p.segments[p.segIndex + 1].type);   /* have its gifs ready */
+                    ensureDeck(p, p.segments[last ? 0 : p.segIndex + 1].type);   /* have its gifs ready */
                     p.dom.root.classList.remove("is-on");
                     p.dom.button.classList.remove("is-on");
                 }
@@ -829,7 +831,8 @@
             }
             if(isRow) render(p);
         }else if(p.phaseElapsed >= GAP_MS){
-            p.segIndex++;
+            if(p.segIndex >= p.segments.length - 1){ p.segIndex = 0; p.loop++; }   /* back to the first kind */
+            else p.segIndex++;
             startSegment(p);
         }
     }
@@ -948,6 +951,7 @@
         const p = {
             segments:     segments,
             segIndex:     0,
+            loop:         1,            /* which time through the whole flow (1 to LOOPS) */
             phase:        "show",       /* "show" or "gap" (the pause between kinds) */
             phaseElapsed: 0,
             nameIndex:    -1,
