@@ -393,7 +393,7 @@
          vw, vh      the Front Page's size
          center      {left, right, top, bottom} of the centerpiece
          waveTop     top edge of the bottom doors
-         shareLeft   left edge of #frontShareButton (or null)
+         shareLeft   left edge of the left-most of #frontShareButton / #frontFormsButton (or null)
          shareAbove  true when that button sits above the doors (phones)
        Returns {mode:"side"|"below"|"button", right, bottom}
        (right/bottom = distance from the screen's right / bottom edge). */
@@ -640,7 +640,11 @@
         const waveTop = wave ? wave.top : vh - vh * (narrow ? 0.15 : 0.10);
         const topWave = rectIn(page, "#frontTopWave");
         const topWaveBottom = topWave ? topWave.bottom : vh * (narrow ? 0.15 : 0.10);
-        const share = rectIn(page, "#frontShareButton");
+        /* The row stops at the left edge of whichever button is further left: the share button, or the join / testify
+           button that sits just left of it (js/frontForms.js). */
+        const shareBtn = rectIn(page, "#frontShareButton");
+        const formsBtn = rectIn(page, "#frontFormsButton");
+        const share = (shareBtn && formsBtn) ? (formsBtn.left < shareBtn.left ? formsBtn : shareBtn) : (shareBtn || formsBtn);
 
         return {
             vw:vw, vh:vh, center:center, waveTop:waveTop, topWaveBottom:topWaveBottom,

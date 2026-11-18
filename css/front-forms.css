@@ -1,0 +1,580 @@
+/* =========================================================
+   FRONT PAGE FORMS  (css/front-forms.css, with js/frontForms.js)
+   ---------------------------------------------------------
+   The "join / testify" button next to #frontShareButton, the little menu
+   above it (Join | Testify), and the two forms (Join, Testify!) with their
+   confirmation windows.
+
+   The button is markup in index.html inside #frontPage, so it is shown and
+   hidden with the Front Page like the share button. The menu and the form
+   window are created by js/frontForms.js inside #frontPage the first time
+   they are needed, so until then none of them exist on the page.
+
+   Button position: immediately LEFT of #frontShareButton (60px wide), so it
+   uses the share button's own offsets plus its width and a small gap:
+     wide      right: clamp(60px,5vw,20%) + 66px     bottom: 0
+     <=700px   right: clamp(5px,5vw,15%)  + 64px     bottom: clamp(110px,20vw,25%)
+   (keep these in step with #frontShareButton in css/front-page.css).
+   Layers: button 200 (like the share button), menu 205, form window 310.
+   ========================================================= */
+
+#frontFormsButton{
+    position:fixed;
+    right:calc(clamp(60px,5vw,20%) + 66px);
+    bottom:0;
+    z-index:200;
+
+    width:60px;
+    height:60px;
+    box-sizing:border-box;
+    margin:0;
+    padding:8px;
+
+    display:flex;
+    align-items:center;
+    justify-content:center;
+
+    border:none;
+    border-radius:8px;
+    background:transparent;
+    color:#5eead4;
+
+    cursor:pointer;
+    pointer-events:auto;
+    appearance:none;
+    -webkit-appearance:none;
+    -webkit-tap-highlight-color:transparent;
+    touch-action:manipulation;
+    transition:filter .2s ease, transform .2s ease;
+}
+
+#frontFormsButton svg{
+    display:block;
+    width:78%;
+    height:78%;
+    overflow:visible;
+    pointer-events:none;
+    /* a soft dark edge keeps the light-teal drawing readable on bright backgrounds */
+    filter:drop-shadow(0 1px 1.5px rgba(0,40,40,.55)) drop-shadow(0 0 1px rgba(0,40,40,.45));
+}
+
+#frontFormsButton:hover{filter:brightness(1.1);transform:translateY(-2px);}
+#frontFormsButton:active{transform:translateY(0) scale(.96);}
+#frontFormsButton:focus-visible{outline:2px solid #fff;outline-offset:3px;}
+
+@media (max-width:700px){
+    #frontFormsButton{
+        right:calc(clamp(5px,5vw,15%) + 64px);
+        bottom:clamp(110px,20vw,25%);
+    }
+}
+
+@media (prefers-reduced-motion:reduce){
+    #frontFormsButton{transition:none;}
+}
+
+/* ---------------------------------------------------------
+   Shared look (light / dark follow html[data-theme="dark"], like the share panel)
+   --------------------------------------------------------- */
+.ff-menu,
+.ff-modal{
+    --ff-bg:#ffffff;
+    --ff-text:#202124;
+    --ff-muted:#5f6368;
+    --ff-line:rgba(32,33,36,.14);
+    --ff-hover:rgba(32,33,36,.07);
+    --ff-field:#f4f6f5;
+    --ff-field-line:rgba(32,33,36,.22);
+    --ff-accent:#0d723b;
+    --ff-accent-hover:#0a5f31;
+    --ff-main:#0e351f;
+    --ff-error:#b3261e;
+    --ff-ok:#0d723b;
+    font-family:Inter,"Segoe UI",Roboto,Arial,sans-serif;
+}
+
+html[data-theme="dark"] .ff-menu,
+html[data-theme="dark"] .ff-modal{
+    --ff-bg:#2b2d30;
+    --ff-text:#e8eaed;
+    --ff-muted:#a7abb0;
+    --ff-line:rgba(232,234,237,.18);
+    --ff-hover:rgba(232,234,237,.10);
+    --ff-field:#1f2124;
+    --ff-field-line:rgba(232,234,237,.28);
+    --ff-accent:#15a152;
+    --ff-accent-hover:#1bb85f;
+    --ff-main:#7ee2a8;
+    --ff-error:#ff8a80;
+    --ff-ok:#6fe3a2;
+}
+
+.ff-menu[hidden],
+.ff-modal[hidden]{display:none!important;}
+
+/* ---------------------------------------------------------
+   The little menu above the button: Join | Testify
+   --------------------------------------------------------- */
+.ff-menu{
+    position:fixed;
+    z-index:205;
+    box-sizing:border-box;
+    display:flex;
+    gap:8px;
+    padding:8px;
+    background:var(--ff-bg);
+    border-radius:14px;
+    box-shadow:0 10px 30px rgba(0,0,0,.34), 0 0 0 1px var(--ff-line);
+    opacity:0;
+    transform:translateY(6px) scale(.97);
+    transform-origin:50% 100%;
+    transition:opacity .16s ease, transform .16s ease;
+}
+
+.ff-menu.is-open{opacity:1;transform:none;}
+
+/* the little pointer toward the button (its left offset is set by the script) */
+.ff-menu::after{
+    content:"";
+    position:absolute;
+    left:var(--ff-arrow,50%);
+    bottom:-6px;
+    width:12px;
+    height:12px;
+    margin-left:-6px;
+    background:var(--ff-bg);
+    transform:rotate(45deg);
+    box-shadow:2px 2px 2px rgba(0,0,0,.12);
+    border-radius:0 0 3px 0;
+}
+
+.ff-menu-btn{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    min-width:96px;
+    min-height:44px;
+    box-sizing:border-box;
+    margin:0;
+    padding:0 16px;
+    border:0;
+    border-radius:10px;
+    background:var(--ff-accent);
+    color:#fff;
+    font:600 15px/1 Inter,"Segoe UI",Roboto,Arial,sans-serif;
+    cursor:pointer;
+    -webkit-tap-highlight-color:transparent;
+    touch-action:manipulation;
+}
+
+.ff-menu-btn svg{width:18px;height:18px;flex:0 0 auto;display:block;}
+.ff-menu-btn:hover{background:var(--ff-accent-hover);}
+.ff-menu-btn:active{transform:scale(.97);}
+.ff-menu-btn:focus-visible{outline:2px solid #1a73e8;outline-offset:2px;}
+
+/* ---------------------------------------------------------
+   The form window
+   --------------------------------------------------------- */
+.ff-modal{
+    position:fixed;
+    inset:0;
+    z-index:310;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    visibility:hidden;
+    pointer-events:none;
+}
+
+.ff-modal.is-open{visibility:visible;pointer-events:auto;}
+
+.ff-backdrop{
+    position:absolute;
+    inset:0;
+    background:rgba(0,0,0,.42);
+    opacity:0;
+    transition:opacity .2s ease;
+}
+
+.ff-modal.is-open .ff-backdrop{opacity:1;}
+
+.ff-dialog{
+    position:relative;
+    box-sizing:border-box;
+    display:flex;
+    flex-direction:column;
+    width:480px;
+    max-width:calc(100vw - 24px);
+    max-height:calc(100dvh - 40px);
+    background:var(--ff-bg);
+    color:var(--ff-text);
+    border-radius:18px;
+    box-shadow:0 14px 44px rgba(0,0,0,.36), 0 0 0 1px var(--ff-line);
+    overflow:hidden;
+    opacity:0;
+    transform:translateY(10px) scale(.98);
+    transition:opacity .2s ease, transform .2s ease;
+}
+
+.ff-modal.is-open .ff-dialog{opacity:1;transform:none;}
+
+/* phones: bottom sheet */
+@media (max-width:700px){
+    .ff-modal{align-items:flex-end;}
+    .ff-dialog{
+        width:100%;
+        max-width:none;
+        max-height:min(94dvh,760px);
+        border-radius:20px 20px 0 0;
+        transform:translateY(28px);
+    }
+}
+
+.ff-header{
+    flex:0 0 auto;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    padding:16px 18px 10px;
+}
+
+.ff-header h2{
+    margin:0;
+    font-size:22px;
+    line-height:1.25;
+    font-weight:700;
+    color:var(--ff-main);
+}
+
+.ff-sub{
+    margin:0;
+    padding:0 18px 4px;
+    font-size:14px;
+    line-height:1.4;
+    color:var(--ff-muted);
+}
+
+.ff-close{
+    display:grid;
+    place-items:center;
+    flex:0 0 auto;
+    width:40px;
+    height:40px;
+    margin:-4px -6px -4px 0;
+    padding:0;
+    border:0;
+    border-radius:50%;
+    background:transparent;
+    color:var(--ff-muted);
+    cursor:pointer;
+    -webkit-tap-highlight-color:transparent;
+}
+
+.ff-close svg{width:20px;height:20px;display:block;}
+.ff-close:hover{background:var(--ff-hover);color:var(--ff-text);}
+.ff-close:focus-visible{outline:2px solid #1a73e8;outline-offset:1px;}
+.ff-dialog[data-busy="true"] .ff-close{opacity:.35;cursor:not-allowed;}
+
+.ff-body{
+    flex:1 1 auto;
+    min-height:0;
+    overflow-y:auto;
+    overscroll-behavior:contain;
+    padding:6px 18px 14px;
+    -webkit-overflow-scrolling:touch;
+}
+
+.ff-footer{
+    flex:0 0 auto;
+    padding:12px 18px calc(16px + env(safe-area-inset-bottom));
+    border-top:1px solid var(--ff-line);
+    background:var(--ff-bg);
+}
+
+/* ---------------------------------------------------------
+   Fields
+   --------------------------------------------------------- */
+.ff-fields{
+    min-width:0;
+    margin:0;
+    padding:0;
+    border:0;
+}
+
+.ff-field{margin:12px 0 0;}
+.ff-field:first-child{margin-top:4px;}
+
+.ff-label{
+    display:block;
+    margin:0 0 5px;
+    font-size:14px;
+    font-weight:600;
+    color:var(--ff-text);
+}
+
+.ff-label .ff-req{color:var(--ff-error);margin-left:2px;}
+.ff-label .ff-opt{margin-left:6px;font-weight:400;color:var(--ff-muted);font-size:12.5px;}
+
+.ff-input,
+.ff-select,
+.ff-textarea{
+    display:block;
+    width:100%;
+    box-sizing:border-box;
+    margin:0;
+    padding:10px 12px;
+    border:1px solid var(--ff-field-line);
+    border-radius:10px;
+    background:var(--ff-field);
+    color:var(--ff-text);
+    font:400 16px/1.35 Inter,"Segoe UI",Roboto,Arial,sans-serif;      /* 16px: phones do not zoom in on focus */
+    min-height:44px;
+    -webkit-appearance:none;
+    appearance:none;
+}
+
+.ff-textarea{min-height:120px;resize:vertical;}
+
+.ff-select{
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><path d='M6 9l6 6 6-6'/></svg>");
+    background-repeat:no-repeat;
+    background-position:right 12px center;
+    padding-right:34px;
+}
+
+.ff-input:focus,
+.ff-select:focus,
+.ff-textarea:focus{
+    outline:2px solid var(--ff-accent);
+    outline-offset:0;
+    border-color:transparent;
+}
+
+.ff-field[data-bad="true"] .ff-input,
+.ff-field[data-bad="true"] .ff-select,
+.ff-field[data-bad="true"] .ff-textarea{border-color:var(--ff-error);}
+
+.ff-row{display:flex;gap:8px;}
+.ff-row > *{flex:1 1 0;min-width:0;}
+
+.ff-hint{margin:5px 0 0;font-size:12.5px;line-height:1.4;color:var(--ff-muted);}
+.ff-error{margin:5px 0 0;font-size:13px;line-height:1.4;color:var(--ff-error);font-weight:500;}
+.ff-error:empty{display:none;}
+.ff-count{margin:4px 0 0;font-size:12px;text-align:right;color:var(--ff-muted);}
+
+/* a hidden field only robots fill in */
+.ff-trap{
+    position:absolute!important;
+    left:-9999px!important;
+    top:auto!important;
+    width:1px!important;
+    height:1px!important;
+    overflow:hidden!important;
+}
+
+.ff-check-box{display:flex;gap:10px;align-items:flex-start;margin:14px 0 0;}
+.ff-check-box input{
+    flex:0 0 auto;
+    width:22px;
+    height:22px;
+    margin:1px 0 0;
+    accent-color:var(--ff-accent);
+}
+.ff-check-box label{font-size:14px;line-height:1.45;color:var(--ff-text);cursor:pointer;}
+.ff-check-box small{display:block;margin-top:2px;font-size:12.5px;color:var(--ff-muted);}
+
+/* file pickers */
+.ff-sr{
+    position:absolute;
+    width:1px;
+    height:1px;
+    margin:-1px;
+    padding:0;
+    overflow:hidden;
+    clip:rect(0 0 0 0);
+    border:0;
+}
+
+.ff-pick{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    min-height:44px;
+    box-sizing:border-box;
+    padding:8px 12px;
+    border:1.5px dashed var(--ff-field-line);
+    border-radius:10px;
+    background:var(--ff-field);
+    color:var(--ff-text);
+    font:600 14.5px/1.3 Inter,"Segoe UI",Roboto,Arial,sans-serif;
+    cursor:pointer;
+    -webkit-tap-highlight-color:transparent;
+}
+
+.ff-pick[hidden]{display:none!important;}
+.ff-pick svg{width:20px;height:20px;flex:0 0 auto;color:var(--ff-accent);}
+.ff-pick:hover{background:var(--ff-hover);}
+.ff-sr:focus-visible + .ff-pick{outline:2px solid var(--ff-accent);outline-offset:1px;}
+.ff-field[data-disabled="true"] .ff-pick{opacity:.5;cursor:not-allowed;pointer-events:none;}
+.ff-field[data-bad="true"] .ff-pick{border-color:var(--ff-error);}
+
+.ff-chosen{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-top:8px;
+    padding:8px 10px;
+    border-radius:10px;
+    background:var(--ff-hover);
+    min-width:0;
+}
+
+.ff-chosen[hidden]{display:none!important;}
+
+.ff-badge{
+    flex:0 0 auto;
+    padding:3px 8px;
+    border-radius:999px;
+    background:var(--ff-accent);
+    color:#fff;
+    font-size:12px;
+    font-weight:700;
+    letter-spacing:.2px;
+}
+
+.ff-fileinfo{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;line-height:1.3;}
+.ff-fileinfo strong{font-size:13.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ff-fileinfo span{font-size:12px;color:var(--ff-muted);}
+
+.ff-remove{
+    flex:0 0 auto;
+    min-height:34px;
+    padding:0 10px;
+    border:0;
+    border-radius:8px;
+    background:transparent;
+    color:var(--ff-error);
+    font:600 13px/1 Inter,"Segoe UI",Roboto,Arial,sans-serif;
+    cursor:pointer;
+}
+.ff-remove:hover{background:var(--ff-hover);}
+
+/* the security check (Cloudflare Turnstile) */
+.ff-check{margin:14px 0 0;min-height:0;}
+.ff-check-note{margin:6px 0 0;font-size:12.5px;color:var(--ff-muted);}
+.ff-check-note button{
+    margin:0 0 0 4px;
+    padding:0;
+    border:0;
+    background:none;
+    color:var(--ff-accent);
+    font:inherit;
+    font-weight:600;
+    text-decoration:underline;
+    cursor:pointer;
+}
+
+/* ---------------------------------------------------------
+   Footer: buttons, messages, progress
+   --------------------------------------------------------- */
+.ff-msg{margin:0 0 10px;font-size:14px;line-height:1.4;color:var(--ff-error);font-weight:500;}
+.ff-msg:empty{display:none;}
+.ff-msg[data-kind="info"]{color:var(--ff-muted);font-weight:400;}
+
+.ff-ask{margin:0 0 10px;font-size:15px;line-height:1.45;color:var(--ff-text);font-weight:600;}
+.ff-ask small{display:block;margin-top:2px;font-size:13px;font-weight:400;color:var(--ff-muted);}
+
+.ff-actions{display:flex;gap:10px;}
+.ff-actions > *{flex:1 1 0;}
+
+.ff-btn{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    width:100%;
+    min-height:48px;
+    box-sizing:border-box;
+    margin:0;
+    padding:0 18px;
+    border:0;
+    border-radius:12px;
+    font:700 16px/1 Inter,"Segoe UI",Roboto,Arial,sans-serif;
+    cursor:pointer;
+    -webkit-tap-highlight-color:transparent;
+    touch-action:manipulation;
+}
+
+.ff-btn:active{transform:scale(.98);}
+.ff-btn:focus-visible{outline:2px solid #1a73e8;outline-offset:2px;}
+.ff-btn[disabled]{opacity:.55;cursor:not-allowed;}
+
+.ff-primary{background:var(--ff-accent);color:#fff;}
+.ff-primary:hover:not([disabled]){background:var(--ff-accent-hover);}
+.ff-secondary{background:var(--ff-hover);color:var(--ff-text);}
+.ff-secondary:hover:not([disabled]){background:var(--ff-line);}
+
+.ff-progress{
+    height:10px;
+    border-radius:999px;
+    background:var(--ff-hover);
+    overflow:hidden;
+}
+.ff-progress i{
+    display:block;
+    height:100%;
+    width:0;
+    border-radius:inherit;
+    background:linear-gradient(90deg,#5eead4,#0d9488);
+    transition:width .25s ease;
+}
+.ff-progress[data-wait="true"] i{width:35%;animation:ff-slide 1.1s ease-in-out infinite alternate;}
+@keyframes ff-slide{from{margin-left:0}to{margin-left:65%}}
+
+.ff-progress-text{margin:8px 0 0;font-size:14px;color:var(--ff-text);text-align:center;}
+.ff-progress-note{margin:2px 0 0;font-size:12.5px;color:var(--ff-muted);text-align:center;}
+
+/* ---------------------------------------------------------
+   Confirmation windows
+   --------------------------------------------------------- */
+.ff-done{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    text-align:center;
+    padding:22px 8px 8px;
+}
+
+.ff-done-icon{
+    width:76px;
+    height:76px;
+    margin-bottom:14px;
+    display:grid;
+    place-items:center;
+    border-radius:50%;
+    background:linear-gradient(135deg,#b8fff0 0%,#34c8b6 100%);
+    color:#0e351f;
+}
+.ff-done-icon svg{width:44px;height:44px;display:block;}
+
+.ff-done h3{margin:0 0 8px;font-size:21px;line-height:1.3;font-weight:700;color:var(--ff-main);}
+.ff-done p{margin:0 0 10px;font-size:16px;line-height:1.5;color:var(--ff-text);}
+.ff-done .ff-ref{margin:6px 0 4px;font-size:14px;font-weight:700;color:var(--ff-muted);}
+.ff-done blockquote{
+    margin:0;
+    padding:0 6px;
+    font-size:16px;
+    line-height:1.55;
+    font-style:italic;
+    color:var(--ff-text);
+}
+
+@media (prefers-reduced-motion:reduce){
+    .ff-menu,
+    .ff-backdrop,
+    .ff-dialog,
+    .ff-progress i{transition:none;}
+    .ff-progress[data-wait="true"] i{animation:none;margin-left:0;width:100%;}
+}
