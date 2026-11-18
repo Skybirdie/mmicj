@@ -27,7 +27,8 @@ The cycle (whatever applies today, in this order, 2 s pause between):
   WELCOME  >  HAPPY BIRTHDAY  >  HAPPY ANNIVERSARY
   Each kind: names shuffled, 3 s each (at least 10 s per kind: 1 name = 10 s, 2 = 5 s each),
   gif changes every 10 s (shuffled deck, no repeats until all used, never the same twice in a row),
-  then fades out; after the last kind everything is gone until the app is reopened.
+  then fades out; after the last kind the whole flow starts again (same 2 s pause), LOOPS = 3 times in all
+  (setting at the top of js/birthdayParty.js; 1 = play once), and then everything is gone until the app is reopened.
   Tapping the row opens the popup for the kind showing (its gif, title, names A-Z, its backdrop);
   the clock pauses while it is open. During the 2 s pause the row is not tappable.
   Button layout (no room for a row): the button shows 10 s per kind with that kind's icon.

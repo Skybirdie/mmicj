@@ -145,6 +145,8 @@ ok(dm[0].birthday === '1990-11-13' && dm[0].added === '2026-11-11' && dm[1].adde
 ok(C.ORDER.join() === 'welcome,birthday,anniversary' && C.GAP_MS === 2000, 'order is welcome > birthday > anniversary with a 2 s gap');
 
 
+ok(C.LOOPS === 3, 'the whole flow loops 3 times');
+
 /* the live file: Trinidad's day, and only today's file is accepted */
 ok(C.trinidadToday(new Date('2026-11-14T04:05:00Z')) === '2026-11-14' && C.trinidadToday(new Date('2026-11-14T03:59:00Z')) === '2026-11-13', "Trinidad's date is the UTC clock minus four hours");
 ok(C.trinidadToday(new Date('2027-01-01T03:00:00Z')) === '2026-12-31', "Trinidad's date rolls back across a year end");
