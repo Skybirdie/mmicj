@@ -29,6 +29,8 @@ Nothing else changed. The front page, share panel, service worker and Worker are
   Audio upload (switched off, with a note, when the media is a video), "Share anonymously" (only the admins ever see the name).
   Text alone, a file alone, or both are fine. There is no date or release field: the time is stamped by the Worker and every
   testimony is a draft until an admin decides.
+* **The security check heals itself.** If its token expires or the widget goes missing, tapping Send (or Join) rebuilds it and carries on automatically. No page refresh needed.
+* **On desktops** the windows open toward the right side of the screen. On phones they are a bottom sheet.
 * **Files** go straight from the phone to R2 with a progress bar. The window cannot be closed while sending.
   If a send fails, **Try again** resumes without losing what was typed or chosen.
 * **After sending** the form is emptied, and the confirmation window shows (Testify: "Your testimony has been sent." and Revelation 12:11 (KJV)).

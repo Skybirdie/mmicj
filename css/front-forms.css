@@ -122,9 +122,10 @@ html[data-theme="dark"] .ff-modal{
     display:flex;
     gap:8px;
     padding:8px;
-    background:var(--ff-bg);
+    /* same light-teal family as the button's icon (#d9fff6 > #7ef0dc > #2fc4b2) */
+    background:linear-gradient(180deg,#e9fffb 0%,#b4f6ea 55%,#8ceedd 100%);
     border-radius:14px;
-    box-shadow:0 10px 30px rgba(0,0,0,.34), 0 0 0 1px var(--ff-line);
+    box-shadow:0 10px 30px rgba(0,0,0,.34), 0 0 0 1px rgba(47,196,178,.55);
     opacity:0;
     transform:translateY(6px) scale(.97);
     transform-origin:50% 100%;
@@ -142,7 +143,7 @@ html[data-theme="dark"] .ff-modal{
     width:12px;
     height:12px;
     margin-left:-6px;
-    background:var(--ff-bg);
+    background:#8ceedd;   /* the gradient's bottom colour, so the pointer blends in */
     transform:rotate(45deg);
     box-shadow:2px 2px 2px rgba(0,0,0,.12);
     border-radius:0 0 3px 0;
@@ -218,6 +219,15 @@ html[data-theme="dark"] .ff-modal{
 }
 
 .ff-modal.is-open .ff-dialog{opacity:1;transform:none;}
+
+/* desktops: the windows open toward the right side of the screen, near the button */
+@media (min-width:701px){
+    .ff-modal{
+        justify-content:flex-end;
+        padding-right:clamp(16px,4vw,64px);
+        box-sizing:border-box;
+    }
+}
 
 /* phones: bottom sheet */
 @media (max-width:700px){

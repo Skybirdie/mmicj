@@ -143,6 +143,11 @@
 
     function makeCheck(box, note){
         var c = { token: "", id: null, failed: false, mounted: false };
+        var waiters = [];
+        function settle(ok){
+            var w = waiters; waiters = [];
+            w.forEach(function(x){ ok ? x.res(c.token) : x.rej(new Error("check")); });
+        }
         function refreshNote(){
             clear(note);
             if(!TURNSTILE_SITE_KEY) return;
@@ -165,11 +170,11 @@
                     sitekey: TURNSTILE_SITE_KEY,
                     size: (box.clientWidth && box.clientWidth < 300) ? "compact" : "flexible",
                     theme: isDark() ? "dark" : "light",
-                    callback: function(t){ c.token = t; c.failed = false; refreshNote(); },
+                    callback: function(t){ c.token = t; c.failed = false; refreshNote(); settle(true); },
                     "expired-callback": function(){ c.token = ""; },
-                    "error-callback": function(){ c.token = ""; c.failed = true; refreshNote(); }
+                    "error-callback": function(){ c.token = ""; c.failed = true; refreshNote(); settle(false); }
                 });
-            }).catch(function(){ c.failed = true; refreshNote(); });
+            }).catch(function(){ c.failed = true; refreshNote(); settle(false); });
         };
         c.unmount = function(){
             try{ if(c.id !== null && window.turnstile) window.turnstile.remove(c.id); }catch(e){}
@@ -182,6 +187,29 @@
             try{ if(c.id !== null && window.turnstile) window.turnstile.reset(c.id); }catch(e){}
         };
         c.needed = function(){ return !!TURNSTILE_SITE_KEY; };
+
+        /* Get a usable token, whatever state the widget is in. If the widget is gone, empty or stuck,
+           it is rebuilt from scratch, so the person never has to refresh the page. */
+        function dead(){ return !c.mounted || (c.id !== null && !box.childNodes.length) || c.failed; }
+        c.ensure = function(){
+            if(!TURNSTILE_SITE_KEY || c.token) return Promise.resolve(c.token);
+            return new Promise(function(res, rej){
+                var done = false, t1, t2;
+                var w = {
+                    res: function(t){ if(done) return; done = true; clearTimeout(t1); clearTimeout(t2); res(t); },
+                    rej: function(e){ if(done) return; done = true; clearTimeout(t1); clearTimeout(t2); rej(e); }
+                };
+                waiters.push(w);
+                if(dead()){ c.unmount(); c.mount(); }
+                else if(c.id !== null){ try{ window.turnstile.reset(c.id); }catch(e){} }
+                /* still nothing after a while: rebuild once more, then give up */
+                t1 = setTimeout(function(){
+                    if(done || c.token) return;
+                    c.unmount(); c.mount();
+                    t2 = setTimeout(function(){ if(!done){ c.failed = true; refreshNote(); w.rej(new Error("check")); } }, 30000);
+                }, 10000);
+            });
+        };
         return c;
     }
 
@@ -467,12 +495,16 @@
         f.afterDone = resetForm;
         f.onShow = function(){ check.mount(); };
 
+        var checking = false;
         submit.addEventListener("click", function(){
             if(f.busyNow) return;
             say("");
             if(!validate()) return;
             if(check.needed() && !check.token){
-                say(check.failed ? "The security check did not load. Please tap “Try again” under it." : "Please wait for the check above to finish, then tap Join again.");
+                if(checking) return;
+                checking = true; say("Checking that you're a person…");
+                check.ensure().then(function(){ checking = false; say(""); submit.click(); },
+                    function(){ checking = false; say("The security check did not finish. Please try again."); });
                 return;
             }
             if(navigator.onLine === false){ say(sayFailure({ status: 0 })); return; }
@@ -710,13 +742,17 @@
 
         function newSession(){ st.started = false; st.uploads = null; st.id = newId("t"); }
 
+        var checking = false;
         /* step 1: Send -> check, then ask "are you sure?" (nothing is sent yet) */
         sendBtn.addEventListener("click", function(){
             say("");
             yesBtn.textContent = "Yes, send it";
             if(!validate()) return;
             if(check.needed() && !check.token){
-                say(check.failed ? "The security check did not load. Please tap “Try again” under it." : "Please wait for the check above to finish, then tap Send again.");
+                if(checking) return;
+                checking = true; say("Checking that you're a person…");
+                check.ensure().then(function(){ checking = false; say(""); if(st.mode === "edit") sendBtn.click(); },
+                    function(){ checking = false; say("The security check did not finish. Please tap Send again."); });
                 return;
             }
             if(!st.id) st.id = newId("t");
@@ -737,7 +773,13 @@
         function run(){
             say("");
             if(navigator.onLine === false){ say(sayFailure({ status: 0 })); return; }
-            if(!st.started && check.needed() && !check.token){ say("Please wait for the check to finish, then tap again."); return; }
+            if(!st.started && check.needed() && !check.token){
+                if(checking) return;
+                checking = true; say("Checking that you're a person…");
+                check.ensure().then(function(){ checking = false; say(""); if(st.mode === "confirm") run(); },
+                    function(){ checking = false; say("The security check did not finish. Please tap again."); });
+                return;
+            }
             setMode("sending");
             setProgress(0, "Getting ready…", true);
 
