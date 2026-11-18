@@ -23,14 +23,12 @@ Nothing else changed. The front page, share panel, service worker and Worker are
   Join sends on **Join**. Testify sends on **Send, then Yes, send it** (the second step is the confirmation).
 * **Nothing is loaded with the front page** except the small button, one stylesheet and this script.
   The security check (Cloudflare Turnstile) loads only when a form is first opened.
-* **Join:** name (required), birthday as month and day (optional), email and phone (optional), consent box.
+* **Join:** name (required), birthday as month and day (optional), email and phone (at least one of the two is required: "Please provide at least 1 contact method for our records."), consent box.
   Confirmation: "Welcome to the MMicj garden! Let's grow together."
 * **Testify!:** Title and Name or nickname (required), Description, Media upload (photo, video or PDF, type detected from the file),
   Audio upload (switched off, with a note, when the media is a video), "Share anonymously" (only the admins ever see the name).
   Text alone, a file alone, or both are fine. There is no date or release field: the time is stamped by the Worker and every
   testimony is a draft until an admin decides.
-* **The security check heals itself.** If its token expires or the widget goes missing, tapping Send (or Join) rebuilds it and carries on automatically. No page refresh needed.
-* **On desktops** the windows open toward the right side of the screen. On phones they are a bottom sheet.
 * **Files** go straight from the phone to R2 with a progress bar. The window cannot be closed while sending.
   If a send fails, **Try again** resumes without losing what was typed or chosen.
 * **After sending** the form is emptied, and the confirmation window shows (Testify: "Your testimony has been sent." and Revelation 12:11 (KJV)).

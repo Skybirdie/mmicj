@@ -401,9 +401,11 @@
         function setBirthBad(msg){ bErr.textContent = msg || ""; bWrap.setAttribute("data-bad", msg ? "true" : "false"); }
 
         var email = input("email", { autocomplete: "email", inputmode: "email", maxlength: String(LIMITS.email), placeholder: "name@example.com" });
-        var fEmail = field("Email", email, { optional: true });
+        var fEmail = field("Email", email);
         var phone = input("tel", { autocomplete: "tel", inputmode: "tel", maxlength: String(LIMITS.phone), placeholder: "+1 868 555 0142" });
-        var fPhone = field("Phone", phone, { optional: true });
+        var fPhone = field("Phone", phone);
+        var contactHint = el("p", "ff-hint ff-contact-hint", "Please provide at least 1 contact method for our records (email or phone).");
+        var contactErr = el("p", "ff-error", ""); contactErr.id = "ffContactErr";
 
         /* a field only robots fill in */
         var trap = input("text", { tabindex: "-1", autocomplete: "off", name: "website", "aria-hidden": "true" });
@@ -422,7 +424,7 @@
         var checkNote = el("p", "ff-check-note", "");
         var check = makeCheck(checkBox, checkNote);
 
-        fields.appendChild(fName); fields.appendChild(bWrap); fields.appendChild(fEmail); fields.appendChild(fPhone);
+        fields.appendChild(fName); fields.appendChild(bWrap); fields.appendChild(contactHint); fields.appendChild(fEmail); fields.appendChild(fPhone); fields.appendChild(contactErr);
         fields.appendChild(consentWrap); fields.appendChild(consentErr); fields.appendChild(trapWrap);
         fields.appendChild(checkBox); fields.appendChild(checkNote);
         form.appendChild(fields);
@@ -458,8 +460,8 @@
 
         /* an error goes away as soon as the person works on that field */
         name.addEventListener("input", function(){ fName.setBad(""); });
-        email.addEventListener("input", function(){ fEmail.setBad(""); });
-        phone.addEventListener("input", function(){ fPhone.setBad(""); });
+        email.addEventListener("input", function(){ fEmail.setBad(""); contactErr.textContent = ""; });
+        phone.addEventListener("input", function(){ fPhone.setBad(""); contactErr.textContent = ""; });
         month.addEventListener("change", function(){ setBirthBad(""); });
         day.addEventListener("change", function(){ setBirthBad(""); });
         consent.addEventListener("change", function(){ consentErr.textContent = ""; });
@@ -479,6 +481,8 @@
             var ph = phone.value.trim();
             fPhone.setBad("");
             if(ph && (ph.length > LIMITS.phone || !/^[0-9+()\-.\s]{5,}$/.test(ph))) bad(phone, fPhone.setBad, "That phone number does not look right.");
+            contactErr.textContent = "";
+            if(!em && !ph) bad(email, function(t){ contactErr.textContent = t; }, "Please provide at least 1 contact method for our records.");
             consentErr.textContent = "";
             if(!consent.checked) bad(consent, function(t){ consentErr.textContent = t; }, "Please tick the box to let us keep your details.");
             if(firstBad) firstBad.focus({ preventScroll: false });
@@ -489,7 +493,7 @@
             name.value = ""; month.value = ""; day.value = ""; email.value = ""; phone.value = ""; trap.value = ""; consent.checked = false;
             fitDays(); sid = "";
             [fName, fEmail, fPhone].forEach(function(x){ x.setBad(""); });
-            setBirthBad(""); consentErr.textContent = ""; say("");
+            setBirthBad(""); consentErr.textContent = ""; contactErr.textContent = ""; say("");
             check.reset();
         }
         f.afterDone = resetForm;
