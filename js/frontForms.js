@@ -35,6 +35,7 @@
     var INTAKE_URL = "https://mmicj-intake.meditation-mornings-icj.workers.dev";
     var TURNSTILE_SITE_KEY = "0x4AAAAAAGF5FIsgOzi0ukTg";      /* public by design; "" = no security check (local testing only) */
     var TURNSTILE_SRC = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+    var JOIN_DONE_IMAGE = "assets/garden.png";                /* picture on the Join confirmation; the drawn sprout is the fallback */
 
     /* The same rules the Worker enforces (the Worker checks again, so these only give a friendly message early). */
     var MB = 1024 * 1024;
@@ -312,6 +313,19 @@
             var icon = el("div", "ff-done-icon");
             icon.appendChild(svg(opts.icon));
             wrap.appendChild(icon);
+            /* optional picture: the drawn icon shows first and stays if the picture is missing or fails to load */
+            if(opts.image){
+                var pic = new Image();
+                pic.alt = ""; pic.decoding = "async";
+                pic.onload = function(){
+                    if(icon.parentNode !== wrap) return;
+                    var photo = el("div", "ff-done-icon ff-done-photo");
+                    photo.setAttribute("aria-hidden", "true");
+                    photo.appendChild(pic);
+                    wrap.replaceChild(photo, icon);
+                };
+                pic.src = opts.image;
+            }
             opts.lines.forEach(function(l){
                 var n = el(l.tag, l.cls || "", l.text);
                 wrap.appendChild(n);
@@ -397,7 +411,7 @@
         bLabel.setAttribute("for", "ffBirthMonth"); month.id = "ffBirthMonth";
         var bErr = el("p", "ff-error", ""); bErr.id = "ffBirthErr";
         bWrap.appendChild(bLabel); bWrap.appendChild(bRow); bWrap.appendChild(bErr);
-        bWrap.appendChild(el("p", "ff-hint", "Month and day only, no year."));
+        bWrap.appendChild(el("p", "ff-hint ff-hint-small", "Month and day only, no year."));
         function setBirthBad(msg){ bErr.textContent = msg || ""; bWrap.setAttribute("data-bad", msg ? "true" : "false"); }
 
         var email = input("email", { autocomplete: "email", inputmode: "email", maxlength: String(LIMITS.email), placeholder: "name@example.com" });
@@ -514,6 +528,7 @@
             if(navigator.onLine === false){ say(sayFailure({ status: 0 })); return; }
             sid = sid || newId("j");
             setBusy(true);
+            try{ new Image().src = JOIN_DONE_IMAGE; }catch(e){}        /* warm the confirmation picture while sending */
             var body = {
                 id: sid, name: name.value.replace(/\s+/g, " ").trim(), consent: true, website: trap.value, cf: check.token,
                 birthday: month.value && day.value ? (("0" + month.value).slice(-2) + "-" + ("0" + day.value).slice(-2)) : "",
@@ -524,7 +539,7 @@
                 if(res.ok){
                     shell.setBusy(false);
                     shell.showDone({
-                        title: "Welcome!", icon: ICON.sprout,
+                        title: "Welcome!", icon: ICON.sprout, image: JOIN_DONE_IMAGE,
                         lines: [{ tag: "h3", text: "Welcome to the MMicj garden!" }, { tag: "p", text: "Let's grow together." }]
                     });
                     return;
