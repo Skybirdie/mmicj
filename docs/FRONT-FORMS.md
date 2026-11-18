@@ -26,6 +26,7 @@ Nothing else changed. The front page, share panel, service worker and Worker are
   The security check (Cloudflare Turnstile) loads only when a form is first opened.
 * **Join:** name (required), birthday as month and day (optional), email and phone (at least one of the two is required: "Please provide at least 1 contact method for our records."), consent box.
   Confirmation: "Welcome to the MMicj garden! Let's grow together."
+  The confirmation circle shows `assets/garden.png` (set by `JOIN_DONE_IMAGE`); if the picture is missing or fails to load, the drawn sprout circle shows instead.
 * **Testify!:** Title and Name or nickname (required), Description, Media upload (photo, video or PDF, type detected from the file),
   Audio upload (switched off, with a note, when the media is a video), "Share anonymously" (only the admins ever see the name).
   Text alone, a file alone, or both are fine. There is no date or release field: the time is stamped by the Worker and every
