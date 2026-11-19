@@ -5937,6 +5937,83 @@ function isShareModeEnabled(
   return SHARE_MODE_ENABLED;
 }
 
+/* =========================================================
+   FRONT PAGE FORM SWITCHES  (js/frontForms.js)
+
+   The small button next to Share opens a menu with Join and
+   Testify. Each one has its own switch, a plain variable
+   (Cloudflare dashboard -> this Worker -> Settings -> Variables
+   and Secrets, next to SHARE_MODE_ENABLED / MAINTENANCE):
+
+     JOIN_BUTTON_ENABLED      the Join row of the menu
+     TESTIFY_BUTTON_ENABLED   the Testify row of the menu
+
+     "true"  (or not set)  that row works as usual
+     "false" / "0" / "off" / "no"
+                           that row stays in the menu but is
+                           dimmed and cannot be tapped
+
+   When BOTH are off, the small button itself is dimmed too.
+
+   No deploy is needed: edit the variable and the next page load
+   follows it. Because "keep_vars" is on in wrangler.jsonc, a value
+   set in the dashboard survives later deploys. (Do not also put
+   them in "vars" there: a value in that file would overwrite the
+   dashboard value on every deploy.)
+
+   The page is told through window.__MMICJ_JOIN_ENABLED and
+   window.__MMICJ_TESTIFY_ENABLED, written into <head> by
+   serveBasePage() below. Anything other than an explicit "off"
+   value means ON, so a typo can never lock a form by accident.
+
+   These switches only dim and disable the controls in the app.
+   The intake Worker (mmicj-intake) is a separate Worker and is
+   not changed by them.
+========================================================= */
+
+function isSwitchOn(
+  env,
+  name
+) {
+  const raw =
+    env &&
+    env[name] !== undefined &&
+    env[name] !== null
+      ? String(
+          env[name]
+        )
+          .trim()
+          .toLowerCase()
+      : "";
+
+  return ![
+    "false",
+    "0",
+    "off",
+    "no"
+  ].includes(
+    raw
+  );
+}
+
+function isJoinButtonEnabled(
+  env
+) {
+  return isSwitchOn(
+    env,
+    "JOIN_BUTTON_ENABLED"
+  );
+}
+
+function isTestifyButtonEnabled(
+  env
+) {
+  return isSwitchOn(
+    env,
+    "TESTIFY_BUTTON_ENABLED"
+  );
+}
+
 const PUBLISHED_CATALOG_URL =
   "https://media.mmicj.com/catalog/published.json";
 
@@ -6538,6 +6615,32 @@ async function serveBasePage(
 
               element.append(
                 tags,
+                {
+                  html:
+                    true
+                }
+              );
+
+              /* Join / Testify switches (see FRONT PAGE FORM SWITCHES
+                 above). After the share-mode flag, which must stay first. */
+              element.append(
+                "<script>window.__MMICJ_JOIN_ENABLED = " +
+                  (
+                    isJoinButtonEnabled(
+                      env
+                    )
+                      ? "true"
+                      : "false"
+                  ) +
+                  ";window.__MMICJ_TESTIFY_ENABLED = " +
+                  (
+                    isTestifyButtonEnabled(
+                      env
+                    )
+                      ? "true"
+                      : "false"
+                  ) +
+                  ";</script>",
                 {
                   html:
                     true

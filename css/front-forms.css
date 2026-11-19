@@ -58,8 +58,17 @@
     filter:drop-shadow(0 1px 1.5px rgba(0,40,40,.55)) drop-shadow(0 0 1px rgba(0,40,40,.45));
 }
 
-#frontFormsButton:hover{filter:brightness(1.1);transform:translateY(-2px);}
-#frontFormsButton:active{transform:translateY(0) scale(.96);}
+#frontFormsButton:hover:not(:disabled){filter:brightness(1.1);transform:translateY(-2px);}
+#frontFormsButton:active:not(:disabled){transform:translateY(0) scale(.96);}
+
+/* both forms switched off at the backend (Worker variables JOIN_BUTTON_ENABLED and TESTIFY_BUTTON_ENABLED = false): same place, dimmed, not tappable */
+#frontFormsButton:disabled,
+#frontFormsButton.is-off{
+    opacity:.35;
+    filter:grayscale(.6);
+    cursor:not-allowed;
+    transform:none;
+}
 #frontFormsButton:focus-visible{outline:2px solid #fff;outline-offset:3px;}
 
 @media (max-width:700px){
@@ -170,8 +179,16 @@ html[data-theme="dark"] .ff-modal{
 }
 
 .ff-menu-btn svg{width:18px;height:18px;flex:0 0 auto;display:block;}
-.ff-menu-btn:hover{background:var(--ff-accent-hover);}
-.ff-menu-btn:active{transform:scale(.97);}
+.ff-menu-btn:hover:not(:disabled){background:var(--ff-accent-hover);}
+.ff-menu-btn:active:not(:disabled){transform:scale(.97);}
+
+/* one form switched off at the backend: its row stays in the menu, dimmed and not tappable */
+.ff-menu-btn:disabled,
+.ff-menu-btn.is-off{
+    opacity:.4;
+    filter:grayscale(.6);
+    cursor:not-allowed;
+}
 .ff-menu-btn:focus-visible{outline:2px solid #1a73e8;outline-offset:2px;}
 
 /* ---------------------------------------------------------

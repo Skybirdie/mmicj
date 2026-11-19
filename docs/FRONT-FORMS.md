@@ -15,6 +15,31 @@ Tapping it opens a little menu above it with **Join** and **Testify**. Each open
 
 Nothing else changed. The front page, share panel, service worker and Worker are untouched.
 
+## Switching Join and Testify on and off (backend)
+Each form has its own switch. Cloudflare dashboard, then the **mmicj** Worker, then **Settings, Variables and Secrets**: add a plain variable.
+
+| Variable | Controls |
+|---|---|
+| `JOIN_BUTTON_ENABLED` | the **Join** row of the menu |
+| `TESTIFY_BUTTON_ENABLED` | the **Testify** row of the menu |
+
+| Value | Result |
+|---|---|
+| `true`, or the variable not set | That form works as usual |
+| `false`, `0`, `off` or `no` | That form stays in the menu but is **dimmed and cannot be tapped** (its tooltip says "Not available right now") |
+
+Both are ON by default (nothing to set). To pause only Join, add `JOIN_BUTTON_ENABLED = false`; to switch it back on, change it to `true` or delete the variable.
+If **both** are off, the small button next to Share is dimmed and cannot be tapped either.
+
+No deploy is needed: the next page load follows the variables. `keep_vars` is on in `wrangler.jsonc`, so values set in the dashboard
+survive later deploys. Do **not** also add them to `vars` in `wrangler.jsonc`: a value in that file would replace the dashboard value on every deploy.
+Any other value (a typo, for example) counts as ON, so a form can never be switched off by accident.
+
+How it works: the Worker writes `window.__MMICJ_JOIN_ENABLED` and `window.__MMICJ_TESTIFY_ENABLED` (`true`/`false`) into the page's `<head>` (it already rewrites the page for the link preview,
+so this costs no extra request). `js/frontForms.js` reads them. Links that carry a Glide contract (`?contract=`, `?contractz=`, `?k=`) are passed to the
+page untouched by the Worker, so on those both forms are shown as ON.
+The switches dim and disable the controls in the app; they do not change the intake Worker (`mmicj-intake`), which would still accept a request sent to it directly.
+
 ## Settings (top of `js/frontForms.js`)
 * `INTAKE_URL` = `https://mmicj-intake.meditation-mornings-icj.workers.dev`
 * `TURNSTILE_SITE_KEY` = your public site key. Leave it `""` only for local testing (the Worker then must not have `TURNSTILE_SECRET`).
