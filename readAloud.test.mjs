@@ -120,7 +120,7 @@ function makeEnv(o={}){
     _next(){const u=this.queue.shift();if(!u){this.speaking=false;this.pending=false;this.cur=null;return}
       this.speaking=true;this.cur=u;this.pending=this.queue.length>0;
       this.timer=setTimeout(()=>{
-        if(o.failWith){u.onerror&&u.onerror({error:o.failWith});this._next();return}
+        if(o.failWith||(o.failIf&&o.failIf(u))){u.onerror&&u.onerror({error:o.failWith||'synthesis-failed'});this._next();return}
         u.onstart&&u.onstart({});
         log.push({text:u.text,rate:u.rate,voice:u.voice&&u.voice.voiceURI});
         u.onend&&u.onend({});
@@ -333,7 +333,7 @@ const P1=(...t)=>lines(t,{w:300});
 }
 {
   const e=makeEnv({pages:[P1('One. Two. Three. Four. Five.'),P1('x.')],failWith:'synthesis-failed'});
-  e.button.click();await sleep(1800);   /* the three cautious retries take ~1 s before it gives up */
+  e.button.click();await until(()=>e.RA.state()==='idle'&&e.toastText()!=='',8000);   /* the cautious retries wait for a stuck engine to settle, then it gives up */
   ok(e.RA.state()==='idle'&&e.toastText()==='Speech is not working. Check device settings.','repeated failures: gives up with a short message ('+e.toastText()+')');
 }
 
@@ -601,6 +601,66 @@ const P1=(...t)=>lines(t,{w:300});
   y.store['mm-readaloud-check']=JSON.stringify({at:1,st:'bad',verdict:'x',text:'old report'});
   y.doc.dispatchEvent({type:'skyreader:bookOpened'});
   ok(!y.chip()&&!y.panel()&&y.RA.diagnosticSaved()===false,'an ordinary document never shows the saved report');
+}
+
+
+/* ======================= PART 3: A VOICE THE PHONE CANNOT USE (e.g. Malay, voice data not installed) ======================= */
+const VOICES3=[{voiceURI:'en',name:'English United States',lang:'en_US',localService:true,default:true},{voiceURI:'ms',name:'Malay Malaysia',lang:'ms_MY',localService:true},{voiceURI:'gb',name:'English United Kingdom',lang:'en_GB',localService:true}];
+const isMs=u=>!!u.voice&&u.voice.voiceURI==='ms';
+{
+  /* the settings sample used to fail silently and leave the broken voice chosen */
+  const e=makeEnv({pages:[P1('Cover.'),P1('Text.')],voices:VOICES3,failIf:isMs,speakMs:20});
+  let refreshed=0;e.RA.onVoices(()=>refreshed++);
+  e.RA.setVoice('ms');e.RA.preview();
+  await until(()=>e.log.length>=1,3000);
+  ok(e.RA.getSettings().voice==='','sample in a voice the phone refuses: the choice goes back to the device default ('+JSON.stringify(e.RA.getSettings())+')');
+  ok(/not available on this phone/.test(e.toastText())&&refreshed>=1,'the reader is told, and the voice list in Settings is refreshed ('+e.toastText()+')');
+  ok(e.log.length===1&&e.log[0].voice===undefined&&/how I will read/.test(e.log[0].text),'the sample is then said again in the voice that works');
+  ok(JSON.parse(e.store['mm-readaloud']).voice==='','the switch back is saved, so the broken voice does not return next time');
+}
+{
+  /* a voice that spoke before is never blamed: the engine is the problem, so the choice stays */
+  const e=makeEnv({pages:[P1('Cover.'),P1('Text.')],voices:VOICES3,speakMs:20});
+  e.RA.setVoice('gb');e.RA.preview();await until(()=>e.log.length>=1,2000);
+  ok(JSON.parse(e.store['mm-readaloud']).good==='gb','a voice that really spoke is remembered as the last one that worked');
+}
+{
+  /* reading: a refused voice is swapped back to the last good one and reading carries on at once, without the cautious levels */
+  const e=makeEnv({pages:[P1('Cover.'),P1('One. Two. Three.')],voices:VOICES3,failIf:isMs,speakMs:10});
+  e.RA.setVoice('gb');e.RA.preview();await until(()=>e.log.length>=1,2000);       /* gb works: it becomes the last good voice */
+  e.RA.setVoice('ms');e.setPage(2);e.button.click();
+  await until(()=>e.RA.state()==='idle'&&e.log.length>=4,6000);
+  const spoken=e.log.slice(1).map(x=>x.voice);
+  ok(e.RA.getSettings().voice==='gb','reading with a refused voice: the choice goes back to the voice that worked before ('+JSON.stringify(e.RA.getSettings())+')');
+  ok(spoken.length>=3&&spoken.every(v=>v==='gb'),'the whole text is read in that voice ('+spoken.join(',')+')');
+}
+{
+  /* the real-world case: after the refused voice the phone's engine refuses everything for a while ("stuck engine") */
+  let until_=0;
+  const e=makeEnv({pages:[P1('Cover.'),P1('One. Two. Three. Four.')],voices:VOICES3,speakMs:10,
+    failIf:u=>{if(isMs(u))until_=Date.now()+700;return isMs(u)||Date.now()<until_}});
+  e.RA.setVoice('ms');e.setPage(2);e.button.click();
+  await until(()=>e.RA.state()==='idle'&&e.log.length>=4,8000);
+  ok(e.log.length>=4&&e.RA.state()==='idle','a stuck engine recovers: the retries wait for it, and reading completes ('+e.log.length+' pieces, toast: '+e.toastText()+')');
+  ok(e.RA.getSettings().voice==='','and the refused voice is no longer the saved choice');
+  /* changing the voice back to default or any other voice works afterwards */
+  e.RA.setVoice('gb');e.RA.preview();await until(()=>e.log.length>=5,3000);
+  ok(e.log[e.log.length-1].voice==='gb','a different voice chosen afterwards is heard');
+}
+{
+  /* a refused voice is not used as a fallback either */
+  const e=makeEnv({pages:[P1('Cover.'),P1('One. Two.')],voices:[VOICES3[1],VOICES3[0]],failIf:isMs,speakMs:10});
+  e.RA.setVoice('ms');e.setPage(2);e.button.click();
+  await until(()=>e.RA.state()==='idle'&&e.log.length>=2,6000);
+  ok(e.log.length>=2&&e.log.every(x=>x.voice!=='ms'),'a refused voice is skipped when the app picks a voice by itself');
+}
+{
+  /* the speech check names the cause and the way out, and which voice was switched back */
+  const DIAG3='book-mwb6vj0c-dl8l';
+  const k=makeEnv({bookId:DIAG3,pages:[lines(['One title','Two title','Three title'],{step:30,w:100})],voices:VOICES3,failIf:isMs,speakMs:10});
+  k.RA.setVoice('ms');k.RA.preview();await sleep(900);
+  k.button.click();await until(()=>k.RA.state()==='idle'||k.log.length>=1,4000);
+  ok(/switched back from Malay Malaysia/.test(k.RA.diagnosticReport()),'the report names the voice that was switched back');
 }
 
 console.log(fails?('\n'+fails+' FAILED'):'\nall ok');

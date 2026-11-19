@@ -78,9 +78,9 @@ const clampRate=v=>{
 function loadSettings(){
     try{
         const o=JSON.parse(localStorage.getItem(KEY)||"{}");
-        return {rate:clampRate(o.rate||1),voice:typeof o.voice==="string"?o.voice:"",showButton:typeof o.showButton==="boolean"?o.showButton:null};
+        return {rate:clampRate(o.rate||1),voice:typeof o.voice==="string"?o.voice:"",good:typeof o.good==="string"?o.good:"",showButton:typeof o.showButton==="boolean"?o.showButton:null};
     }catch(e){
-        return {rate:1,voice:"",showButton:null};
+        return {rate:1,voice:"",good:"",showButton:null};
     }
 }
 
@@ -102,7 +102,7 @@ api.setButtonVisible=function(v){
     return api.isButtonVisible();
 };
 api.setRate=function(v){settings.rate=clampRate(v);saveSettings();return settings.rate;};
-api.setVoice=function(uri){settings.voice=String(uri||"");level=0;voiceTry=0;saveSettings();};
+api.setVoice=function(uri){settings.voice=String(uri||"");badVoices.delete(settings.voice);level=0;voiceTry=0;errorRun=0;saveSettings();};
 api.rateRange=()=>({min:RATE_MIN,max:RATE_MAX});
 
 /*-------------------------------------------------------
@@ -122,8 +122,9 @@ api.onVoices=function(fn){
     if(typeof fn==="function")voiceListeners.push(fn);
 };
 
+function notifyVoices(){voiceListeners.forEach(fn=>{try{fn();}catch(e){}});}
+
 if(SS){
-    const notifyVoices=()=>voiceListeners.forEach(fn=>{try{fn();}catch(e){}});
     if(typeof SS.addEventListener==="function")SS.addEventListener("voiceschanged",notifyVoices);
     else SS.onvoiceschanged=notifyVoices;
 }
@@ -581,11 +582,52 @@ function voiceCount(){
 
 let voiceTry=0;           /* which of the candidate voices level 2 is on */
 
+/* Voices that were refused during this session (usually their voice data is not installed on the phone). They are not
+   picked as fallbacks, and the reader's own choice is swapped back (see revertBadVoice). Cleared on reload or when the
+   reader picks that voice again on purpose. */
+const badVoices=new Set();
+
+function voiceByUri(uri){
+    if(!SS||!uri)return null;
+    try{return (SS.getVoices()||[]).find(v=>v.voiceURI===uri)||null;}catch(e){return null;}
+}
+
+/* a piece that really started speaking proves its voice setting works ("" = the device default) */
+function noteWorked(u){
+    if(!u||u._lvl!==0)return;
+    badVoices.delete(u._setting);
+    if(settings.good!==u._setting){settings.good=u._setting;saveSettings();}
+}
+
+/* The voice the reader picked was refused by the phone. Some Android speech engines then refuse EVERY voice until they
+   are restarted, so a voice that does not work must not stay chosen: put back the last setting that spoke (or the device
+   default) and say so. Returns true when it switched. Does nothing when the refused voice is one that has spoken before:
+   then the engine is the problem, not the voice. */
+let lastSwitchBack="";
+function revertBadVoice(u){
+    if(!u||u._lvl!==0||!settings.voice||u._setting!==settings.voice||settings.voice===settings.good)return false;
+    const bad=voiceByUri(settings.voice);
+    lastSwitchBack=describeVoice(bad||{voiceURI:settings.voice});
+    badVoices.add(settings.voice);
+    settings.voice=voiceByUri(settings.good)?settings.good:"";
+    saveSettings();
+    notifyVoices();
+    toast("That voice is not available on this phone. Switched back.",5000);
+    return true;
+}
+
+/* cancel() even when the browser says nothing is speaking: after an error some phones keep a dead item in their queue */
+function hardCancel(){
+    if(!SS)return;
+    try{SS.cancel();}catch(e){}
+}
+
 /* voices that suit the phone's language, best first: the exact language, the same language family,
    the device default, English, then the rest; voices stored on the device before online ones */
 function candidateVoices(){
     let list=[];
     try{list=SS.getVoices()||[];}catch(e){}
+    list=list.filter(v=>!badVoices.has(v.voiceURI));
     if(!list.length)return [];
     const norm=l=>String(l||"").toLowerCase().replace("_","-");
     const want=norm((typeof navigator!=="undefined"&&navigator.language)||(document.documentElement&&document.documentElement.lang)||"en-US");
@@ -611,6 +653,7 @@ function makeUtterance(text){
     u.rate=level>=3?1:settings.rate;
     const v=level===0?chosenVoice():level>=2?autoVoice():null;
     if(v){u.voice=v;u.lang=v.lang;}
+    u._lvl=level;u._setting=level===0?settings.voice:"";
     if(diag)diagUtterance(v,u);
     return u;
 }
@@ -629,7 +672,7 @@ function speakList(list,from,token){
             while(token===session&&!dead&&next<total&&next-ended<=(level>=3?1:2)&&holdAt<0){
                 const i=next++;
                 const u=makeUtterance(list[i].text);
-                if(diag)u.onstart=()=>{if(token===session&&!dead)diagStarted(i);};
+                u.onstart=()=>{if(token!==session||dead)return;noteWorked(u);if(diag)diagStarted(i);};
                 const gapMs=list[i].gap>0&&i<total-1?Math.round(list[i].gap/settings.rate):0;
                 if(gapMs>0)holdAt=i;
                 const finish=()=>{
@@ -649,15 +692,17 @@ function speakList(list,from,token){
                     if(diag)diagSpeechError(code);
                     /* a voice / language the phone cannot use: start this piece again with the device's default voice */
                     if(level<3&&RECOVERABLE.indexOf(code)>=0){
-                        if(level===2&&voiceTry<Math.min(candidateVoices().length,6)-1)voiceTry++;      /* the next voice */
+                        const swapped=revertBadVoice(u);       /* the reader's own voice was the problem: back to the one that worked */
+                        if(swapped){}
+                        else if(level===2&&voiceTry<Math.min(candidateVoices().length,6)-1)voiceTry++;      /* the next voice */
                         else{level++;voiceTry=0;}
                         dead=true;
-                        cancelSpeech();
+                        hardCancel();
                         try{SS.resume();}catch(e){}
                         setTimeout(()=>{
                             if(token!==session)return;
                             speakList(list,i,token).then(resolve);
-                        },level>=3?500:200);
+                        },swapped?400:level>=3?900:350);       /* a stuck engine needs a moment before it takes the next request */
                         return;
                     }
                     errorRun++;
@@ -869,8 +914,17 @@ function applyNow(){
 api.preview=function(){
     if(!SS||state==="loading")return;
     if(state==="speaking"){applyNow();return;}
-    cancelSpeech();
+    hardCancel();
     const u=makeUtterance("This is how I will read to you.");
+    u.onstart=()=>noteWorked(u);
+    u.onerror=ev=>{
+        const code=ev&&ev.error;
+        if(RECOVERABLE.indexOf(code)<0)return;          /* "canceled" and "interrupted" are just a newer sample replacing this one */
+        if(revertBadVoice(u)){
+            hardCancel();
+            setTimeout(()=>{if(state==="idle")api.preview();},500);       /* say the sample again, in the voice that works */
+        }else toast(speechFailedMessage(code),5000);
+    };
     live.push(u);
     if(live.length>6)live.shift();
     setTimeout(()=>{try{SS.speak(u);}catch(e){}},SS.speaking?120:0);
@@ -1060,7 +1114,7 @@ function diagSummary(){
     else if(!okPages.length&&errPages.length){verdict="Reading the page text failed on this device, before speech. That points to the browser's PDF engine, not the voice.";st="bad";}
     else if(!okPages.length&&emptyPages.length){verdict="The page has no readable text layer.";st="bad";}
     else if(sp.started!==null){verdict="Working: the text was read and speech started.";st="ok";}
-    else if(sp.errors.length){verdict="The text was read, but the voice failed ("+sp.errors[sp.errors.length-1].code+").";st="bad";}
+    else if(sp.errors.length){verdict="The text was read, but the voice failed ("+sp.errors[sp.errors.length-1].code+")."+(lastSwitchBack?" A voice that failed was switched back.":"")+" If a voice was changed just before this, close the app completely and open it again; if it still fails, force stop Speech Services by Google in the phone's Android settings.";st="bad";}
     else{verdict="Checking...";st="wait";}
     return {rows:rows,verdict:verdict,st:st,voices:v};
 }
@@ -1082,7 +1136,7 @@ function diagReportText(){
     L.push("Secure page: "+d.env.secure+"; installed app: "+d.env.standalone+"; app muted: "+d.env.muted);
     L.push("Speech support: "+(SS?"yes":"no"));
     L.push("Voices: "+S.voices.count+(S.voices.list.length?" - "+S.voices.list.join("; "):""));
-    L.push("Settings: speed "+settings.rate+", saved voice "+(settings.voice||"automatic"));
+    L.push("Settings: speed "+settings.rate+", saved voice "+(settings.voice||"automatic")+(lastSwitchBack?"; switched back from "+lastSwitchBack:""));
     L.push("Pages:");
     if(!d.pages.length)L.push("  (none read yet)");
     d.pages.forEach(r=>{

@@ -122,6 +122,19 @@ the device reports are written to the browser console (`[ReadAloud] speech faile
 Other notices: "Speech was blocked. Tap Listen again." (browser blocked speech), "Audio is busy. Close other apps and tap Listen."
 (another app is using sound), "No readable text here." (three spreads in a row with no text on them), "Couldn't read this page's text." (the browser's PDF engine failed on the page, which is not the same as there being no text), "Finished reading."
 
+### A voice the phone cannot use (for example Malay, ms_MY)
+
+Android lists every voice as "on device" even when that voice's data was never downloaded. Picking such a voice makes the phone's speech engine refuse the text (`synthesis-failed`), and some engines then refuse every voice, even the default, until they are restarted. The app now:
+
+- remembers the last voice setting that really spoke (`good` in the saved settings; empty = device default);
+- tests a newly picked voice with the settings sample, which used to fail silently. If the phone refuses it, the choice is put back to the last good one, saved, the voice list in Settings is refreshed, and a short notice says so;
+- does the same while reading: a refused voice the reader chose is swapped back first, before the cautious fallback levels start;
+- never blames a voice that has spoken before (then the engine is the problem and the choice stays), and never picks a refused voice as an automatic fallback (until the page is reloaded or the reader picks it again on purpose);
+- cancels the engine's queue even when the browser says nothing is speaking, and waits a little longer between retries (350 ms, 900 ms for the last level) so a stuck engine can settle;
+- in the speech check report: names the voice that was switched back, and says what to try if the engine is still stuck (close the app completely and reopen it; then force stop Speech Services by Google in Android settings).
+
+The app cannot restart the phone's speech engine itself. To use Malay, install its voice data in Android Settings > Text-to-speech output (Google engine) > Install voice data.
+
 ## Limits
 - A page with no text layer (a scan, a picture) is skipped; three empty spreads in a row stop with a note.
   Scanned books need OCR first, on the admin side, so readers' devices are not burdened.
