@@ -28,30 +28,51 @@ window.SettingsPanel=(function(){
               <button type="button" class="sr-settings-close" aria-label="Close settings">×</button>
             </div>
             <div class="sr-settings-body">
-              <label class="sr-setting-row"><span>Dark theme</span><input id="srSettingTheme" type="checkbox"></label>
-              <label class="sr-setting-row"><span>Remember reading position</span><input id="srSettingRemember" type="checkbox"></label>
-              <label class="sr-setting-row"><span>Remember zoom</span><input id="srSettingZoom" type="checkbox"></label>
-              <label class="sr-setting-row"><span>Page-turn sound</span><input id="srSettingSound" type="checkbox"></label>
-              <label class="sr-setting-row"><span>Page edges (book thickness)</span><input id="srSettingBookStack" type="checkbox"></label>
+              <section class="sr-setting-group" aria-labelledby="srGroupAppearance">
+                <h3 class="sr-setting-group-title" id="srGroupAppearance">Appearance</h3>
+                <label class="sr-setting-row"><span>Dark theme</span><input id="srSettingTheme" type="checkbox"></label>
+              </section>
 
-<label class="sr-setting-row">
-  <span>Continue media playback in background</span>
-  <input id="srSettingBackgroundMedia" type="checkbox">
-</label>
+              <section class="sr-setting-group" aria-labelledby="srGroupReading">
+                <h3 class="sr-setting-group-title" id="srGroupReading">Reading</h3>
+                <label class="sr-setting-row"><span>Remember reading position</span><input id="srSettingRemember" type="checkbox"></label>
+                <label class="sr-setting-row"><span>Remember zoom</span><input id="srSettingZoom" type="checkbox"></label>
+                <label class="sr-setting-row"><span>Page edges (book thickness)</span><input id="srSettingBookStack" type="checkbox"></label>
+              </section>
 
-<label class="sr-setting-row" id="srSettingListenRow">
-  <span>Show Listen (read aloud) button</span>
-  <input id="srSettingListen" type="checkbox">
-</label>
-              <label class="sr-setting-row sr-setting-range"><span>Sound volume</span><input id="srSettingVolume" type="range" min="0" max="1" step="0.05"></label>
-              <p id="srSoundCheckTip" class="sr-soundcheck-tip">For a fair test, turn your device volume up and make sure the right speaker is selected.</p>
-              <button type="button" id="srSoundCheckButton" class="sr-settings-action sr-soundcheck-button">Test sounds</button>
-              <div id="srSoundCheckBox" hidden></div>
-              <div id="srListenRows" hidden>
-                <label class="sr-setting-row sr-setting-range"><span id="srListenRateLabel">Listen speed</span><input id="srSettingListenRate" type="range" min="0.6" max="1.8" step="0.1"></label>
-                <label class="sr-setting-row sr-setting-select"><span>Listen voice</span><select id="srSettingListenVoice"></select></label>
-              </div>
-              <button type="button" id="srFullscreenButton" class="sr-settings-action">Enter fullscreen</button>
+              <section class="sr-setting-group" aria-labelledby="srGroupSound">
+                <h3 class="sr-setting-group-title" id="srGroupSound">Sound</h3>
+                <label class="sr-setting-row"><span>Page-turn sound</span><input id="srSettingSound" type="checkbox"></label>
+                <label class="sr-setting-row sr-setting-range"><span>Sound volume</span><input id="srSettingVolume" type="range" min="0" max="1" step="0.05"></label>
+              </section>
+
+              <section class="sr-setting-group" aria-labelledby="srGroupMedia">
+                <h3 class="sr-setting-group-title" id="srGroupMedia">Videos &amp; Images/Graphics</h3>
+                <label class="sr-setting-row">
+                  <span>Continue media playback in background</span>
+                  <input id="srSettingBackgroundMedia" type="checkbox">
+                </label>
+              </section>
+
+              <section class="sr-setting-group" id="srListenGroup" aria-labelledby="srGroupListen">
+                <h3 class="sr-setting-group-title" id="srGroupListen">Text to Speech</h3>
+                <label class="sr-setting-row" id="srSettingListenRow">
+                  <span>Show Listen (read aloud) button</span>
+                  <input id="srSettingListen" type="checkbox">
+                </label>
+                <div id="srListenRows" hidden>
+                  <label class="sr-setting-row sr-setting-range"><span id="srListenRateLabel">Listen speed</span><input id="srSettingListenRate" type="range" min="0.6" max="1.8" step="0.1"></label>
+                  <label class="sr-setting-row sr-setting-select"><span>Listen voice</span><select id="srSettingListenVoice"></select></label>
+                </div>
+              </section>
+
+              <section class="sr-setting-group sr-setting-group-device" aria-labelledby="srGroupDevice">
+                <h3 class="sr-setting-group-title" id="srGroupDevice">Device</h3>
+                <p id="srSoundCheckTip" class="sr-soundcheck-tip">For a fair test, turn your device volume up and make sure the right speaker is selected.</p>
+                <button type="button" id="srSoundCheckButton" class="sr-settings-action sr-soundcheck-button">Test sounds</button>
+                <div id="srSoundCheckBox" hidden></div>
+                <button type="button" id="srFullscreenButton" class="sr-settings-action">Enter fullscreen</button>
+              </section>
             </div>
           </section>`;
         document.body.appendChild(root);
@@ -143,12 +164,19 @@ window.SettingsPanel=(function(){
         return root;
     }
 
+    /* The "Text to Speech" title only shows while at least one of its rows does (neither shows on a browser that cannot speak) */
+    function syncListenGroup(el){
+        const group=el.querySelector("#srListenGroup"),row=el.querySelector("#srSettingListenRow"),box=el.querySelector("#srListenRows");
+        if(group&&row&&box)group.hidden=row.style.display==="none"&&box.hidden;
+    }
+
     /* Listen (read-aloud) controls: only shown when this browser can speak */
     function fillListen(el){
         const box=el.querySelector("#srListenRows");
         if(!box)return;
-        if(!window.ReadAloud||!ReadAloud.supported){box.hidden=true;return;}
+        if(!window.ReadAloud||!ReadAloud.supported){box.hidden=true;syncListenGroup(el);return;}
         box.hidden=false;
+        syncListenGroup(el);
         const s=ReadAloud.getSettings();
         el.querySelector("#srSettingListenRate").value=s.rate;
         el.querySelector("#srListenRateLabel").textContent="Listen speed ("+Number(s.rate).toFixed(1)+"\u00D7)";

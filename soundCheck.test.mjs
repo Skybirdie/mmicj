@@ -9,15 +9,16 @@ const AUDIO=rd('./js/audio.js'),SC=rd('./js/soundCheck.js'),SET=rd('./js/setting
 let fails=0;const ok=(c,m)=>{if(!c){console.log('FAIL',m);fails++}else console.log('ok  ',m)};
 
 /* ---------- wiring ---------- */
-const vi=SET.indexOf('id="srSettingVolume"'),bi=SET.indexOf('id="srSoundCheckButton"'),li=SET.indexOf('id="srListenRows"');
-ok(vi>0&&bi>vi&&bi<li,'the Test sounds button is right below the Sound volume row (inside .sr-settings-body)');
+const vi=SET.indexOf('id="srSettingVolume"'),bi=SET.indexOf('id="srSoundCheckButton"'),li=SET.indexOf('id="srListenRows"'),xi=SET.indexOf('id="srSoundCheckBox"'),fi=SET.indexOf('id="srFullscreenButton" class');
+ok(vi>0&&li>vi&&bi>li&&bi<xi&&xi<fi,'the Test sounds button sits at the bottom of the dialog (after the Text to Speech rows), with its result box, immediately above the fullscreen button (inside .sr-settings-body)');
+ok(/id="srGroupListen">Text to Speech</.test(SET)&&/id="srGroupDevice">Device</.test(SET),'the settings are grouped under titles, including Text to Speech and Device');
 ok(/id="srSoundCheckBox" hidden/.test(SET),'the result box is hidden until a test runs');
 ok(/SoundCheck\.run\(root\.querySelector\("#srSoundCheckBox"\)\)/.test(SET),'the button runs the check into that box');
 ok(/b\.disabled=true[\s\S]{0,200}finally\{b\.disabled=false/.test(SET),'the button cannot be tapped twice while a test runs');
 ok(/#srSoundCheckButton"\)\.style\.display=window\.SoundCheck/.test(SET),'no button if the check script did not load');
 ok(/\.sr-settings-action\.sr-soundcheck-button\{margin-top:12px/.test(CSS)&&CSS.indexOf('.sr-settings-action.sr-soundcheck-button')>CSS.indexOf('.sr-settings-action{'),'its spacing rule comes after the general button rule (so it wins)');
 ok(/js\/audio\.js\?v=2\.1\.1"><\/script>\s*<script src="js\/soundCheck\.js\?v=1\.0\.2"/.test(INDEX),'index.html loads soundCheck.js right after audio.js (audio.js version bumped)');
-ok(/js\/settingsPanel\.js\?v=1\.0\.8/.test(INDEX)&&/css\/style\.css\?v=1\.0\.9/.test(INDEX),'settingsPanel.js and style.css versions bumped (browsers fetch the new copies)');
+ok(/js\/settingsPanel\.js\?v=1\.0\.9/.test(INDEX)&&/css\/style\.css\?v=1\.1\.0/.test(INDEX),'settingsPanel.js and style.css versions bumped (browsers fetch the new copies)');
 ok(/audio\.version="1\.2\.0"/.test(AUDIO),'audio.js version bumped');
 const eff=(SLIDE.match(/const EFFECT_URL = "([^"]+)"/)||[])[1],fb=(SLIDE.match(/const EFFECT_FALLBACK_URL = "([^"]+)"/)||[])[1],mm=(SLIDE.match(/const MUSIC_MANIFEST_URL = "([^"]+)"/)||[])[1];
 ok(SC.indexOf('effect:"'+eff+'"')>=0&&SC.indexOf('fallback:"'+fb+'"')>=0&&SC.indexOf('musicManifest:"'+mm+'"')>=0,'the slideshow effect, fallback and music list match js/slideshowViewer.js ('+eff+', '+fb+', '+mm+')');

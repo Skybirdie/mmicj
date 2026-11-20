@@ -1783,6 +1783,15 @@ html[data-theme="dark"] #readerPanel #toolbar .iconButton{
 /* when a finished check scrolls its result into view, leave room for the sticky header above it */
 #srSoundCheckBox{scroll-margin-top:84px;}
 
+/* Settings groups: a small muted title above each set of related controls (Appearance, Reading, Sound, ... Text to Speech, Device) */
+.sr-setting-group{margin:0;}
+.sr-setting-group[hidden]{display:none;}
+.sr-setting-group-title{margin:22px 0 0;font-size:12px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);}
+.sr-setting-group:first-child .sr-setting-group-title{margin-top:8px;}
+/* last group: the tip, Test sounds, its result box and the fullscreen button sit together at the bottom of the window */
+.sr-setting-group-title + .sr-soundcheck-tip{margin-top:6px;}
+.sr-setting-group-device .sr-settings-action#srFullscreenButton{margin-top:12px;}
+
 /* ---------- Welcome / focus ---------- */
 
 .sr-welcome-banner{

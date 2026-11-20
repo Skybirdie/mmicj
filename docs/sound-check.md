@@ -1,6 +1,6 @@
 # Sound check (Settings -> "Test sounds")
 
-A **Test sounds** button sits directly under *Sound volume* in Settings (`.sr-settings-body`). One tap runs everything by itself (about 4-8 seconds), then shows a short result list,
+A **Test sounds** button sits at the bottom of Settings (`.sr-settings-body`), in the *Device* group, immediately above the Enter/Exit fullscreen button. One tap runs everything by itself (about 4-8 seconds), then shows a short result list,
 asks one question and offers **Copy report**, the same way the speech check works for read aloud. The report is what to ask a reader to send when sounds are silent on their device.
 
 ## What the panel shows (soundCheck.js 1.0.1)
