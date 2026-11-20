@@ -1785,7 +1785,9 @@ html[data-theme="dark"] #readerPanel #toolbar .iconButton{
 
 /* Settings groups: each set of related controls (Appearance, Reading, Sound, ... Text to Speech, Device) sits in its own bordered box
    with a title in the main text colour, and the boxes are spaced apart so it is clear which controls belong together */
-.sr-setting-group{margin:0;padding:14px 16px 0;border:1px solid var(--line);border-radius:14px;}
+/* the area around the boxes is lightly tinted (the text colour mixed into the panel colour, so it works in light and dark themes); the boxes keep the plain panel colour and stand out against it */
+.sr-settings-body{padding:16px 16px 20px;background:color-mix(in srgb,var(--text) 5%,var(--panel));}
+.sr-setting-group{margin:0;padding:14px 16px 0;border:1px solid var(--line);border-radius:14px;background:var(--panel);}
 .sr-setting-group[hidden]{display:none;}
 .sr-setting-group + .sr-setting-group{margin-top:22px;}
 .sr-setting-group-title{margin:0;font-size:12px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--text);}
