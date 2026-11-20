@@ -1783,12 +1783,17 @@ html[data-theme="dark"] #readerPanel #toolbar .iconButton{
 /* when a finished check scrolls its result into view, leave room for the sticky header above it */
 #srSoundCheckBox{scroll-margin-top:84px;}
 
-/* Settings groups: a small muted title above each set of related controls (Appearance, Reading, Sound, ... Text to Speech, Device) */
-.sr-setting-group{margin:0;}
+/* Settings groups: each set of related controls (Appearance, Reading, Sound, ... Text to Speech, Device) sits in its own bordered box
+   with a title in the main text colour, and the boxes are spaced apart so it is clear which controls belong together */
+.sr-setting-group{margin:0;padding:14px 16px 0;border:1px solid var(--line);border-radius:14px;}
 .sr-setting-group[hidden]{display:none;}
-.sr-setting-group-title{margin:22px 0 0;font-size:12px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);}
-.sr-setting-group:first-child .sr-setting-group-title{margin-top:8px;}
+.sr-setting-group + .sr-setting-group{margin-top:22px;}
+.sr-setting-group-title{margin:0;font-size:12px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--text);}
+/* inside a box the divider goes ABOVE each row (not below), so no stray line sits against the box's bottom edge; the first row, right under the title, has none */
+.sr-setting-group .sr-setting-row{border-bottom:0;border-top:1px solid var(--line);}
+.sr-setting-group .sr-setting-group-title + .sr-setting-row{border-top:0;}
 /* last group: the tip, Test sounds, its result box and the fullscreen button sit together at the bottom of the window */
+.sr-setting-group-device{padding-bottom:16px;}
 .sr-setting-group-title + .sr-soundcheck-tip{margin-top:6px;}
 .sr-setting-group-device .sr-settings-action#srFullscreenButton{margin-top:12px;}
 

@@ -18,7 +18,7 @@ ok(/b\.disabled=true[\s\S]{0,200}finally\{b\.disabled=false/.test(SET),'the butt
 ok(/#srSoundCheckButton"\)\.style\.display=window\.SoundCheck/.test(SET),'no button if the check script did not load');
 ok(/\.sr-settings-action\.sr-soundcheck-button\{margin-top:12px/.test(CSS)&&CSS.indexOf('.sr-settings-action.sr-soundcheck-button')>CSS.indexOf('.sr-settings-action{'),'its spacing rule comes after the general button rule (so it wins)');
 ok(/js\/audio\.js\?v=2\.1\.1"><\/script>\s*<script src="js\/soundCheck\.js\?v=1\.0\.2"/.test(INDEX),'index.html loads soundCheck.js right after audio.js (audio.js version bumped)');
-ok(/js\/settingsPanel\.js\?v=1\.0\.9/.test(INDEX)&&/css\/style\.css\?v=1\.1\.0/.test(INDEX),'settingsPanel.js and style.css versions bumped (browsers fetch the new copies)');
+ok(/js\/settingsPanel\.js\?v=1\.0\.9/.test(INDEX)&&/css\/style\.css\?v=1\.1\.1/.test(INDEX),'settingsPanel.js and style.css versions bumped (browsers fetch the new copies)');
 ok(/audio\.version="1\.2\.0"/.test(AUDIO),'audio.js version bumped');
 const eff=(SLIDE.match(/const EFFECT_URL = "([^"]+)"/)||[])[1],fb=(SLIDE.match(/const EFFECT_FALLBACK_URL = "([^"]+)"/)||[])[1],mm=(SLIDE.match(/const MUSIC_MANIFEST_URL = "([^"]+)"/)||[])[1];
 ok(SC.indexOf('effect:"'+eff+'"')>=0&&SC.indexOf('fallback:"'+fb+'"')>=0&&SC.indexOf('musicManifest:"'+mm+'"')>=0,'the slideshow effect, fallback and music list match js/slideshowViewer.js ('+eff+', '+fb+', '+mm+')');
